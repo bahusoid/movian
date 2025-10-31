@@ -984,27 +984,30 @@ add_job(glw_root_t *gr,
 
   if(gr->gr_num_render_jobs >= gr->gr_render_jobs_capacity) {
     // Need more space
-    glw_render_job_t *old_jobs = gr->gr_render_jobs;
     int old_capacity = gr->gr_render_jobs_capacity;
+    ptrdiff_t *offsets = malloc(old_capacity * sizeof(ptrdiff_t));
+    
+    // Save offsets before realloc
+    for(int i = 0; i < old_capacity; i++) {
+      offsets[i] = gr->gr_render_order[i].job - gr->gr_render_jobs;
+    }
 
     gr->gr_render_jobs_capacity = 100 + gr->gr_render_jobs_capacity * 2;
-
 
     gr->gr_render_jobs = realloc(gr->gr_render_jobs,
                                  sizeof(glw_render_job_t) *
                                  gr->gr_render_jobs_capacity);
 
-    // Adjust pointers since we might have relocated job array
+    // Adjust pointers using saved offsets
     for(int i = 0; i < old_capacity; i++) {
-      gr->gr_render_order[i].job =
-        gr->gr_render_order[i].job - old_jobs + gr->gr_render_jobs;
+      gr->gr_render_order[i].job = gr->gr_render_jobs + offsets[i];
     }
+
+    free(offsets);
 
     gr->gr_render_order = realloc(gr->gr_render_order,
                                   sizeof(glw_render_order_t) *
                                   gr->gr_render_jobs_capacity);
-
-
   }
 
   struct glw_render_job   *rj = gr->gr_render_jobs  + gr->gr_num_render_jobs;

@@ -751,7 +751,7 @@ icymeta_parse(icecast_play_context_t *ipc, const char *buf)
 
       if(gconf.enable_icecast_debug)
         TRACE(TRACE_DEBUG, "Radio", "Title decoded as '%s' to '%s'",
-              how, rstr_get(t));
+              how, rstr_get(t) ? rstr_get(t) : "(null)");
 
       const char *title_tag = strstr(rstr_get(t), "<mus_sng_title>");
       if(title_tag != NULL) {

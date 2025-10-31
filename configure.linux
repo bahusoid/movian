@@ -576,7 +576,7 @@ if pkg-config valgrind; then
 fi
 
 
-LIBAV_ARCH_FLAGS="--disable-shared --enable-static"
+LIBAV_ARCH_FLAGS="--disable-shared --enable-static --disable-inline-asm"
 ext_setup
 
 #

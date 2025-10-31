@@ -343,7 +343,7 @@ loader_thread(void *aux)
 	  image_release(img);
 
         if(gconf.enable_image_debug)
-          TRACE(TRACE_DEBUG, "GLW", "Load of %s was aborted", rstr_get(url));
+          TRACE(TRACE_DEBUG, "GLW", "Load of %s was aborted", rstr_get(url) ? rstr_get(url) : "(null)");
 
         glt_set_state(glt, GLT_STATE_INACTIVE);
       } else if(img == NULL) {

@@ -38,7 +38,7 @@ LIB=${BUILDDIR}/libmovian
 
 include ${BUILDDIR}/config.mak
 
-CFLAGS_std += -Wall -Werror -Wwrite-strings -Wno-deprecated-declarations \
+CFLAGS_std += -Wall -Wno-attributes -Werror -Wwrite-strings -Wno-deprecated-declarations \
 		-Wmissing-prototypes -Wno-multichar -Iext/dvd -std=gnu99
 
 GCCVERSIONGTEQ8 := $(shell expr `gcc -dumpversion | cut -f1 -d.` \>= 8)
@@ -772,7 +772,9 @@ SRCS-${CONFIG_VMIR} += \
 
 ${BUILDDIR}/ext/vmir/src/vmir.o : CFLAGS = ${VMIR_CFLAGS} ${OPTFLAGS} -DVMIR_USE_TLSF -Iext/tlsf
 
-${BUILDDIR}/src/np/%.o : CFLAGS = ${CFLAGS_std} ${OPTFLAGS} -DNATIVEPLUGIN_HOST -Inativeplugin/include/
+${BUILDDIR}/src/arch/linux/linux_misc.o : CFLAGS = ${CFLAGS_std} ${OPTFLAGS} -Wno-error=attributes
+
+${BUILDDIR}/src/np/%.o : CFLAGS = ${CFLAGS_std} ${OPTFLAGS} -DNATIVEPLUGIN_HOST -Inativeplugin/include
 
 
 
