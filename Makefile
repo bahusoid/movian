@@ -770,9 +770,9 @@ SRCS-${CONFIG_VMIR} += \
 	src/np/np_stats.c \
 
 
-${BUILDDIR}/ext/vmir/src/vmir.o : CFLAGS = ${VMIR_CFLAGS} ${OPTFLAGS} -DVMIR_USE_TLSF -Iext/tlsf
+${BUILDDIR}/ext/vmir/src/vmir.o : CFLAGS = ${VMIR_CFLAGS} ${OPTFLAGS} -DVMIR_USE_TLSF -Iext/tlsf -Wno-error=enum-int-mismatch
 
-${BUILDDIR}/src/arch/linux/linux_misc.o : CFLAGS = ${CFLAGS_std} ${OPTFLAGS} -Wno-error=attributes
+${BUILDDIR}/src/arch/linux/linux_misc.o : CFLAGS = ${CFLAGS_std} ${OPTFLAGS} -Wno-error=attributes 
 
 ${BUILDDIR}/src/np/%.o : CFLAGS = ${CFLAGS_std} ${OPTFLAGS} -DNATIVEPLUGIN_HOST -Inativeplugin/include
 
