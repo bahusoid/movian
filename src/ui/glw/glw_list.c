@@ -32,6 +32,10 @@ typedef struct glw_list {
 
   glw_scroll_control_t gsc;
 
+  // One-shot guard: only align focus to selection once for the main list
+  // to avoid fighting later UI (e.g., popups/menus). Reset by ctor on rebuild.
+  uint8_t did_focus_on_select;
+
 } glw_list_t;
 
 
@@ -574,6 +578,7 @@ glw_list_ctor(glw_t *w)
 {
   glw_list_t *l = (void *)w;
   l->gsc.suggest_cnt = 1;
+  l->did_focus_on_select = 0;
   w->glw_flags |= GLW_FLOATING_FOCUS;
 }
 
@@ -634,8 +639,8 @@ glw_list_select_child(glw_t *w, glw_t *c, prop_t *origin)
 
   GLW_TRACE("List '%s' select_child -> '%s'",
             glw_get_name(w), glw_get_name(c));
-
-  // Make sure the selected item is visible
+  
+  // Always ensure the selected item is visible
   scroll_to_me(l, c);
 
   // Prefer focusing a focusable leaf within the selected item
@@ -643,21 +648,37 @@ glw_list_select_child(glw_t *w, glw_t *c, prop_t *origin)
   if(leaf == NULL)
     leaf = c;
 
-  // If this selection originates from an explicit PROP_SELECT_CHILD,
-  // and this is the main scrollable list on the page, treat it as
-  // interactive so it decisively wins over initial Open/Close focus.
-  int how = GLW_FOCUS_SET_AUTOMATIC;
-  if(origin != NULL && w->glw_id_rstr != NULL &&
-     !strcmp(rstr_get(w->glw_id_rstr), "scrollable"))
-    how = GLW_FOCUS_SET_INTERACTIVE;
+  int is_main_scrollable = w->glw_id_rstr != NULL &&
+    !strcmp(rstr_get(w->glw_id_rstr), "scrollable");
 
-  if(!glw_focus_set(w->glw_root, leaf, how, "SelectChild")) {
-    // If focus could not be set immediately (e.g., during re-entrant
-    // focus work on page open), enqueue a suggestion so it will land
-    // on the next frame when it's safe.
-    glw_scroll_suggest_focus(&l->gsc, w, leaf);
+  // Determine if current focus is within this list; if focus is elsewhere
+  // (e.g., a popup/menu), avoid stealing it.
+  int focus_in_list = 0;
+  glw_t *cur = w->glw_root->gr_current_focus;
+  while(cur != NULL) {
+    if(cur == w) { focus_in_list = 1; break; }
+    cur = cur->glw_parent;
   }
-  return 1;
+
+  // Decide how to set focus
+  if(is_main_scrollable) {
+    // Only set focus for explicit selections when focus is within the list
+    // (or not set yet). Always leave scroll in place.
+    if(origin != NULL && (focus_in_list || w->glw_root->gr_current_focus == NULL)) {
+      int how = GLW_FOCUS_SET_INTERACTIVE;
+      if(!glw_focus_set(w->glw_root, leaf, how, "SelectChild"))
+        glw_scroll_suggest_focus(&l->gsc, w, leaf);
+      l->did_focus_on_select = 1;
+    }
+    return 1;
+  } else {
+    // Non-main lists: only set focus if current focus is within the list
+    if(focus_in_list) {
+      if(!glw_focus_set(w->glw_root, leaf, GLW_FOCUS_SET_AUTOMATIC, "SelectChild"))
+        glw_scroll_suggest_focus(&l->gsc, w, leaf);
+    }
+    return 1;
+  }
 }
 
 /**
