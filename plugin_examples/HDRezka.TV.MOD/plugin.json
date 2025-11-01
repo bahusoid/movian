@@ -1,0 +1,16 @@
+{
+  "type": "ecmascript",
+  "apiversion": 2,
+  "id": "HDRezka.TV.MOD",
+  "file": "HDRezka.TV.js",
+  "showtimeVersion": "5",
+  "version": "2.6.10.1-mod1",
+  "author": "Buksa (fix by kovalDN)",
+  "title": "HDRezka.TV.MOD",
+  "icon": "HDRezka.TV.png",
+  "synopsis": "Онлайн кинотеатр HDRezka для просмотра фильмов, мультфильмов, сериалов и прочего контента",
+  "category": "video",
+  "description": "<p>Плагин для Movian для доступа к онлайн кинотеатру HDRezka через зеркала сайта, <a href=\"http://hdrezkayou.com\">http://hdrezkayou.com</a></p>",
+  "homepage": "https://github.com/Buksa/movian-plugin-HDRezka.tv",
+  "downloadURL": "https://bit.ly/MP-HDRezka-TV"
+}
