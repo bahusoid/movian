@@ -513,84 +513,57 @@ function display_season(page) {
   });
 
   if (data.season) {
-    var absoluteIndex = 0; // Track absolute position including separators
+    page.appendPassiveItem('separator', null, {title: 'Сезоны:'});
+
+    // Check for last watched episode to focus on the correct season
     var lastWatchedKey = 'lastWatched_' + data.id;
     var lastWatchedEpisode = resumeStore[lastWatchedKey];
-    var targetAbsoluteIndex = -1;
+    var focusSeasonIndex = -1;
 
-    console.log('Display season for series ID:', data.id);
-    console.log('Last watched key:', lastWatchedKey);
-    console.log('resumeStore available:', typeof resumeStore);
-    console.log('Last watched episode:', lastWatchedEpisode);
-
-
-    var prop = require('movian/prop');
-    var selectItem = null;
-    
-    // Reset for actual item addition
-    absoluteIndex = 0;
-    data.season.forEach(function (seasonElement) {
-      page.appendPassiveItem('separator', null, {title: seasonElement.title});
-      absoluteIndex++; // Separator takes an index
-      
-
-
-      seasonElement.ep.forEach(function (episodeElement) {
-        // Create episode data with series ID included for resume functionality
-        var episodeData = {
-          season_id: episodeElement.season_id,
-          episode_id: episodeElement.episode_id,
-          title: episodeElement.title,
-          series_id: data.id, // Include series ID
-          translator_id: data.translator_id,
-          type: 'serial'
-        };
-        uri = JSON.stringify(episodeData);
-        var focusElem = lastWatchedEpisode.season_id == episodeElement.season_id &&
-          lastWatchedEpisode.episode_id == episodeElement.episode_id;
-//        item = page.appendItem(PREFIX + ':play:' + uri, 'video', {
-        item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
-          title: episodeElement.title,
-          icon: data.icon,
-          autofocus: focusElem
+    if (lastWatchedEpisode) {
+      console.log('Last watched episode found:', lastWatchedEpisode);
+      // Find which season contains the last watched episode
+      data.season.forEach(function (seasonElement, seasonIndex) {
+        var found = seasonElement.ep.some(function (episode) {
+          return episode.season_id == lastWatchedEpisode.season_id &&
+                 episode.episode_id == lastWatchedEpisode.episode_id;
         });
-        
-        if (lastWatchedEpisode.season_id == episodeElement.season_id &&
-          lastWatchedEpisode.episode_id == episodeElement.episode_id) {
-          console.log('Found last watched episode! Will select at absolute index:', absoluteIndex);
-          selectItem = item;
-      }
-        
-
-        if (service.tvdb) {
-          item.bindVideoMetadata({
-            title: (data.title_en ? data.title_en : data.title) +
-            ' S' + (episodeElement.season_id < 10 ? '0' + episodeElement.season_id : episodeElement.season_id) +
-            'E' + (episodeElement.episode_id < 10 ? '0' + episodeElement.episode_id : episodeElement.episode_id),
-          });
+        if (found) {
+          focusSeasonIndex = seasonIndex;
+          console.log('Found last watched episode in season index:', seasonIndex);
         }
-        absoluteIndex++; // Episode takes an index
-
       });
-    });
-
-    console.log('Total items added (including separators):', absoluteIndex);
-    
-
-
-    // Set selection using page.metadata.selection after append
-    if (selectItem) {
-      console.log('Setting selection using page.model.nodes.selected to:', selectItem);
-      // if (page.metadata && typeof page.metadata.selection !== 'undefined') {
-      //   //page.metadata.selection = targetAbsoluteIndex;
-      //   page.model.selected = targetAbsoluteIndex;
-      //   console.log('page.metadata.selection set to:', page.metadata.selection);
-      // } else {
-      //   console.log('page.metadata.selection not available');
-      // }
     } else {
-      console.log('No last watched episode found, selection remains at default');
+      console.log('No last watched episode found for series:', data.id);
     }
+
+    data.season.forEach(function (seasonElement, seasonIndex) {
+      // Create season data for navigation
+      var seasonData = {
+        id: data.id,
+        title: data.title,
+        title_year: data.title_year,
+        icon: data.icon,
+        translator_id: data.translator_id,
+        season_index: seasonIndex,
+        season_title: seasonElement.title,
+        episodes: seasonElement.ep,
+        type: 'serial'
+      };
+
+      var uri = PREFIX + ':SEASON:' + JSON.stringify(seasonData);
+
+      var item = page.appendItem(uri, service.list, {
+        title: seasonElement.title,
+        icon: data.icon,
+        description: seasonElement.ep.length + ' эпизодов',
+        autofocus: (seasonIndex === focusSeasonIndex)
+      });
+
+      if (seasonIndex === focusSeasonIndex) {
+        console.log('Setting autofocus on season:', seasonElement.title);
+      }
+    });
   } else {
     console.log('No seasons data found');
   }

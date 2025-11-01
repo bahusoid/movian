@@ -363,54 +363,70 @@ exports.updates = function (page, params) {
 //  })
   page.loading = false;
 };
-//exports.season = function (page, data) {
-//  data = showtime.JSONDecode(data);
-//  data = JSON.parse(data);
-//  log.d({
-//    route: 'season',
-//    data: data,
-//  });
-//  page.loading = true;
-//  page.type = 'directory';
-//  page.metadata.title = data.title_year;
-//  referer = BASE_URL;
-//  api.call(page, data.url /* .replace(/\d+&e=\d+/, sN)*/, null, function (pageHtml) {
-//    resp = pageHtml.text.toString();
-//    VideoBalancer = /video_balancer_options([^\;]+})/.exec(resp)[1];
-//    log.p('VideoBalancer:\n' + VideoBalancer);
-//    eval('options' + VideoBalancer);
-//    log.p({
-//      label: 'VideoBalancer',
-//      options: options,
-//    });
-//    log.d('^^^^^^^^^^options has been update^^^^^^^^^');
-//    log.d('count episode: ' + options.episodes.length);
-//    iframe = data.url.replace(/\d+&e=\d+/, sN);
-//    for (i = 0; i < options.episodes.length; i++) {
-//      data.url = link(options.season, options.episodes[i], options.serial_token);
-//      data.ref = '&ref=' + options.ref,
-//      log.d({
-//        uri: 'PREFIX + ':play:' + ',
-//        data: data,
-//      });
-//      item = page.appendItem(PREFIX + ':play:' + showtime.JSONEncode(data), 'video', {
-//      item = page.appendItem(PREFIX + ':play:' + JSON.stringify(data), 'video', {
-//      item = page.appendItem(PREFIX + ':play:' + showtime.JSONEncode(data), service.list, {
-//      item = page.appendItem(PREFIX + ':play:' + JSON.stringify(data), service.list, {
-//        episode: {
-//          number: fix_0(options.episodes[i]),
-//        },
-//        title: fix_0(options.episodes[i]) + ' \u0441\u0435\u0440\u0438\u044f',
-//        icon: data.icon,
-//      });
-//      item.bindVideoMetadata({
-//        title: (data.title_en ? data.title_en : data.title) + ' S' + fix_0(options.season) + 'E' + fix_0(options.episodes[i]),
-//      });
-//    }
-//    page.loading = false;
-//    page.metadata.title += ' | ' + options.season + ' \u0441\u0435\u0437\u043e\u043d';
-//  });
-//};
+exports.season = function (page, data) {
+  data = JSON.parse(data);
+  log.d({
+    route: 'season',
+    data: data,
+  });
+  page.loading = true;
+  page.type = 'directory';
+  page.metadata.title = data.title_year + ' | ' + data.season_title;
+  page.metadata.logo = data.icon;
+  
+  // Check for last watched episode in this season
+  var lastWatchedKey = 'lastWatched_' + data.id;
+  var lastWatchedEpisode = resumeStore[lastWatchedKey];
+  var focusEpisodeIndex = -1;
+  
+  if (lastWatchedEpisode) {
+    console.log('Last watched episode found for season page:', lastWatchedEpisode);
+    // Find the episode index within this season
+    data.episodes.forEach(function (episodeElement, episodeIndex) {
+      if (episodeElement.season_id == lastWatchedEpisode.season_id &&
+          episodeElement.episode_id == lastWatchedEpisode.episode_id) {
+        focusEpisodeIndex = episodeIndex;
+        console.log('Found last watched episode at index:', episodeIndex);
+      }
+    });
+  } else {
+    console.log('No last watched episode found for series:', data.id);
+  }
+  
+  // Display episodes for this season
+  data.episodes.forEach(function (episodeElement, episodeIndex) {
+    var episodeData = {
+      season_id: episodeElement.season_id,
+      episode_id: episodeElement.episode_id,
+      title: episodeElement.title,
+      series_id: data.id,
+      translator_id: data.translator_id,
+      type: 'serial'
+    };
+    
+    var uri = JSON.stringify(episodeData);
+    
+    var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
+      title: episodeElement.title,
+      icon: data.icon,
+      autofocus: (episodeIndex === focusEpisodeIndex)
+    });
+    
+    if (episodeIndex === focusEpisodeIndex) {
+      console.log('Setting autofocus on episode:', episodeElement.title);
+    }
+    
+    if (service.tvdb) {
+      item.bindVideoMetadata({
+        title: (data.title_en ? data.title_en : data.title) +
+        ' S' + (episodeElement.season_id < 10 ? '0' + episodeElement.season_id : episodeElement.season_id) +
+        'E' + (episodeElement.episode_id < 10 ? '0' + episodeElement.episode_id : episodeElement.episode_id),
+      });
+    }
+  });
+  
+  page.loading = false;
+};
 //function link(e, t, n) {
 //  var r = '/serial/' + n + '/iframe';
 //  var i = '';
