@@ -252,6 +252,7 @@ settings.createMultiOpt('tracker', 'Выбор трекера', [
   printDebug('Установите трекер на ' + v);
   service.tracker = v;
 });
+
 //var BASE_TURL = 'https://hdrezka.download';
 var BASE_TURL = service.tracker;
 //var inspect_url = BASE_URL.replace(/^http.*(\w{4,15}.\w{2,3})$/gm,'.*\.$1') + '.*';
@@ -323,6 +324,21 @@ settings.createBool('Show_META', 'Показ информации из базы 
 //settings.createBool('cp', 'Непрерывное воспроизведение', true, function (v) {service.cp = v});
 settings.createBool('cp', 'Непрерывное воспроизведение', false, function (v) {service.cp = v});
 settings.createBool('movianDRM', 'Проигрыватель Movian DRM', true, function (v) {service.movianDRM = v});
+
+// Quality settings
+settings.createBool('askQuality', 'Спрашивать качество каждый раз', true, function (v) {store.askQuality = v});
+settings.createMultiOpt('qualityResolution', 'Предпочтительное разрешение', [
+  ['1080p', '1080p', true],
+  ['720p', '720p'],
+  ['sd', 'SD'],
+  ['4k', '4K'],
+], function (v) {store.qualityResolution = v});
+settings.createMultiOpt('qualityFormat', 'Предпочтительный формат', [
+  ['hls', 'HLS', true],
+  ['mp4', 'MP4'],
+  ['drm', 'DRM'],
+], function (v) {store.qualityFormat = v});
+
 //settings.createBool('movianDRM', 'Проигрыватель Movian DRM', false, function (v) {service.movianDRM = v});
 /*
 //function setPageHeader(page, title) {
