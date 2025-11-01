@@ -1460,10 +1460,7 @@ cloner_add_child0(sub_cloner_t *sc, prop_t *p, prop_t *before,
   if(flags & PROP_ADD_SELECTED && parent->glw_class->gc_select_child != NULL) {
     GLW_TRACE("PROP_ADD_SELECTED: parent '%s' selects child '%s'",
               glw_get_name(parent), glw_get_name(c->c_w));
-    // Treat pending-select as an explicit selection so lists can set
-    // interactive focus for the main scrollable list. Passing 'p' as
-    // origin preserves intent and avoids needing a separate suggest.
-    parent->glw_class->gc_select_child(parent, c->c_w, p);
+    parent->glw_class->gc_select_child(parent, c->c_w, NULL);
   }
 
   if(sc->sc_pending_suggest == p && parent->glw_class->gc_suggest_focus != NULL) {
