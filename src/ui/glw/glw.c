@@ -1846,8 +1846,20 @@ glw_get_focusable_child(glw_t *w)
 
   glw_t *c = glw_focus_by_path(w);
 
+  if(c != NULL) {
+    GLW_TRACE("get_focusable_child('%s'): by-path -> '%s'",
+              glw_get_name(w), glw_get_name(c));
+  }
+
   if(c == NULL)
-    c = glw_focus_crawl1(w, 1);
+   c = glw_focus_crawl1(w, 1);
+
+  if(c != NULL) {
+    GLW_TRACE("get_focusable_child('%s'): crawl -> '%s'",
+              glw_get_name(w), glw_get_name(c));
+  } else {
+    GLW_TRACE("get_focusable_child('%s'): none", glw_get_name(w));
+  }
 
   return c;
 }

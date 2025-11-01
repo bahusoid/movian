@@ -818,6 +818,16 @@ es_prop_unlink(duk_context *ctx)
   return 0;
 }
 
+/**
+ * Suggest focus to a property's parent container (routes to UI via PROP_SUGGEST_FOCUS)
+ */
+static int
+es_prop_suggest_focus(duk_context *ctx)
+{
+  prop_suggest_focus(es_stprop_get(ctx, 0));
+  return 0;
+}
+
 
 /**
  *
@@ -1105,6 +1115,7 @@ static const duk_function_list_entry fnlist_prop[] = {
   { "deleteChilds",        es_prop_delete_childs_duk,     1 },
   { "destroy",             es_prop_destroy_duk,           1 },
   { "select",              es_prop_select,                1 },
+  { "suggestFocus",        es_prop_suggest_focus,         1 },
   { "link",                es_prop_link,                  2 },
   { "unlink",              es_prop_unlink,                1 },
   { "sendEvent",           es_prop_send_event,            3 },

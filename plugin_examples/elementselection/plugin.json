@@ -1,0 +1,12 @@
+{
+  "type": "ecmascript",
+  "apiversion": 1,
+  "id": "ElementSelection",
+  "file": "elementselection.js",
+  "showtimeVersion": "5",
+  "version": "1.0",
+  "author": "Test",
+  "title": "Element Selection Demo",
+  "synopsis": "Demonstrates selecting the 3rd element in a list",
+  "category": "test"
+}

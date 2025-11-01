@@ -501,6 +501,8 @@ glw_list_callback(glw_t *w, void *opaque, glw_signal_t signal, void *extra)
     break;
 
   case GLW_SIGNAL_FOCUS_CHILD_INTERACTIVE:
+    GLW_TRACE("List '%s' interactive focus on child '%s'",
+              glw_get_name(w), extra ? glw_get_name(extra) : "<null>");
     scroll_to_me(l, extra);
     l->gsc.suggest_cnt = 0;
     w->glw_flags &= ~GLW_FLOATING_FOCUS;
@@ -619,6 +621,46 @@ glw_list_set_float_unresolved(glw_t *w, const char *a, float value,
 }
 
 /**
+ * Align UI focus with selection coming from the prop system.
+ * When the parent (list) is asked to select a child, move focus to that child
+ * (or its focusable descendant) and ensure it is scrolled into view.
+ */
+static int
+glw_list_select_child(glw_t *w, glw_t *c, prop_t *origin)
+{
+  glw_list_t *l = (glw_list_t *)w;
+  if(c == NULL)
+    return 0;
+
+  GLW_TRACE("List '%s' select_child -> '%s'",
+            glw_get_name(w), glw_get_name(c));
+
+  // Make sure the selected item is visible
+  scroll_to_me(l, c);
+
+  // Prefer focusing a focusable leaf within the selected item
+  glw_t *leaf = glw_get_focusable_child(c);
+  if(leaf == NULL)
+    leaf = c;
+
+  // If this selection originates from an explicit PROP_SELECT_CHILD,
+  // and this is the main scrollable list on the page, treat it as
+  // interactive so it decisively wins over initial Open/Close focus.
+  int how = GLW_FOCUS_SET_AUTOMATIC;
+  if(origin != NULL && w->glw_id_rstr != NULL &&
+     !strcmp(rstr_get(w->glw_id_rstr), "scrollable"))
+    how = GLW_FOCUS_SET_INTERACTIVE;
+
+  if(!glw_focus_set(w->glw_root, leaf, how, "SelectChild")) {
+    // If focus could not be set immediately (e.g., during re-entrant
+    // focus work on page open), enqueue a suggestion so it will land
+    // on the next frame when it's safe.
+    glw_scroll_suggest_focus(&l->gsc, w, leaf);
+  }
+  return 1;
+}
+
+/**
  *
  */
 static int
@@ -658,6 +700,7 @@ static glw_class_t glw_list_y = {
   .gc_ctor = glw_list_ctor,
   .gc_signal_handler = glw_list_callback,
   .gc_suggest_focus = glw_list_suggest_focus,
+  .gc_select_child = glw_list_select_child,
   .gc_set_int16_4 = glw_list_set_int16_4,
   .gc_pointer_event = handle_pointer_event,
   .gc_pointer_event_filter = handle_pointer_event_filter,
@@ -683,6 +726,7 @@ static glw_class_t glw_list_x = {
   .gc_ctor = glw_list_ctor,
   .gc_signal_handler = glw_list_callback,
   .gc_suggest_focus = glw_list_suggest_focus,
+  .gc_select_child = glw_list_select_child,
   .gc_set_int16_4 = glw_list_set_int16_4,
   .gc_bubble_event = glw_navigate_horizontal,
   .gc_set_int_unresolved = glw_list_set_int_unresolved,
