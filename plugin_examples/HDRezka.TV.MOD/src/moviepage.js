@@ -2,6 +2,8 @@
 /* eslint-disable require-jsdoc */
 /* eslint-disable max-len */
 /* eslint-disable no-var */
+var store = require('movian/store').create('config');
+var resumeStore = require('movian/store').create('resume');
 exports.contentPage = function (page, mdata) {
 //  if (/{/.test(mdata)) data = showtime.JSONDecode(mdata);
 //  if (/{/.test(mdata)) data = JSON.parse(mdata);
@@ -99,6 +101,7 @@ function moviePage(page, data) {
       }
       data_(dom);
       display_season(page);
+      display_quality(page);
       display_translate(page);
 //      if (null !== (m = /sof\.tv\.initCDNMoviesEvents\((\d+).*?(\d+).*?({.*?})\);/gm.exec(pageHtml.text.toString()))) {
       if (null !== (m = /sof.tv.initCDNMoviesEvents\((\d+).*?(\d+).*?(\{.*?})\);/gm.exec(pageHtml.text.toString()))) {
@@ -568,4 +571,45 @@ function display_season(page) {
     console.log('No seasons data found');
   }
   page.loading = false;
+};
+function display_quality(page) {
+  // Quality settings as selectable items
+  page.appendPassiveItem('separator', null, {title: 'Качество:'});
+  
+  // Ask each time option
+  var askQuality = store.askQuality !== undefined ? store.askQuality : false;
+  var askItem = page.appendAction('Спрашивать каждый раз: ' + (askQuality ? 'Да' : 'Нет'), function() {
+    store.askQuality = !store.askQuality;
+    // Update the title directly
+    askItem.root.metadata.title = 'Спрашивать каждый раз: ' + (store.askQuality ? 'Да' : 'Нет');
+    // Update other items' enabled state
+    if (resolutionItem) resolutionItem.root.enabled = !store.askQuality;
+    if (formatItem) formatItem.root.enabled = !store.askQuality;
+  });
+  
+  // Resolution option (always create, but enable/disable based on askQuality)
+  var currentResolution = store.qualityResolution || '1080p';
+  var resolutionItem = page.appendAction('Разрешение: ' + currentResolution, function() {
+    // Cycle through resolutions
+    var resolutions = ['sd', '720p', '1080p', '4k'];
+    var currentIndex = resolutions.indexOf(store.qualityResolution || '1080p');
+    var nextIndex = (currentIndex + 1) % resolutions.length;
+    store.qualityResolution = resolutions[nextIndex];
+    // Update the title directly
+    resolutionItem.root.metadata.title = 'Разрешение: ' + store.qualityResolution;
+  });
+  resolutionItem.root.enabled = !askQuality;
+  
+  // Format option (always create, but enable/disable based on askQuality)
+  var currentFormat = store.qualityFormat || 'hls';
+  var formatItem = page.appendAction('Формат: ' + currentFormat.toUpperCase(), function() {
+    // Cycle through formats
+    var formats = ['hls', 'mp4', 'drm'];
+    var currentIndex = formats.indexOf(store.qualityFormat || 'hls');
+    var nextIndex = (currentIndex + 1) % formats.length;
+    store.qualityFormat = formats[nextIndex];
+    // Update the title directly
+    formatItem.root.metadata.title = 'Формат: ' + store.qualityFormat.toUpperCase();
+  });
+  formatItem.root.enabled = !askQuality;
 };

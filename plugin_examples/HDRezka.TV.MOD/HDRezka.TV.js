@@ -74,8 +74,7 @@ console.log(service);
 //var cache = require('showtime/store').create('cache');
 var cache = require('movian/store').create('cache');
 var resumeStore = require('movian/store').create('resume');
-//var store = plugin.createStore('config', true);
-var store = service.create('config', true);
+var store = require('movian/store').create('config');
 //var storage = plugin.createStore(NAME);
 var storage = service.create(NAME);
 var io = require('native/io');
@@ -91,7 +90,7 @@ var html = require('movian/html');
 //var html = 0;
 var urls = require('url');
 var UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36';
-var currentUser = null;
+var currentUser = store.currentUser || null;
 var result = '';
 var data = {};
 var items = [];
@@ -610,6 +609,7 @@ new page.Route(PREFIX + ':login', function (page) {
     if (ent.statuscode === 200) {
       console.log('Login successful');
       currentUser = credentials.username; // Store the username
+      store.currentUser = credentials.username; // Persist the username
     }
   }
   page.redirect(PREFIX + ':start');
@@ -624,6 +624,7 @@ new page.Route(PREFIX + ':logout', function (page) {
   var url = BASE_URL + '/logout/';
   http.request(url);
   currentUser = null; // Clear the username
+  delete store.currentUser; // Clear persisted username
   page.loading = false;
   page.redirect(PREFIX + ':start');
 });
@@ -1101,28 +1102,56 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   };
   list = scrapeSourceLinks(streams);
   videoparams.subtitles = scrapeSourceSub(data.subtitle);
+  
+  // Check quality settings
+  var askQuality = store.askQuality !== undefined ? store.askQuality : false;
+  var qualityResolution = store.qualityResolution || '1080p';
+  var qualityFormat = store.qualityFormat || 'hls';
+  
   try {
-//    videoparams.subtitles.push({
-//      url: BASE_URL + element.attributes.getNamedItem('src').value,
-//      language: element.attributes.getNamedItem('srclang').value,
-//      title: element.attributes.getNamedItem('src').value.match(/file\/\d+\/([^']+)/)[1],
-//    });
+    if (!askQuality) {
+      // Auto-select best quality based on settings
+      var selectedItem = selectBestQuality(list, qualityResolution, qualityFormat);
+      if (selectedItem) {
+        if (selectedItem.hls && qualityFormat === 'hls') {
+          videoparams.sources = [{
+            url: 'hls:' + selectedItem.hls,
+          }];
+          video = 'videoparams:' + JSON.stringify(videoparams);
+          page.redirect(video);
+          return;
+        } else if (selectedItem.mp4 && qualityFormat === 'mp4') {
+          page.redirect('mp4:' + selectedItem.mp4);
+          return;
+        }
+        // For DRM, fall back to showing options
+      }
+    }
+    
+    // Find preferred quality for highlighting when asking
+    var preferredItem = null;
+    if (askQuality) {
+      preferredItem = selectBestQuality(list, qualityResolution, qualityFormat);
+    }
+    
+    // Show all quality options (old behavior or fallback)
     for (i = 0; i < list.length; i++) {
       if (list[i].hls) {
         videoparams.sources = [{
           url: 'hls:' + list[i].hls,
         }];
-//        video = 'videoparams:' + showtime.JSONEncode(videoparams);
         video = 'videoparams:' + JSON.stringify(videoparams);
-//        log.d(video);
-//        log.d(videoparams.canonicalUrl == (PREFIX + ':play:' + showtime.JSONEncode(data)));
-//        log.d(videoparams.canonicalUrl == (PREFIX + ':play:' + JSON.stringify(data)));
-//        log.d(data);
+        
+        // Check if this is the preferred quality when asking
+        var isPreferred = askQuality && preferredItem && 
+                         ((preferredItem.hls && list[i].hls === preferredItem.hls) || 
+                          (preferredItem.mp4 && list[i].mp4 === preferredItem.mp4));
+        
         page.appendItem(video, 'item', {
           title: 'HLS ' + list[i].q + ' | ' + data.title,
           description: '',
-//          icon: data.icon,
           icon: data.icon,
+          autofocus: isPreferred
         });
         page.entries++;
       }
@@ -1135,6 +1164,17 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   optionsmovianDRM(page, canonicalUrl);
   if (service.movianDRM) {
     try {
+      if (!askQuality && qualityFormat === 'drm') {
+        // Auto-select best DRM quality
+        var selectedItem = selectBestQuality(list, qualityResolution, 'hls'); // DRM uses HLS streams
+        if (selectedItem && selectedItem.hls) {
+          var uri = 'movianDRM:hls:' + selectedItem.hls + '::HLS ' + selectedItem.q + ' | ' + data.title;
+          page.redirect(uri);
+          return;
+        }
+      }
+      
+      // Show all DRM quality options
       for (i = 0; i < list.length; i++) {
         if (list[i].hls) {
           var uri = 'movianDRM:hls:' + list[i].hls;
@@ -1156,11 +1196,17 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
 //          uri = decodeURIComponent(uri);
 //          uri = escape(uri);
 //          uri = encodeURIComponent(uri);
+          
+          // Check if this is the preferred DRM quality when asking
+          var isPreferred = askQuality && preferredItem && 
+                           ((preferredItem.hls && list[i].hls === preferredItem.hls) || 
+                            (preferredItem.mp4 && list[i].mp4 === preferredItem.mp4));
+          
           page.appendItem(uri, 'item', {
             title: 'DRM ' + list[i].q + ' | ' + data.title,
             description: '',
-//            icon: data.icon,
             icon: data.icon,
+            autofocus: isPreferred
           });
           page.entries++;
         }
@@ -1172,22 +1218,33 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
     }
   }
   try {
+    if (!askQuality && qualityFormat === 'mp4') {
+      // Auto-select best MP4 quality
+      var selectedItem = selectBestQuality(list, qualityResolution, 'mp4');
+      if (selectedItem && selectedItem.mp4) {
+        page.redirect(selectedItem.mp4);
+        return;
+      }
+    }
+    
+    // Show all MP4 quality options
     for (i = 0; i < list.length; i++) {
       if (list[i].mp4) {
         videoparams.sources = [{
           url: list[i].mp4,
         }];
-//        video = 'videoparams:' + showtime.JSONEncode(videoparams);
         video = 'videoparams:' + JSON.stringify(videoparams);
-//        log.d(video);
-//        log.d(videoparams.canonicalUrl == (PREFIX + ':play:' + showtime.JSONEncode(data)));
-//        log.d(videoparams.canonicalUrl == (PREFIX + ':play:' + JSON.stringify(data)));
-//        log.d(data);
+        
+        // Check if this is the preferred MP4 quality when asking
+        var isPreferred = askQuality && preferredItem && 
+                         ((preferredItem.hls && list[i].hls === preferredItem.hls) || 
+                          (preferredItem.mp4 && list[i].mp4 === preferredItem.mp4));
+        
         page.appendItem(video, 'item', {
           title: 'MP4 ' + list[i].q + ' | ' + data.title,
           description: '',
-//          icon: data.icon,
           icon: data.icon,
+          autofocus: isPreferred
         });
         page.entries++;
       }
@@ -1506,6 +1563,32 @@ function scrapeSourceLinks(streams) {
     });
   }
   return returnValue;
+};
+function selectBestQuality(list, maxResolution, preferredFormat) {
+  // Define resolution hierarchy (higher index = better quality)
+  var resolutionOrder = ['sd', '720p', '1080p', '4k'];
+  var maxResIndex = resolutionOrder.indexOf(maxResolution);
+  
+  var bestMatch = null;
+  var bestResIndex = -1;
+  
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    var quality = item.q.replace(/\[|\]/g, '').toLowerCase();
+    var resIndex = resolutionOrder.indexOf(quality);
+    
+    // Check if this quality is within our limit and better than current best
+    if (resIndex <= maxResIndex && resIndex > bestResIndex) {
+      // Check if preferred format is available
+      if ((preferredFormat === 'hls' && item.hls) || 
+          (preferredFormat === 'mp4' && item.mp4)) {
+        bestMatch = item;
+        bestResIndex = resIndex;
+      }
+    }
+  }
+  
+  return bestMatch;
 };
 function scrapeSourceSub(streams) {
   var returnValue = [];
