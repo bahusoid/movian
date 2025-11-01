@@ -104,7 +104,6 @@ typedef struct sub_cloner {
 
   struct glw_prop_sub_pending_queue sc_pending;
   prop_t *sc_pending_select;
-  prop_t *sc_pending_suggest;
 
   int sc_entries;
 
@@ -1457,18 +1456,8 @@ cloner_add_child0(sub_cloner_t *sc, prop_t *p, prop_t *before,
 
   glw_signal_handler_register(c->c_w, clone_sig_handler, c);
 
-  if(flags & PROP_ADD_SELECTED && parent->glw_class->gc_select_child != NULL) {
-    GLW_TRACE("PROP_ADD_SELECTED: parent '%s' selects child '%s'",
-              glw_get_name(parent), glw_get_name(c->c_w));
+  if(flags & PROP_ADD_SELECTED && parent->glw_class->gc_select_child != NULL)
     parent->glw_class->gc_select_child(parent, c->c_w, NULL);
-  }
-
-  if(sc->sc_pending_suggest == p && parent->glw_class->gc_suggest_focus != NULL) {
-    GLW_TRACE("PENDING PROP_SUGGEST_FOCUS: parent '%s' suggests '%s'",
-              glw_get_name(parent), glw_get_name(c->c_w));
-    parent->glw_class->gc_suggest_focus(parent, c->c_w);
-    sc->sc_pending_suggest = NULL;
-  }
 
   clone_eval(c, scope);
 
@@ -1599,8 +1588,6 @@ cloner_del_child(glw_root_t *gr, sub_cloner_t *sc, prop_t *p, glw_t *parent)
 
   if(sc->sc_pending_select == p)
     sc->sc_pending_select = NULL;
-  if(sc->sc_pending_suggest == p)
-    sc->sc_pending_suggest = NULL;
 
   if((gpsp = prop_tag_clear(p, &sc->sc_pending)) == NULL)
     return;
@@ -1619,19 +1606,13 @@ cloner_select_child(sub_cloner_t *sc, prop_t *p, glw_t *parent, prop_t *extra)
 {
   glw_clone_t *c;
   if(p == NULL) {
-    GLW_TRACE("PROP_SELECT_CHILD: parent '%s' selects NULL (clear)",
-              glw_get_name(parent));
     parent->glw_class->gc_select_child(parent, NULL, extra);
     return;
   }
 
   if((c = prop_tag_get(p, sc)) != NULL) {
-    if(parent->glw_class->gc_select_child != NULL) {
-      GLW_TRACE("PROP_SELECT_CHILD: parent '%s' selects child '%s'",
-                glw_get_name(parent), glw_get_name(c->c_w));
-      // Pass the selected prop as origin to distinguish from ADD_SELECTED
-      parent->glw_class->gc_select_child(parent, c->c_w, p);
-    }
+    if(parent->glw_class->gc_select_child != NULL)
+      parent->glw_class->gc_select_child(parent, c->c_w, extra);
     sc->sc_pending_select = NULL;
     return;
   }
@@ -1649,13 +1630,8 @@ cloner_suggest_focus(sub_cloner_t *sc, prop_t *p, glw_t *parent)
   glw_clone_t *c;
 
   if((c = prop_tag_get(p, sc)) != NULL) {
-    if(parent->glw_class->gc_suggest_focus != NULL) {
-      GLW_TRACE("PROP_SUGGEST_FOCUS: parent '%s' suggests '%s'",
-                glw_get_name(parent), glw_get_name(c->c_w));
+    if(parent->glw_class->gc_suggest_focus != NULL)
       parent->glw_class->gc_suggest_focus(parent, c->c_w);
-    }
-  } else {
-    sc->sc_pending_suggest = p;
   }
 }
 
