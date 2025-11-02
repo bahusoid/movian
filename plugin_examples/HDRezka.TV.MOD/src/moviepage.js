@@ -111,7 +111,7 @@ function moviePage(page, data) {
           playData = data.play_active;
           log.e('********************************');
 //          log.e({'playData106': playData});
-          log.e({'playData107': playData});
+//          log.e({'playData107': playData});
         }
         else {
           playData = {
@@ -469,7 +469,7 @@ function data_(dom) {
       });
     });
   }
-  log.e({'data335': data});
+  //log.e({'data335': data});
 };
 function display_translate(page) {
   if (data.tr) {

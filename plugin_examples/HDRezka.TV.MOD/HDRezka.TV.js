@@ -188,27 +188,17 @@ function printDebug(message) {
 //  if (store.debug) console.error(message);
   if (service.debug) console.error(message);
 };
-settings.createString('baseURL', 'Базовый URL (без завершающего "/")', '', function (v) {service.baseURL = v});
-//settings.createString('domain', 'Базовый URL (без завершающего "/")', 'https://rezka.ag', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен', 'https://rezka.ag', function (v) {service.domain = v});
-//settings.createString('domain', '\u0414\u043e\u043c\u0435\u043d', 'http://hdrezkayou.com', function (v) {service.domain = v});
-//settings.createString('domain', '\u0414\u043e\u043c\u0435\u043d', 'http://kinopub.me', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен', 'rezka.ag', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без "http://" и завершающего "/" в конце)', 'rezka.ag', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://rezka.ag', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без "https://" и завершающего "/" в конце)', 'rezka.ag', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://rezka.ag', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://hdrezkayou.com', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://aghdrezka.com', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://metaivi.com', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://cokinopoisk.com', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://kinopub.me', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://rezkify.com', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://rezkify.com', function (v) {service.domain = v});
-settings.createString('domain0', 'Домен (базовый URL без завершающего "/" в конце)', 'http://rezka.ag', function (v) {service.domain0 = v});
+settings.createString('domain0', 'Пользовательский домен (базовый URL без завершающего "/" в конце)', 'http://rezka.ag', function (v) { 
+  service.domain0 = v;
+  if(service.isCustomDomain) {
+    service.domain = v;
+    BASE_URL = v;
+    referer = v;
+  }
+});
+
 settings.createMultiOpt('domain', 'Выбор домена', [
-//  [service.domain0, service.domain0],
-  [service.domain0, service.domain0, true],
+  ['custom', 'Пользовательский домен', true],
   ['https://rezkify.com', 'https://rezkify.com'],
   ['http://rezkify.com', 'http://rezkify.com'],
   ['http://kinopub.me', 'http://kinopub.me'],
@@ -218,15 +208,21 @@ settings.createMultiOpt('domain', 'Выбор домена', [
   ['http://hdrezkayou.com', 'http://hdrezkayou.com'],
   ['http://rezka.ag', 'http://rezka.ag'],
   ['https://rezka.ag', 'https://rezka.ag'],
-  ],
+  ['https://rezka-ua.org', 'https://rezka-ua.org'],
+],
   function (v) {
-  printDebug('Установите домен на ' + v);
-  service.domain = v;
+    service.isCustomDomain = v === 'custom';
+  if (service.isCustomDomain) {
+    service.domain = service.domain0;
+  } else {
+    service.domain = v;
+  }
+  BASE_URL = service.domain; // Update BASE_URL immediately
+  referer = service.domain; // Update referer too
 });
-//var BASE_URL = 'http://rezka.ag';
-var BASE_URL = service.baseURL && service.baseURL.trim() ? service.baseURL : service.domain;
-//var referer = service.domain;
-var referer = BASE_URL;
+
+var BASE_URL = service.domain;
+var referer = service.domain;
 //settings.createString('baseTURL', 'Базовый трекер URL (без завершающего "/")', BASE_TURL, function (v) {service.baseTURL = v});
 //settings.createString('tracker', 'Базовый трекер URL (без завершающего "/")', 'https://hdrezka.download', function (v) {service.tracker = v});
 //settings.createString('tracker', 'Трекер', 'https://hdrezka.download', function (v) {service.tracker = v});
@@ -239,18 +235,30 @@ var referer = BASE_URL;
 //settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.tv', function (v) {service.tracker = v});
 //settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'http://rezka.land', function (v) {service.tracker = v});
 //settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.cc', function (v) {service.tracker = v});
-settings.createString('tracker0', 'Трекер (базовый URL без завершающего "/" в конце)', 'http://rezka.tv', function (v) {service.tracker0 = v});
+settings.createString('tracker0', 'Пользовательский трекер (базовый URL без завершающего "/" в конце)', 'http://rezka.tv', 
+  function (v) {
+    service.tracker0 = v
+    if (service.isCustomTracker) {
+      service.tracker = v;
+      BASE_TURL = v;
+    }
+
+  });
 settings.createMultiOpt('tracker', 'Выбор трекера', [
-//  [service.tracker0, service.tracker0],
-  [service.tracker0, service.tracker0, true],
+  ['custom', 'Пользовательский трекер', true],
   ['http://rezka.tv', 'http://rezka.tv'],
   ['https://rezka.tv', 'https://rezka.tv'],
   ['http://rezka.land', 'http://rezka.land'],
   ['https://rezka.cc', 'https://rezka.cc'],
   ],
   function (v) {
-  printDebug('Установите трекер на ' + v);
-  service.tracker = v;
+    service.isCustomTracker = v === 'custom';
+    if (service.isCustomTracker) {
+      service.tracker = service.tracker0;
+  } else {
+    service.tracker = v;
+  }
+  BASE_TURL = service.tracker;
 });
 
 //var BASE_TURL = 'https://hdrezka.download';
