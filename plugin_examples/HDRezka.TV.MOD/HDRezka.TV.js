@@ -188,7 +188,7 @@ function printDebug(message) {
 //  if (store.debug) console.error(message);
   if (service.debug) console.error(message);
 };
-settings.createString('domain0', 'Пользовательский домен (базовый URL без завершающего "/" в конце)', 'http://rezka.ag', function (v) { 
+settings.createString('domain0', 'Пользовательский домен (базовый URL без завершающего "/" в конце)', 'https://rezka.ag', function (v) { 
   service.domain0 = v;
   if(service.isCustomDomain) {
     service.domain = v;
@@ -235,7 +235,7 @@ var referer = service.domain;
 //settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.tv', function (v) {service.tracker = v});
 //settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'http://rezka.land', function (v) {service.tracker = v});
 //settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.cc', function (v) {service.tracker = v});
-settings.createString('tracker0', 'Пользовательский трекер (базовый URL без завершающего "/" в конце)', 'http://rezka.tv', 
+settings.createString('tracker0', 'Пользовательский трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.tv', 
   function (v) {
     service.tracker0 = v
     if (service.isCustomTracker) {
