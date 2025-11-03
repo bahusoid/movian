@@ -457,16 +457,20 @@ function data_(dom) {
         epData = {
           title: ep.textContent,
 //          icon: data.icon,
-          translator_id: data.translator_id,
+//          translator_id: data.translator_id,
 //           cdn_url: ep.attributes.getNamedItem('data-cdn_url').value,
-          id: ep.attributes.getNamedItem('data-id').value,
-          season_id: ep.attributes.getNamedItem('data-season_id').value,
+//          id: ep.attributes.getNamedItem('data-id').value,
+//          season_id: ep.attributes.getNamedItem('data-season_id').value,
           episode_id: ep.attributes.getNamedItem('data-episode_id').value,
 //          favs: data.favs,
 //          favs: yoData.favs,
         };
         data.season[index].ep.push(epData);
       });
+      // Set season_id from first episode
+      if (data.season[index].ep.length > 0) {
+        data.season[index].season_id = eplist[0].attributes.getNamedItem('data-season_id').value;
+      }
     });
   }
   //log.e({'data335': data});
@@ -524,13 +528,14 @@ function display_season(page) {
       console.log('Last watched episode found:', lastWatchedEpisode);
       // Find which season contains the last watched episode
       data.season.forEach(function (seasonElement, seasonIndex) {
-        var found = seasonElement.ep.some(function (episode) {
-          return episode.season_id == lastWatchedEpisode.season_id &&
-                 episode.episode_id == lastWatchedEpisode.episode_id;
-        });
-        if (found) {
-          focusSeasonIndex = seasonIndex;
-          console.log('Found last watched episode in season index:', seasonIndex);
+        if (seasonElement.season_id == lastWatchedEpisode.season_id) {
+          var found = seasonElement.ep.some(function (episode) {
+            return episode.episode_id == lastWatchedEpisode.episode_id;
+          });
+          if (found) {
+            focusSeasonIndex = seasonIndex;
+            console.log('Found last watched episode in season index:', seasonIndex);
+          }
         }
       });
     } else {
@@ -547,6 +552,7 @@ function display_season(page) {
         translator_id: data.translator_id,
         season_index: seasonIndex,
         season_title: seasonElement.title,
+        season_id: seasonElement.season_id,
         episodes: seasonElement.ep,
         type: 'serial'
       };

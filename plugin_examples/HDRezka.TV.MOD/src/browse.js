@@ -383,7 +383,7 @@ exports.season = function (page, data) {
     console.log('Last watched episode found for season page:', lastWatchedEpisode);
     // Find the episode index within this season
     data.episodes.forEach(function (episodeElement, episodeIndex) {
-      if (episodeElement.season_id == lastWatchedEpisode.season_id &&
+      if (data.season_id == lastWatchedEpisode.season_id &&
           episodeElement.episode_id == lastWatchedEpisode.episode_id) {
         focusEpisodeIndex = episodeIndex;
         console.log('Found last watched episode at index:', episodeIndex);
@@ -396,7 +396,7 @@ exports.season = function (page, data) {
   // Display episodes for this season
   data.episodes.forEach(function (episodeElement, episodeIndex) {
     var episodeData = {
-      season_id: episodeElement.season_id,
+      season_id: data.season_id,
       episode_id: episodeElement.episode_id,
       title: episodeElement.title,
       series_id: data.id,
@@ -419,7 +419,7 @@ exports.season = function (page, data) {
     if (service.tvdb) {
       item.bindVideoMetadata({
         title: (data.title_en ? data.title_en : data.title) +
-        ' S' + (episodeElement.season_id < 10 ? '0' + episodeElement.season_id : episodeElement.season_id) +
+        ' S' + (data.season_id < 10 ? '0' + data.season_id : data.season_id) +
         'E' + (episodeElement.episode_id < 10 ? '0' + episodeElement.episode_id : episodeElement.episode_id),
       });
     }
