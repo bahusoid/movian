@@ -336,6 +336,7 @@ settings.createBool('movianDRM', 'Проигрыватель Movian DRM', true, 
 // Quality settings
 settings.createBool('askQuality', 'Спрашивать качество каждый раз', true, function (v) {store.askQuality = v});
 settings.createMultiOpt('qualityResolution', 'Предпочтительное разрешение', [
+  ['4k', '4K'],
   ['1080p', '1080p', true],
   ['720p', '720p'],
   ['sd', 'SD'],
