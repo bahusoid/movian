@@ -340,7 +340,6 @@ settings.createMultiOpt('qualityResolution', 'Предпочтительное �
   ['1080p', '1080p', true],
   ['720p', '720p'],
   ['sd', 'SD'],
-  ['4k', '4K'],
 ], function (v) {store.qualityResolution = v});
 settings.createMultiOpt('qualityFormat', 'Предпочтительный формат', [
   ['hls', 'HLS', true],
