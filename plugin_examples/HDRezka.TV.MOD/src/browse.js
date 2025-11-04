@@ -1,6 +1,8 @@
 ﻿/* eslint-disable require-jsdoc */
 /* eslint-disable max-len */
 /* eslint-disable no-var */
+var moviepage = require('./moviepage');
+
 data = {};
 //data = [];
 function scrapeList(href, pageHtml) {
@@ -373,18 +375,33 @@ exports.season = function (page, data) {
   page.type = 'directory';
   page.metadata.title = data.title_year + ' | ' + data.season_title;
   page.metadata.logo = data.icon;
+
+  // Load episodes dynamically
+  var dom = moviepage.getSeriesDom(data.id, data.translator_id, data.season_index);
+  var episodes = [];
+  var seasonEpisodesDom = dom.getElementById('simple-episodes-tabs').children[data.season_index];
+  if (seasonEpisodesDom) {
+    seasonEpisodesDom.children.forEach(function (ep) {
+      var epData = {
+        title: ep.textContent,
+        //translator_id: data.translator_id,
+        //season_id: ep.attributes.getNamedItem('data-season_id').value,
+        episode_id: ep.attributes.getNamedItem('data-episode_id').value,
+      };
+      episodes.push(epData);
+    });
+  }
   
+
   // Check for last watched episode in this season
   var lastWatchedKey = 'lastWatched_' + data.id;
   var lastWatchedEpisode = resumeStore[lastWatchedKey];
   var focusEpisodeIndex = -1;
-  
-  if (lastWatchedEpisode) {
+
+  if (lastWatchedEpisode && data.season_id == lastWatchedEpisode.season_id) {
     console.log('Last watched episode found for season page:', lastWatchedEpisode);
-    // Find the episode index within this season
-    data.episodes.forEach(function (episodeElement, episodeIndex) {
-      if (data.season_id == lastWatchedEpisode.season_id &&
-          episodeElement.episode_id == lastWatchedEpisode.episode_id) {
+    episodes.forEach(function (episodeElement, episodeIndex) {
+      if (episodeElement.episode_id == lastWatchedEpisode.episode_id) {
         focusEpisodeIndex = episodeIndex;
         console.log('Found last watched episode at index:', episodeIndex);
       }
@@ -392,30 +409,32 @@ exports.season = function (page, data) {
   } else {
     console.log('No last watched episode found for series:', data.id);
   }
-  
+
   // Display episodes for this season
-  data.episodes.forEach(function (episodeElement, episodeIndex) {
+  episodes.forEach(function (episodeElement, episodeIndex) {
+    var episodeTitle = episodeElement.title;
+
     var episodeData = {
       season_id: data.season_id,
       episode_id: episodeElement.episode_id,
-      title: episodeElement.title,
+      title: episodeTitle,
       series_id: data.id,
       translator_id: data.translator_id,
       type: 'serial'
     };
-    
+
     var uri = JSON.stringify(episodeData);
-    
+
     var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
-      title: episodeElement.title,
+      title: episodeTitle,
       icon: data.icon,
       autofocus: (episodeIndex === focusEpisodeIndex)
     });
-    
+
     if (episodeIndex === focusEpisodeIndex) {
-      console.log('Setting autofocus on episode:', episodeElement.title);
+      console.log('Setting autofocus on episode:', episodeTitle);
     }
-    
+
     if (service.tvdb) {
       item.bindVideoMetadata({
         title: (data.title_en ? data.title_en : data.title) +
@@ -424,7 +443,7 @@ exports.season = function (page, data) {
       });
     }
   });
-  
+
   page.loading = false;
 };
 //function link(e, t, n) {

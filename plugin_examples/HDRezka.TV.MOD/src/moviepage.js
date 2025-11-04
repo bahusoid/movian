@@ -86,8 +86,9 @@ function moviePage(page, data) {
 //      log.d({data79: data});
       if (data.trID) {
         page.metadata.title = page.metadata.title + ' | ' + data.trID.translator_title;
+        data.translator_id = data.trID.translator_id; // Update translator_id for selected translator
         if (data.type == 'serial') {
-          dom = getSeriesDom(data.id, data.trID.translator_id);//,data.favs);
+          dom = getSeriesDom(data.id, data.trID.translator_id, null);//,data.favs);
         }
         data_(dom);
       }
@@ -350,11 +351,10 @@ function getPerson(page, data) {
 };
 */
 // getSeries(page, id, trId);
-function getSeriesDom(id, translator_id) {
-//  resp = showtime.httpReq(BASE_URL + '/ajax/get_cdn_series/?t=' + new Date().getTime(), {
-  resp = http.request(BASE_URL + '/ajax/get_cdn_series/?t=' + new Date().getTime(), {
+
+function getSeriesDom(id, translator_id, season_index) {
+  var resp = http.request(BASE_URL + '/ajax/get_cdn_series/?t=' + new Date().getTime(), {
     debug: 1,
-//     arg: {t: new Date().getTime()},
     headers: {
       'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.87 Safari/537.36',
       'accept': '*/*',
@@ -367,22 +367,22 @@ function getSeriesDom(id, translator_id) {
     postdata: {
       id: id,
       translator_id: translator_id,
-      favs: yoData.favs,
       action: 'get_episodes',
     },
   }).toString();
-  log.d({
-    '229resp': resp,
-  });
-  data.translator_id = translator_id;
-//  seasons = '<ul id="simple-seasons-tabs" class="b-simple_seasons__list clearfix">' + showtime.JSONDecode(resp).seasons + '</ul>';
-  seasons = '<ul id="simple-seasons-tabs" class="b-simple_seasons__list clearfix">' + JSON.parse(resp).seasons + '</ul>';
-//  episodes = '<div id="simple-episodes-tabs">' + showtime.JSONDecode(resp).episodes + '</div>';
-  episodes = '<div id="simple-episodes-tabs">' + JSON.parse(resp).episodes + '</div>';
-  dom = '<html><body>' + seasons + episodes + '</body></html>';
-  dom = html.parse(dom).root;
-  return dom;
+  var respJson = JSON.parse(resp);
+  var dom;
+  if (season_index !== null) {
+    var episodes = '<div id="simple-episodes-tabs">' + respJson.episodes + '</div>';
+    dom = '<html><body>' + episodes + '</body></html>';
+  } else {
+    var seasons = '<ul id="simple-seasons-tabs" class="b-simple_seasons__list clearfix">' + respJson.seasons + '</ul>';
+    dom = '<html><body>' + seasons + '</body></html>';
+  }
+ 
+  return html.parse(dom).root;
 };
+
 function data_(dom) {
 //  log.e({'data256': data});
   log.e({'261 Function data_(dom)': data});
@@ -437,42 +437,15 @@ function data_(dom) {
     slist.children.forEach(function (element, index) {
       data.season[index] = {
         title: element.textContent,
+        //Seems it's enough to have season_index but for now emulate episodes data-season_id from response 
+        season_id: index + 1,
         ep: [],
       };
     });
   }
 //   [... document.getElementById('simple-episodes-tabs').children].forEach(function (stab){console.log(eptab.children)})
 //   [... document.getElementById('simple-episodes-tabs').children].forEach(function (stab, index){console.log(elist = eptab.children)})
-  if (null !== dom.getElementById('simple-episodes-tabs')) {
-    if (data.season == undefined) {
-      data.season = [];
-      data.season[0] = {
-        title: '',
-        ep: [],
-      };
-    }
-    dom.getElementById('simple-episodes-tabs').children.forEach(function (stab, index) {
-      eplist = stab.children;
-      eplist.forEach(function (ep) {
-        epData = {
-          title: ep.textContent,
-//          icon: data.icon,
-//          translator_id: data.translator_id,
-//           cdn_url: ep.attributes.getNamedItem('data-cdn_url').value,
-//          id: ep.attributes.getNamedItem('data-id').value,
-//          season_id: ep.attributes.getNamedItem('data-season_id').value,
-          episode_id: ep.attributes.getNamedItem('data-episode_id').value,
-//          favs: data.favs,
-//          favs: yoData.favs,
-        };
-        data.season[index].ep.push(epData);
-      });
-      // Set season_id from first episode
-      if (data.season[index].ep.length > 0) {
-        data.season[index].season_id = eplist[0].attributes.getNamedItem('data-season_id').value;
-      }
-    });
-  }
+
   //log.e({'data335': data});
 };
 function display_translate(page) {
@@ -529,13 +502,8 @@ function display_season(page) {
       // Find which season contains the last watched episode
       data.season.forEach(function (seasonElement, seasonIndex) {
         if (seasonElement.season_id == lastWatchedEpisode.season_id) {
-          var found = seasonElement.ep.some(function (episode) {
-            return episode.episode_id == lastWatchedEpisode.episode_id;
-          });
-          if (found) {
-            focusSeasonIndex = seasonIndex;
-            console.log('Found last watched episode in season index:', seasonIndex);
-          }
+          focusSeasonIndex = seasonIndex;
+          console.log('Found last watched episode in season index:', seasonIndex);
         }
       });
     } else {
@@ -553,7 +521,7 @@ function display_season(page) {
         season_index: seasonIndex,
         season_title: seasonElement.title,
         season_id: seasonElement.season_id,
-        episodes: seasonElement.ep,
+//        episodes: seasonElement.ep,
         type: 'serial'
       };
 
@@ -562,7 +530,7 @@ function display_season(page) {
       var item = page.appendItem(uri, service.list, {
         title: seasonElement.title,
         icon: data.icon,
-        description: seasonElement.ep.length + ' эпизодов',
+//        description: seasonElement.ep.length + ' эпизодов',
         autofocus: (seasonIndex === focusSeasonIndex)
       });
 
@@ -575,3 +543,6 @@ function display_season(page) {
   }
   page.loading = false;
 };
+
+// Export getSeriesDom for use in other modules
+exports.getSeriesDom = getSeriesDom;

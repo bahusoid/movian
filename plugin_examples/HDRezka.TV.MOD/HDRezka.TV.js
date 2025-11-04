@@ -1,7 +1,7 @@
 ﻿/**
  *  HDRezka.TV plugin for Movian
  *
- *  Copyright (C) 2014-2024 Buksa (fix by kovalDN)
+ *  Copyright (C) 2014-2025 Buksa (fix by kovalDN) (bahusoid mod)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
