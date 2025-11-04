@@ -1376,6 +1376,7 @@ be_stpp_canhandle(const char *url)
  *
  */
 static backend_t be_stpp = {
+  .be_flags      = BACKEND_PLUGIN,
   .be_canhandle  = be_stpp_canhandle,
   .be_open       = be_stpp_open,
 };

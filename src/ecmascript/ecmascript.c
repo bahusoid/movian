@@ -1107,7 +1107,7 @@ ecmascript_load(const char *ctxid, int flags, const char *url,
  *
  */
 static backend_t be_ecmascript = {
-  .be_flags  = BACKEND_OPEN_CHECKS_URI,
+  .be_flags  = BACKEND_OPEN_CHECKS_URI | BACKEND_PLUGIN,
   .be_open   = ecmascript_openuri,
   .be_search = ecmascript_search,
 };

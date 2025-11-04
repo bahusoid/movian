@@ -665,6 +665,11 @@ nav_page_setup_prop(nav_page_t *np, const char *view)
   prop_set(np->np_prop_root, "url",       PROP_SET_STRING, np->np_url);
   prop_set(np->np_prop_root, "parentUrl", PROP_SET_STRING, np->np_parent_url);
 
+  // Convenience flag for skins: true if current page URL is handled by the
+  // plugin backend (i.e. starts with "plugin:")
+  prop_set_int(prop_create(np->np_prop_root, "isPlugin"),
+               !strncmp(np->np_url ?: "", "plugin:", 7));
+
   np->np_direct_close_sub = 
     prop_subscribe(PROP_SUB_NO_INITIAL_UPDATE,
 		   PROP_TAG_NAMED_ROOT, np->np_prop_root, "page",

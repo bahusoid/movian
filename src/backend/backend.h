@@ -93,6 +93,7 @@ typedef struct backend {
   int be_flags;
 #define BACKEND_OPEN_CHECKS_URI 0x1
 #define BACKEND_DYNAMIC         0x2 // refcounted
+#define BACKEND_PLUGIN          0x4 // Provided by plugin system (JS/NP/STPP/etc)
 
   int (*be_init)(void);
 

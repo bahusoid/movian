@@ -578,6 +578,8 @@ backend_open(prop_t *page, const char *url, int sync)
 
   if(be != NULL) {
     prop_set(page, "url", PROP_SET_STRING, url);
+    // Dynamic backends are registered by plugins (e.g., native plugins)
+    prop_set_int(prop_create(page, "isPlugin"), 1);
     int err;
     if(be->be_open2 == NULL) {
       err = 1;
@@ -591,8 +593,11 @@ backend_open(prop_t *page, const char *url, int sync)
 
   LIST_FOREACH(be, &backends, be_global_link) {
     if(be->be_flags & BACKEND_OPEN_CHECKS_URI) {
-      if(be->be_open(page, url, sync))
+      int rc = be->be_open(page, url, sync);
+      if(rc)
 	continue;
+      if(be->be_flags & BACKEND_PLUGIN)
+        prop_set_int(prop_create(page, "isPlugin"), 1);
       return 0;
     }
   }
@@ -605,6 +610,10 @@ backend_open(prop_t *page, const char *url, int sync)
       url = urlbuf;
 
     prop_set(page, "url", PROP_SET_STRING, url);
+
+    // Mark plugin pages based on backend flag
+    if(be->be_flags & BACKEND_PLUGIN)
+      prop_set_int(prop_create(page, "isPlugin"), 1);
 
     be->be_open(page, url, sync);
     return 0;
