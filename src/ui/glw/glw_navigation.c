@@ -78,6 +78,7 @@ glw_navigate_last(glw_t *parent)
   return 0;
 }
 
+static int64_t last_nav_step_ts = 0;
 
 /**
  *
@@ -110,8 +111,17 @@ glw_navigate_step(glw_t *c, int count, int may_wrap)
   if(to_focus != NULL) {
     glw_focus_set(to_focus->glw_root, to_focus, GLW_FOCUS_SET_INTERACTIVE,
                   "NavStep");
+    last_nav_step_ts = arch_get_ts();
     return 1;
   } else if(may_wrap) {
+    // Prevents wrapping while nav key is pressed
+    // This allows users to stop at list edges instead of wrapping immediately
+    int64_t timestamp = arch_get_ts();
+    if(timestamp - last_nav_step_ts < 100000) {
+      last_nav_step_ts = timestamp;
+      return 0;
+    }
+    
     if(forward) {
       return glw_navigate_first(parent);
     } else {
