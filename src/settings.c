@@ -1453,6 +1453,36 @@ static int
 be_settings_open(prop_t *page, const char *url0, int sync)
 {
   usage_page_open(sync, "Settings");
+  // Support canonical per-plugin settings URLs: settings:plugin:<pluginId>
+  const char *plid = mystrbegins(url0, "settings:plugin:");
+  if(plid != NULL && *plid) {
+    // 1) Try exact match first
+    prop_t *pm = prop_find(prop_get_global(),
+                           "settings", "apps", "nodes", plid,
+                           NULL);
+    if(pm != NULL) {
+      prop_set(page, "model", PROP_SET_LINK, pm);
+      return 0;
+    }
+
+    // 2) Fallback: Mostly for dev plugins. Dev plugins have @[origin] suffix - [pluginid]@dev
+    // but settings are registerd under short id without origin (so both plugins share the same settings)
+    char *plid_norm = mystrdupa(plid);
+    char *at = strchr(plid_norm, '@');
+    if(at) {
+      *at = '\0';
+      pm = prop_find(prop_get_global(),
+                     "settings", "apps", "nodes", plid_norm,
+                     NULL);
+      if(pm != NULL) {
+        prop_set(page, "model", PROP_SET_LINK, pm);
+        return 0;
+      }
+    }
+    
+    // Fall back to global settings if plugin model not found
+  }
+
   prop_set(page, "model", PROP_SET_LINK, settings_model);
   return 0;
 }
