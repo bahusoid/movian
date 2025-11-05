@@ -1,7 +1,5 @@
 #import "skin://theme.view"
 
-// Keep behavior simple: rely on default back handling like directory.view
-
 
 // Enable sidebar backdrop style (used by sidebar.view)
 style(sidebarBackdrop, {
@@ -11,9 +9,6 @@ style(sidebarBackdrop, {
 
 // Allow opening the sidebar (Page settings) from the error page
 onEvent(menu,  { toggle($clone.showSidebar); });
-// Left exits when sidebar is closed; Right opens Page settings when closed
-onEvent(left,  {event("back");});
-onEvent(right, { $clone.showSidebar = true; }, !$clone.showSidebar);
 
 widget(container_z, {
 
@@ -75,7 +70,6 @@ widget(container_z, {
     widget(loader, {
       hidden: !$clone.showSidebar;
       filterConstraintX: true;
-      time: 0.05;
       source: "skin://menu/sidebar.view";
     });
   });
