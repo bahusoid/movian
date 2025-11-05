@@ -1,45 +1,111 @@
 #import "skin://theme.view"
 
+// Keep behavior simple: rely on default back handling like directory.view
+
+
+// Enable sidebar backdrop style (used by sidebar.view)
+style(sidebarBackdrop, {
+  color: 0;
+  alpha: 0.3;
+});
+
+// Allow opening the sidebar (Page settings) from the error page
+onEvent(menu,  { toggle($clone.showSidebar); });
+// Left exits when sidebar is closed; Right opens Page settings when closed
+onEvent(left,  {event("back");});
+onEvent(right, { $clone.showSidebar = true; }, !$clone.showSidebar);
+
 widget(container_z, {
 
+  widget(layer, {
+
+    widget(clip, {
+      rightPx: select($clone.showSidebar, 22em, 0);
+      blurOutside: 1;
+      alphaOutside: 0.05;
+
+      widget(container_z, {
+        // Minimal nav: Right opens Page settings, Left exits page
+        onEvent(right, { $clone.showSidebar = 1; }, true, false);
+        onEvent(left,  event("back"),       true, false);
+        // Dim content slightly when sidebar is visible
+        alpha: iir(select($clone.showSidebar, 0.3, 1), 4);
+
+        // Main content
+        widget(image, {
+          margin: 3em;
+          source: "skin://icons/ic_error_48px.svg";
+          alpha: 0.1;
+        });
+
+        widget(container_y, {
+          spacing: 10;
+
+          space(1);
+
+          widget(label, {
+            focusable: 1;
+            align: center;
+            caption: _("Unable to open resource");
+            size: 1.5em;
+            font: "skin://fonts/RobotoCondensed-Bold.ttf";
+            shadow: true;
+          });
+
+          widget(label, {
+            align: center;
+            caption: $self.url;
+            maxlines: 10;
+            shadow: true;
+          });
+
+          widget(label, {
+            align: center;
+            caption: $self.model.error;
+            maxlines: 10;
+            font: "skin://fonts/RobotoCondensed-Bold.ttf";
+            shadow: true;
+          });
+          space(1);
+        });
+      });
+    });
+
+    // Sidebar (Page settings)
+    widget(loader, {
+      hidden: !$clone.showSidebar;
+      filterConstraintX: true;
+      time: 0.05;
+      source: "skin://menu/sidebar.view";
+    });
+  });
+
+  // Page header (hide title when sidebar is open, to match other pages)
   widget(container_y, {
     align: top;
-    PageHeader($self.model.metadata.title);
+    PageHeader(select($clone.showSidebar, "", $self.model.metadata.title));
   });
 
-  widget(image, {
-    margin: 3em;
-    source: "skin://icons/ic_error_48px.svg";
-    alpha: 0.1;
-  });
-
+  // Top-right menu icon to toggle the sidebar (like on Home page)
   widget(container_y, {
-    spacing: 10;
+    alpha: iir($ui.showTopIcons, 4);
 
-    space(1);
-
-    widget(label, {
-      align: center;
-      caption: _("Unable to open resource");
-      size: 1.5em;
-      font: "skin://fonts/RobotoCondensed-Bold.ttf";
-      shadow: true;
+    widget(container_x, {
+      space(1);
+      height: 3em;
+      widget(container_y, {
+        align: center;
+        width: 4em;
+        clickable: true;
+  onEvent(activate, { toggle($clone.showSidebar); });
+        navFocusable: false;
+        widget(icon, {
+          angle: iir($clone.showSidebar, 4) * -90;
+          color: 0.5 + iir(isHovered(), 4);
+          size: 2em;
+          source: "skin://icons/ic_menu_48px.svg";
+        });
+      });
     });
-
-    widget(label, {
-      align: center;
-      caption: $self.url;
-      maxlines: 10;
-      shadow: true;
-    });
-
-    widget(label, {
-      align: center;
-      caption: $self.model.error;
-      maxlines: 10;
-      font: "skin://fonts/RobotoCondensed-Bold.ttf";
-      shadow: true;
-    });
-    space(1);
   });
 });
