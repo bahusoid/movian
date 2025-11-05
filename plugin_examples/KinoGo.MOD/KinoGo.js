@@ -197,134 +197,42 @@ function printDebug(message) {
 //  if (store.debug) console.error(message);
   if (service.debug) console.error(message);
 };
+var HTTPS;
+var BASE_URL;
+var REFERER;
+function updateUrl()
+{
+  HTTPS = service.protocol;
+  BASE_URL = service.domain;
+  REFERER = HTTPS + BASE_URL + '/';
+}
 settings.createMultiOpt('protocol', 'Выбор протокола соединения', [
   ['http://', 'HTTP'],
   ['https://', 'HTTPS', true],
   ],
   function (v) {
-  printDebug('Установите протокол на ' + v);
+
   service.protocol = v;
+  // Update protocol-dependent globals so protocol change is immediate
+  updateUrl();
 });
-var HTTPS = service.protocol;
-//settings.createString('baseURL', 'Базовый URL (без завершающего "/")', BASE_URL, function (v) {service.baseURL = v});
-//settings.createString('domain', 'Базовый URL (без завершающего "/")', 'http://kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен', 'http://kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', '\u0414\u043e\u043c\u0435\u043d', 'http://kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен', 'kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без "http://" и завершающего "/" в конце)', 'kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'http://kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без "https://" и завершающего "/" в конце)', 'kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.tv', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo-net.org', function (v) {service.domain = v});
-//settings.createString('domain1', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo-net.org', function (v) {service.domain1 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo-net.la', function (v) {service.domain = v});
-settings.createString('domain1', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo-net.la', function (v) {service.domain1 = v});
-/*
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.cc', function (v) {service.domain = v});
-settings.createString('domain2', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo.cc', function (v) {service.domain2 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo-film.xyz', function (v) {service.domain = v});
-settings.createString('domain3', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo-film.xyz', function (v) {service.domain3 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kiinogo.biz', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://q.kiinogo.biz', function (v) {service.domain = v});
-settings.createString('domain4', 'Домен (базовый URL без завершающего "/" в конце)', 'q.kiinogo.biz', function (v) {service.domain4 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.cx', function (v) {service.domain = v});
-settings.createString('domain5', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo.cx', function (v) {service.domain5 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.film', function (v) {service.domain = v});
-settings.createString('domain6', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo.film', function (v) {service.domain6 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo-la.net', function (v) {service.domain = v});
-settings.createString('domain7', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo-la.net', function (v) {service.domain7 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogoby.zone', function (v) {service.domain = v});
-settings.createString('domain8', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogoby.zone', function (v) {service.domain8 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.biz', function (v) {service.domain = v});
-settings.createString('domain9', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo.biz', function (v) {service.domain9 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogoo.cc', function (v) {service.domain = v});
-settings.createString('domain10', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogoo.cc', function (v) {service.domain10 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.lt', function (v) {service.domain = v});
-settings.createString('domain0', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo.lt', function (v) {service.domain0 = v});
-*/
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.la', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://zerkalo.kinogo.lu', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://s1.kinogo.lu', function (v) {service.domain = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://s9.kinogo.lu', function (v) {service.domain = v});
-//settings.createString('domain0', 'Домен (базовый URL без завершающего "/" в конце)', 's9.kinogo.lu', function (v) {service.domain0 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.ag', function (v) {service.domain = v});
-//settings.createString('domain0', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo.ag', function (v) {service.domain0 = v});
-//settings.createString('domain', 'Домен (базовый URL без завершающего "/" в конце)', 'https://kinogo.at', function (v) {service.domain = v});
-settings.createString('domain0', 'Домен (базовый URL без завершающего "/" в конце)', 'kinogo.at', function (v) {service.domain0 = v});
-settings.createString('domainx', 'Домен (базовый URL без завершающего "/" в конце)', '', function (v) {service.domainx = v});
+
+settings.createString('domain0', 'Пользовательский домен (базовый URL без завершающего "/" в конце)', 'kinogo.at', function (v) {
+  service.domain0 = v;
+  // If user is using custom domain, apply immediately
+  if (service.isCustomDomain) {
+    service.domain = v;
+    updateUrl();
+  }
+});
+
 settings.createMultiOpt('domain', 'Выбор домена', [
+  ['custom', 'Пользовательский домен', true],
   ['kinogo-net.org', 'kinogo-net.org (http/https) "базовый"'],
 //  ['https://kinogo-net.org', 'https://kinogo-net.org "базовый"'],
-//  [service.domain1, service.domain1],
-  [service.domain1, service.domain1, true],
   ['kinogo-net.la', 'kinogo-net.la (http/https) "зеркало"'],
-//  ['https://kinogo-net.la', 'https://kinogo-net.la "зеркало"'],
-/*
-  ['kinogo.cc', 'kinogo.cc (http/https) "базовый"'],
-//  ['https://kinogo.cc', 'https://kinogo.cc "базовый"'],
-  [service.domain2, service.domain2],
-//  [service.domain2, service.domain2, true],
-  ['kinogo.cc', 'kinogo.cc (http/https) "зеркало"'],
-//  ['https://kinogo.cc', 'https://kinogo.cc "зеркало"'],
-  ['kinogo-film.xyz', 'kinogo-film.xyz (http/https) "базовый"'],
-//  ['https://kinogo-film.xyz', 'https://kinogo-film.xyz "базовый"'],
-  [service.domain3, service.domain3],
-//  [service.domain3, service.domain3, true],
-  ['kinogo-film.xyz', 'kinogo-film.xyz (http/https) "зеркало"'],
-//  ['https://kinogo-film.xyz', 'https://kinogo-film.xyz "зеркало"'],
-  ['kiinogo.biz', 'kiinogo.biz (http/https) "базовый"'],
-//  ['https://kiinogo.biz', 'https://kiinogo.biz "базовый"'],
-  [service.domain4, service.domain4],
-//  [service.domain4, service.domain4, true],
-  ['q.kiinogo.biz', 'q.kiinogo.biz (http/https) "зеркало"'],
-//  ['https://q.kiinogo.biz', 'https://q.kiinogo.biz "зеркало"'],
-  ['kinogo.cx', 'kinogo.cx (http/https) "базовый"'],
-//  ['https://kinogo.cx', 'https://kinogo.cx "базовый"'],
-  [service.domain5, service.domain5],
-//  [service.domain5, service.domain5, true],
-  ['kinogo.cx', 'kinogo.cx (http/https) "зеркало"'],
-//  ['https://kinogo.cx', 'https://kinogo.cx "зеркало"'],
-  ['kinogo.film', 'kinogo.film (http/https) "базовый"'],
-//  ['https://kinogo.film', 'https://kinogo.film "базовый"'],
-  [service.domain6, service.domain6],
-//  [service.domain6, service.domain6, true],
-  ['kinogo.film', 'kinogo.film (http/https) "зеркало"'],
-//  ['https://kinogo.film', 'https://kinogo.film "зеркало"'],
-  ['kinogo-la.net', 'kinogo-la.net (http/https) "базовый"'],
-//  ['https://kinogo-la.net', 'https://kinogo-la.net "базовый"'],
-  [service.domain7, service.domain7],
-//  [service.domain7, service.domain7, true],
-  ['kinogo-la.net', 'kinogo-la.net (http/https) "зеркало"'],
-//  ['https://kinogo-la.net', 'https://kinogo-la.net "зеркало"'],
-  ['kinogoby.zone', 'kinogoby.zone (http/https) "базовый"'],
-//  ['https://kinogoby.zone', 'https://kinogoby.zone "базовый"'],
-  [service.domain8, service.domain8],
-//  [service.domain8, service.domain8, true],
-  ['kinogoby.zone', 'kinogoby.zone (http/https) "зеркало"'],
-//  ['https://kinogoby.zone', 'https://kinogoby.zone "зеркало"'],
-  ['kinogo.biz', 'kinogo.biz (http/https) "базовый"'],
-//  ['https://kinogo.biz', 'https://kinogo.biz "базовый"'],
-  [service.domain9, service.domain9],
-//  [service.domain9, service.domain9, true],
-  ['kinogo.biz', 'kinogo.biz (http/https) "зеркало"'],
-//  ['https://kinogo.biz', 'https://kinogo.biz "зеркало"'],
-  ['kinogoo.cc', 'kinogoo.cc (http/https) "базовый"'],
-//  ['https://kinogoo.cc', 'https://kinogoo.cc "базовый"'],
-  [service.domain10, service.domain10],
-//  [service.domain10, service.domain10, true],
-  ['kinogoo.cc', 'kinogoo.cc (http/https) "зеркало"'],
-//  ['https://kinogoo.cc', 'https://kinogoo.cc "зеркало"'],
-  ['kinogo.lt', 'kinogo.lt (http/https) "базовый"'],
-//  ['https://kinogo.lt', 'https://kinogo.lt "базовый"'],
-  [service.domain0, service.domain0],
-//  [service.domain0, service.domain0, true],
-  ['kinogo.lt', 'kinogo.lt (http/https) "зеркало"'],
-//  ['https://kinogo.lt', 'https://kinogo.lt "зеркало"'],
-*/
   ['kinogo.la', 'kinogo.la (http/https) "базовый"'],
 //  ['https://kinogo.la', 'https://kinogo.la "базовый"'],
-  [service.domain0, service.domain0],
-//  [service.domain0, service.domain0, true],
 //  ['s9.kinogo.lu', 's9.kinogo.lu (http/https) "зеркало"'],
 //  ['https://s9.kinogo.lu', 'https://s9.kinogo.lu "зеркало"'],
   ['zerkalo.kinogo.lu', 'zerkalo.kinogo.lu (http/https) "зеркало"'],
@@ -333,45 +241,35 @@ settings.createMultiOpt('domain', 'Выбор домена', [
 //  ['https://kinogo.ag', 'https://kinogo.ag "зеркало"'],
   ['kinogo.at', 'kinogo.at (http/https) "зеркало"'],
 //  ['https://kinogo.at', 'https://kinogo.at "зеркало"'],
-  [service.domainx, service.domainx],
-//  [service.domainx, service.domainx, true],
   ],
   function (v) {
   printDebug('Установите домен на ' + v);
-  service.domain = v;
+  // Support a custom user-provided domain similar to HDRezka plugin
+  service.isCustomDomain = v === 'custom';
+  if (service.isCustomDomain) {
+    service.domain = service.domain0;
+  } else {
+    service.domain = v;
+  }
+  // Update derived globals immediately so new domain is usable right away
+  updateUrl();
 });
-//var BASE_URL = 'http://kinogo.tv';
-var BASE_URL = service.domain;
-//var REFERER = service.domain;
-//var REFERER = service.protocol + service.domain;
-//var REFERER = BASE_URL;
-//var REFERER = BASE_URL + '/';
-//var REFERER = HTTPS + BASE_URL;
-var REFERER = HTTPS + BASE_URL + '/';
+
+updateUrl();
 //var inspect_url = BASE_URL.replace(/^http.*(\w{4,15}.\w{2,3})$/gm,'.*\.$1') + '.*';
 //var inspect_url = HTTPS + BASE_URL.replace(/^http.*(\w{4,15}.\w{2,3})$/gm,'.*\.$1') + '.*';
 //print(inspect_url)
 //io.httpInspectorCreate(inspect_url, function (ctrl) {
-io.httpInspectorCreate('http.*kinogo.tv.*', function (ctrl) {
-//io.httpInspectorCreate('.*kinogo.tv.*', function (ctrl) {
-//  ctrl.setHeader('Accept','text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8');
-//  ctrl.setHeader('Accept','text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9');
-//  ctrl.setHeader('Accept-Encoding', 'gzip, deflate');
-//  ctrl.setHeader('Accept-Language', 'en-US,en;q=0.8,ru;q=0.6');
-  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
-//  ctrl.setHeader('Content-Type', 'application/x-mpegURL');
-//  ctrl.setHeader('Content-Type', 'application/x-www-form-urlencoded');
-  ctrl.setHeader('Origin', 'http://kinogo.tv');
-  ctrl.setHeader('User-Agent', UA);
-//  ctrl.setHeader('Referer', 'http://kinogo.tv');
-  ctrl.setHeader('Referer', 'http://kinogo.tv/');
-//  ctrl.setHeader('Referer', BASE_URL);
-//  ctrl.setHeader('Referer', BASE_URL + '/');
-//  ctrl.setHeader('Referer', HTTPS + BASE_URL);
-//  ctrl.setHeader('Referer', HTTPS + BASE_URL + '/');
-//  ctrl.setHeader('Referer', REFERER);
-  return 0;
-});
+// Use dynamic BASE_URL and REFERER so headers follow the selected domain immediately
+// io.httpInspectorCreate('http.*' + BASE_URL + '.*', function (ctrl) {
+//   ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
+//   // Origin should use the chosen protocol + domain
+//   ctrl.setHeader('Origin', HTTPS + BASE_URL);
+//   ctrl.setHeader('User-Agent', UA);
+//   // Referer uses the computed REFERER variable (protocol + domain + '/'), updated on setting change
+//   ctrl.setHeader('Referer', REFERER);
+//   return 0;
+// });
 //io.httpInspectorCreate(BASE_URL + '.*', function (ctrl) {
 io.httpInspectorCreate(HTTPS + BASE_URL + '.*', function (ctrl) {
 //  ctrl.setHeader('Accept','text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8');
@@ -382,6 +280,7 @@ io.httpInspectorCreate(HTTPS + BASE_URL + '.*', function (ctrl) {
 //  ctrl.setHeader('Content-Type', 'application/x-mpegURL');
 //  ctrl.setHeader('Content-Type', 'application/x-www-form-urlencoded');
 //  ctrl.setHeader('Origin', 'http://kinogo.tv');
+  ctrl.setHeader('Origin', HTTPS + BASE_URL);
   ctrl.setHeader('User-Agent', UA);
 //  ctrl.setHeader('Referer', BASE_URL);
 //  ctrl.setHeader('Referer', BASE_URL + '/');
