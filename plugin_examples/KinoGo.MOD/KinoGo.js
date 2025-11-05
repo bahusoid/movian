@@ -67,6 +67,17 @@ var LOGOAVATARS = Plugin.path + 'src/avatars.png';
 var LOGOEXIT = Plugin.path + 'src/exit.png';
 //var listview = Plugin.path + 'src/list.view';
 var NAME = 'kinogo';
+
+// Simple debug logger for Movian log
+function dlog(msg) {
+  if (service.debug) {
+    try {
+    print('KinoGo@dev [DEBUG]: ' + msg);
+  } catch (e) {
+    try { console.log('KinoGo@dev [DEBUG]: ' + msg); } catch (e2) {}
+  }
+  }
+}
 //var service = require('showtime/service');
 var service = require('movian/service');
 //var service = plugin.createService(config.TTL, config.PREFIX + ':start', 'video', true, config.LOGO);
@@ -352,7 +363,7 @@ function setPageHeader(page, title, icon) {
 */
 //plugin.addURI(PREFIX + ':start', function (page) {
 new page.Route(PREFIX + ':start', function (page) {
-  if (!service.tosaccepted) {
+  if (!service.tosaccepted) { 
 //    if (showtime.message(tos, true, true)) {
     if (popup.message(tos, true, true)) {
       service.tosaccepted = 1;
@@ -379,7 +390,7 @@ new page.Route(PREFIX + ':start', function (page) {
   html = http.request(REFERER).toString();
 */
 //  html = showtime.httpReq(REFERER, {
-  html = http.request(REFERER, {
+  html = http.request(REFERER, { 
     debug: true,
 //    debug: false,
 //    noFollow: true,
@@ -844,7 +855,7 @@ new page.Route(PREFIX + ':start', function (page) {
     });
 */
 //    page.appendItem('', 'separator', {title: ''});
-    page.appendItem(PREFIX + ':browse:' + REFERER + 'favorites/' + '~' + 'Мои закладки', 'directory', {
+    page.appendItem(PREFIX + ':browse:' + REFERER + 'favorites/' + '~' + 'Мои закладки', 'directory', { 
 //    page.appendItem(PREFIX + ':browse:' + REFERER + 'favorites/' + '~' + 'Мои закладки', 'video', {
 //    page.appendItem(PREFIX + ':browse:' + REFERER + 'favorites/' + '~' + 'Мои закладки', service.list, {
 //      title: new showtime.RichText('Мои закладки'),
@@ -2578,30 +2589,58 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //      title: new showtime.RichText('Видео:'),
       title: new RichText('Видео:'),
     });
-    var playlist = doc.match(/class="tabs.*?">([\s\S]*?)<div class=".*?related.*?">/);
+  var playlist = doc.match(/class="tabs.*?">([\s\S]*?)<div class=".*?related.*?">/);
+  var playlistHtml = playlist ? playlist[1] : doc;
+  dlog('Moviepage: tabs found=' + !!playlist + ', scanLength=' + (playlist ? playlist[1].length : doc.length));
 //    var player = playlist[1].match(/<script.*?Playerjs.*?file:.*?(\.mp4|\.m3u8)|<(iframe|IFRAME|div.*?"tabs-b video-box").*?(vcdn\.icdn\.ws|.*?\.svetacdn\.in|.*?\.annacdn\.cc|cdn\.cdn-films\.xyz|me\.greenfilm\.xyz|films\.video-up\.online|kino\.stokino\.rest|full-hd\.ki1080no\.xyz|s.*?\.filmload\.me|kino.*?\.navigatorkino\.xyz|.*?up\.terobat\.work|up.*?\.kiberload\.pw|cloud.*?\.kifise\.xyz|server.*?\.film-s-load\.live|video\.kinosteel\.club|video\.kinogo\.lu|api\.tobaco\.ws|api.*?\.tobaco\.ws|api\.topdbltj\.ws|api.*?\.topdbltj\.ws|api.*?\.delivembd\.ws|api.*?\.synchroncode\.com|api\.hostemb\.ws|shizahd\.ru|700filmov\.ru\/movie\/)/);
 //    var player = playlist[1].match(/<script.*?Playerjs.*?file:.*?(\.mp4|\.m3u8)|<(iframe|IFRAME|div.*?"tabs-b video-box").*?(icdn|svetacdn|annacdn|cdn-films|greenfilm|video-up|stokino|ki1080no|filmload|navigatorkino|terobat|kiberload|kifise|film-s-load|kinosteel|video\.kinogo\.lu|tobaco|topdbltj|delivembd|synchroncode|hostemb|shizahd|700filmov.*?\/movie\/)/);
-    var player = playlist[1].match(/<script.*?Playerjs.*?file:.*?(\.mp4|\.m3u8)|<(iframe|IFRAME|div.*?"tabs-b video-box").*?((icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise)|((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo)\.ws)|.*?\.takedwn\.ws)|shizahd|700filmov.*?\/movie\/)/);
+  var player = playlistHtml.match(/<script.*?Playerjs.*?file:.*?(\.mp4|\.m3u8)|<(iframe|IFRAME|div.*?"tabs-b video-box").*?((icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm)|((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo|namy)\.ws)|.*?\.(takedwn\.ws|newplayjj\.com)|azure\d+.*?sitsarl\.com)|shizahd|700filmov.*?\/movie\/)/);
+  dlog('Moviepage: player regex matched=' + !!player);
 //    if (playlist) {
-    if (player) {
+  if (player) {
 //      page.appendItem('', 'separator', {
 //        title: new showtime.RichText('Видео:'),
 //        title: new RichText('Видео:'),
 //      });
 //      var replaylist = /<[iframe|IFRAME|script|div.*?"tabs-b video-box"]+(.*?)<\/(iframe|IFRAME|script|div)>/g;
-      var replaylist = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")(.*?)<\/(iframe|IFRAME|script|div)>/g;
+  var replaylist = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")(.*?)<\/(iframe|IFRAME|script|div)>/g;
 //      var replaylist = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")([^"]+)<\/(iframe|IFRAME|script|div)>/g;
-      var match = replaylist.exec(playlist[1]);
+  var match = replaylist.exec(playlistHtml);
+  var playersAdded = 0;
       while (match) {
+        dlog('Moviepage: found embed tag=' + match[1] + ', attrs sample=' + (match[2] ? match[2].slice(0,200) : ''));
 //        var playlisturl = match[1].match(/[file:|src=]+[ '|'| "|"| |]+(.*?)('|"| ).*?/);
 //        var playlisturl = match[2].match(/(file:|src=)( '|'| "|"| |)(.*?)('|"| ).*?/);
 //        var playlisturl = match[2].match(/(file:|src=)( '|'| "|"| |)([^"]+)('|"| ).*?/);
-        var playlisturl = match[2].match(/(file:\(|file:|src=|SRC=)( \(|\(| '|'| "|"| |)(.*?)(\)|'|"| |>)/);
+        // Robustly extract a URL from common attributes/patterns
+        var srcMatch = null;
         try {
-//          playlisturl = playlisturl[1];
-          playlisturl = playlisturl[3];
-//          playlisturl = playlisturl.replace(/('|"| )/g, '').trim();
-          playlisturl = playlisturl.replace(/(\(|\)|'|"| |>)/g, '').trim();
+          // Prefer explicit src="..."
+          srcMatch = match[2].match(/(?:\s|^)src\s*=\s*(['"])(.*?)\1/i);
+          if (!srcMatch) {
+            // Sometimes lazy providers use data-src
+            srcMatch = match[2].match(/(?:\s|^)data-src\s*=\s*(['"])(.*?)\1/i);
+          }
+          if (!srcMatch) {
+            // Playerjs style: file('...') or file: '...'
+            srcMatch = match[2].match(/\bfile\s*:\s*(?:\(|)(['"]?)(.*?)\1\)?/i);
+          }
+        } catch (e) {}
+        var playlisturl = '';
+        try {
+          if (srcMatch && srcMatch[2]) {
+            playlisturl = srcMatch[2].trim();
+          }
+          // Decode common HTML entities that sometimes appear in iframe src (e.g. https&#58;//)
+          try {
+            // numeric entities
+            playlisturl = playlisturl.replace(/&#(\d+);/g, function(_, d){ return String.fromCharCode(parseInt(d,10)); });
+            // hex entities
+            playlisturl = playlisturl.replace(/&#x([0-9a-fA-F]+);/g, function(_, h){ return String.fromCharCode(parseInt(h,16)); });
+            // basic named entities
+            playlisturl = playlisturl.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+          } catch (e2) {}
+          dlog('Moviepage: raw src resolved to=' + playlisturl);
           if (/http.*?:\/\//.test(playlisturl)) {
             playlisturl = playlisturl;
 //            playlisturl = playlisturl + '///';
@@ -2620,11 +2659,16 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //            playlisturl = HTTPS + BASE_URL + '///' + playlisturl;
 //            playlisturl = HTTPS + BASE_URL + '///' + playlisturl + '///';
           }
+          dlog('Moviepage: normalized playlisturl=' + playlisturl);
 //          playlisturl = playlisturl + '///';
 //          playlisturl = playlisturl.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
         }
         catch (err) {
+          dlog('Moviepage: failed to resolve playlisturl: ' + err);
           playlisturl = '';
+        }
+        if (!playlisturl) {
+          dlog('Moviepage: warning - no src/file URL extracted from tag, skipping');
         }
 //        playlisturl = showtime.entityDecode(playlisturl);
 //        playlisturl = unescape(playlisturl);
@@ -2655,7 +2699,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
         }
 //        else if (/(vcdn\.icdn\.ws|.*?\.svetacdn\.in|.*?\.annacdn\.cc|cdn\.cdn-films\.xyz|me\.greenfilm\.xyz|films\.video-up\.online|kino\.stokino\.rest|full-hd\.ki1080no\.xyz|s.*?\.filmload\.me|kino.*?\.navigatorkino\.xyz|.*?up\.terobat\.work|up.*?\.kiberload\.pw|cloud.*?\.kifise\.xyz|server.*?\.film-s-load\.live|video\.kinosteel\.club|video\.kinogo\.lu)/.test(playlisturl)) {
 //        else if (/(icdn|svetacdn|annacdn|cdn-films|greenfilm|video-up|stokino|ki1080no|filmload|navigatorkino|terobat|kiberload|kifise|film-s-load|kinosteel|video\.kinogo\.lu)/.test(playlisturl)) {
-        else if (/(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise)/.test(playlisturl)) {
+        else if (/(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm|azure\d+.*?sitsarl\.com)/.test(playlisturl)) {
           playlistname = 'cloud.cdnland.in';
 //          uri = PREFIX + ':cdnlandpage:' + playlisturl + '~' + title + '~' + icon;
 //          uri = PREFIX + ':cdnlandpage:' + escape(playlisturl) + '~' + escape(title) + '~' + escape(icon);
@@ -2666,7 +2710,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
         }
 //        else if (/(api\.tobaco\.ws|api.*?\.tobaco\.ws|api\.topdbltj\.ws|api.*?\.topdbltj\.ws|api.*?\.delivembd\.ws|api.*?\.synchroncode\.com|api\.hostemb\.ws)/.test(playlisturl)) {
 //        else if (/(tobaco|topdbltj|delivembd|synchroncode|hostemb)/.test(playlisturl)) {
-        else if (/((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo)\.ws)|.*?\.takedwn\.ws)/.test(playlisturl)) {
+        else if (/((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo|namy)\.ws)|.*?\.(takedwn\.ws|newplayjj\.com))/.test(playlisturl)) {
           playlistname = 'takedwn.ws';
 //          playlistname = 'zombie-film.com';
 //          uri = PREFIX + ':takedwnpage:' + playlisturl + '~' + title + '~' + icon;
@@ -2697,7 +2741,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //          uri = PREFIX + ':sundbpage:' + escape(playlisturl) + '~' + escape(title) + '~' + escape(poster);
 //          uri = PREFIX + ':sundbpage:' + encodeURIComponent(playlisturl) + '~' + encodeURIComponent(title) + '~' + encodeURIComponent(poster);
         }
-        else {
+  else {
 //          playlistname = 'other.player';
 //          uri = PREFIX + ':playlistpage:' + playlisturl + '~' + title + '~' + icon;
 //          uri = PREFIX + ':playlistpage:' + escape(playlisturl) + '~' + escape(title) + '~' + escape(icon);
@@ -2706,6 +2750,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //          uri = PREFIX + ':playlistpage:' + escape(playlisturl) + '~' + escape(title) + '~' + escape(poster);
 //          uri = PREFIX + ':playlistpage:' + encodeURIComponent(playlisturl) + '~' + encodeURIComponent(title) + '~' + encodeURIComponent(poster);
 //          uri = '';
+    dlog('Moviepage: provider not recognized, skipping url=' + playlisturl);
         }
 //        playlistname = showtime.entityDecode(playlistname);
 //        playlistname = unescape(playlistname);
@@ -2715,14 +2760,10 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //        if (playlistname) {
 //        if (/(kinorkn\.com|vcdn\.icdn\.ws|.*?\.svetacdn\.in|.*?\.annacdn\.cc|cdn\.cdn-films\.xyz|me\.greenfilm\.xyz|films\.video-up\.online|kino\.stokino\.rest|full-hd\.ki1080no\.xyz|s.*?\.filmload\.me|kino.*?\.navigatorkino\.xyz|.*?up\.terobat\.work|up.*?\.kiberload\.pw|cloud.*?\.kifise\.xyz|server.*?\.film-s-load\.live|video\.kinosteel\.club|video\.kinogo\.lu|api\.tobaco\.ws|api.*?\.tobaco\.ws|api\.topdbltj\.ws|api.*?\.topdbltj\.ws|api.*?\.delivembd\.ws|api.*?\.synchroncode\.com|api\.hostemb\.ws|shizahd\.ru|700filmov\.ru\/movie\/)/.test(playlisturl)) {
 //        if (/(kinorkn|icdn|svetacdn|annacdn|cdn-films|greenfilm|video-up|stokino|ki1080no|filmload|navigatorkino|terobat|kiberload|kifise|film-s-load|kinosteel|video\.kinogo\.lu|tobaco|topdbltj|delivembd|synchroncode|hostemb|shizahd|700filmov.*?\/movie\/)/.test(playlisturl)) {
-        if (/(kinorkn|(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise)|((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo)\.ws)|.*?\.takedwn\.ws)|shizahd|700filmov.*?\/movie\/)/.test(playlisturl)) {
-//          page.appendItem('', 'separator', {
-//            title: new showtime.RichText('Видео:'),
-//            title: new RichText('Видео:'),
-//          });
-//          page.appendItem(uri, 'directory', {
-//          page.appendItem(uri, 'video', {
-          page.appendItem(uri, service.list, {
+  if (/(kinorkn|(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm)|((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo|namy)\.ws)|.*?\.(takedwn\.ws|newplayjj\.com)|azure\d+.*?sitsarl\.com)|shizahd|700filmov.*?\/movie\/)/.test(playlisturl)) {
+          if (uri) {
+            dlog('Moviepage: appending item for provider=' + (playlistname || '') + ', uri=' + uri);
+            page.appendItem(uri, service.list, {
 //            title: new showtime.RichText(title),
             title: new RichText(title),
 //            title: new showtime.RichText(name),
@@ -2907,9 +2948,24 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //            description: new RichText((status ? coloredStr('Статус: ', gray) + status + '<br>' : '') + (translation ? coloredStr('Перевод: ', gray) + translation + '<br>' : '') + (country ? coloredStr('Выпущено: ', gray) + country + '/' : '') + (year ? year + '<br>' : '') + (description ? coloredStr('Описание: ', gray) + description : '')),
 //            description: new showtime.RichText((director ? coloredStr('Режиссер: ', gray) + director + '<br>' : '') + (actor ? coloredStr('Актеры: ', gray) + actor : '')),
 //            description: new RichText((director ? coloredStr('Режиссер: ', gray) + director + '<br>' : '') + (actor ? coloredStr('Актеры: ', gray) + actor : '')),
-          });
+            });
+            playersAdded++;
+          }
         }
-        match = replaylist.exec(playlist[1]);
+  match = replaylist.exec(playlistHtml);
+      }
+      dlog('Moviepage: players added=' + playersAdded);
+      if (!playersAdded) {
+        dlog('Moviepage: no playable items built; appending passive message');
+        page.appendPassiveItem(service.list, '', {
+          title: new RichText('Видео не найдено или отсутствует'),
+          icon: poster,
+          backdrops: backdrops,
+          rating: rating ? 1 * rating : void(0),
+          source: new RichText((year ? coloredStr(year, orange) + ' ' : '') + (country ? coloredStr(country, orange) : '')),
+          tagline: new RichText(coloredStr(title, gray)),
+          description: new RichText((genre ? coloredStr('Жанр: ', gray) + genre + '<br>' : '') + (slogan ? coloredStr('Слоган: ', gray) + slogan + '<br>' : '') + (description ? coloredStr('Описание: ', gray) + description : '')),
+        });
       }
 /*
       var uri;
