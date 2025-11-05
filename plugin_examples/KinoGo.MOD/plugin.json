@@ -1,0 +1,16 @@
+{
+  "type": "ecmascript",
+  "apiversion": 2,
+  "id": "KinoGo",
+  "file": "KinoGo.js",
+  "showtimeVersion": "5",
+  "version": "0.0.1",
+  "author": "kovalDN",
+  "title": "KinoGo",
+  "icon": "KinoGo.png",
+  "synopsis": "Онлайн кинотеатр KinoGo для просмотра фильмов, мультфильмов, сериалов и прочего контента",
+  "category": "video",
+  "description": "<p>Плагин для Movian для доступа к онлайн кинотеатру KinoGo через домены/зеркала сайтов, <a href=\"http://kinogo.tv\">http://kinogo.tv</a></p>",
+  "homepage": "https://bit.ly/mprepo",
+  "downloadURL": "https://bit.ly/MP-KinoGo"
+}
