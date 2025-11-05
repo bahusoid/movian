@@ -112,6 +112,16 @@ SIDEBAR_ACTION(_("Suspend"),
                deliverEvent($core.eventSink, "Standby"),
                !$core.runcontrol.canStandby);
 
+SIDEBAR_ACTION(_("Plugin Settings"),
+               "skin://icons/ic_settings_48px.svg",
+               navOpen("settings:plugin:" + $self.pluginId),
+               isVoid($self.pluginId));
+
+SIDEBAR_ACTION(_("Settings"),
+               "skin://icons/ic_settings_48px.svg",
+               navOpen("settings:"),
+               false);
+
 SIDEBAR_ACTION(fmt(_("Exit %s"), $core.app.name),
                "skin://icons/ic_exit_to_app_48px.svg",
                deliverEvent($core.eventSink, "Quit"),
