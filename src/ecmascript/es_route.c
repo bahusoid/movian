@@ -224,7 +224,6 @@ ecmascript_openuri(prop_t *page, const char *url, int sync)
   // Expose plugin identifiers to the page for skin usage
   // For ECMAScript routes, the context id corresponds to the plugin id
   prop_set(page, "pluginId",   PROP_SET_RSTRING, ec->ec_id);
-  prop_set(page, "pluginFqid", PROP_SET_RSTRING, ec->ec_id);
 
   duk_push_boolean(ctx, sync);
 

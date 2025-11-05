@@ -176,20 +176,9 @@ np_backend_open_page(prop_t *p, const char *url, int sync, void *opaque)
     return 0;
   }
 
-  // Expose plugin identifiers to the page for skin usage
+  // Expose plugin identifier (use fully-qualified id)
   const char *fqid = np->np_id ? np->np_id : "";
-  const char *at = fqid ? strchr(fqid, '@') : NULL;
-  if(at != NULL) {
-    char sid[256];
-    size_t n = MIN(sizeof(sid) - 1, (size_t)(at - fqid));
-    memcpy(sid, fqid, n);
-    sid[n] = '\0';
-    prop_set(p, "pluginId",   PROP_SET_STRING, sid);
-    prop_set(p, "pluginFqid", PROP_SET_STRING, fqid);
-  } else {
-    prop_set(p, "pluginId",   PROP_SET_STRING, fqid);
-    prop_set(p, "pluginFqid", PROP_SET_STRING, fqid);
-  }
+  prop_set(p, "pluginId",   PROP_SET_STRING, fqid);
 
   np_lock(np);
 
@@ -220,7 +209,7 @@ np_register_backend(void *ret, const void *regs, struct ir_unit *iu)
   be->be_prefix = strdup(prefix);
   be->be_opaque = np_context_retain(np);
   be->be_destroy = np_backend_destroy;
-  be->be_flags = BACKEND_DYNAMIC | BACKEND_PLUGIN;
+  be->be_flags = BACKEND_DYNAMIC;
   be->be_play_audio = np_backend_play_audio;
   be->be_open2 = np_backend_open_page;
   backend_register_dynamic(be);

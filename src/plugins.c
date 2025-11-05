@@ -1771,7 +1771,6 @@ plugin_canhandle(const char *url)
  *
  */
 static backend_t be_plugin = {
-  .be_flags = BACKEND_PLUGIN,
   .be_canhandle = plugin_canhandle,
   .be_open = plugin_open_url,
   .be_search = plugin_search,
