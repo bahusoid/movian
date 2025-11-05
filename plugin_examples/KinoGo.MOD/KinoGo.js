@@ -325,6 +325,10 @@ settings.createMultiOpt('list', 'Отображение списка', [
   printDebug('Установите список на ' + v);
   service.list = v;
 });
+// Allow overriding the User-Agent from settings to avoid hardcoding
+settings.createString('ua', 'Пользовательский User-Agent', UA, function (v) {
+  UA = v;
+});
 //settings.createBool('movianDRM', 'Проигрыватель Movian DRM', true, function (v) {service.movianDRM = v});
 settings.createBool('movianDRM', 'Проигрыватель Movian DRM', false, function (v) {service.movianDRM = v});
 /*
@@ -2603,27 +2607,67 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //        title: new RichText('Видео:'),
 //      });
 //      var replaylist = /<[iframe|IFRAME|script|div.*?"tabs-b video-box"]+(.*?)<\/(iframe|IFRAME|script|div)>/g;
-  var replaylist = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")(.*?)<\/(iframe|IFRAME|script|div)>/g;
-//      var replaylist = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")([^"]+)<\/(iframe|IFRAME|script|div)>/g;
+  // Use [\s\S] so we also capture multiline <script> blocks with PlayerJS config
+  var replaylist = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")(>[\s\S]*?|[\s\S]*?)<\/(iframe|IFRAME|script|div)>/g;
+//      var replaylist = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")([^\"]+)<\/(iframe|IFRAME|script|div)>/g;
+
+  // Try to parse tab labels (e.g., "Смотреть онлайн", "Плеер #2") from the header part before the first player box
+  var firstBlockIndex = (function(){
+    try {
+      var m = /<(iframe|IFRAME|script|div.*?"tabs-b video-box")/i.exec(playlistHtml);
+      return m ? m.index : -1;
+    } catch(e) { return -1; }
+  })();
+  var headerSlice = firstBlockIndex > -1 ? playlistHtml.substring(0, firstBlockIndex) : playlistHtml;
+  var tabLabels = [];
+  try {
+    // Generic: any element with class containing 'tab' and non-empty inner text
+    var reLbl = /<([a-z0-9]+)[^>]*class=(['"])([^'"]*tab[^'"]*)\2[^>]*>([\s\S]*?)<\/\1>/ig;
+    var lm;
+    while ((lm = reLbl.exec(headerSlice)) !== null) {
+      var inner = (lm[4] || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (inner) tabLabels.push(inner);
+    }
+    // Fallback: explicit Russian labels if generic missed
+    if (tabLabels.length === 0) {
+      var rf = />\s*((?:Плеер\s*#?\s*\d+|Смотреть\s*онлайн)[^<]{0,50})\s*</ig, rm;
+      while ((rm = rf.exec(headerSlice)) !== null) {
+        var inner2 = (rm[1] || '').replace(/\s+/g, ' ').trim();
+        if (inner2) tabLabels.push(inner2);
+      }
+    }
+  } catch(e) {}
+  try { dlog('Moviepage: tab labels parsed count=' + tabLabels.length + ', sample=' + tabLabels.slice(0,5).join(' | ')); } catch(e) {}
+
   var match = replaylist.exec(playlistHtml);
   var playersAdded = 0;
+  var contentIdx = 0; // index across content panes to map labels 1:1
       while (match) {
+        var currentLabel = (tabLabels && tabLabels.length > contentIdx) ? tabLabels[contentIdx] : '';
+        contentIdx++;
         dlog('Moviepage: found embed tag=' + match[1] + ', attrs sample=' + (match[2] ? match[2].slice(0,200) : ''));
 //        var playlisturl = match[1].match(/[file:|src=]+[ '|'| "|"| |]+(.*?)('|"| ).*?/);
 //        var playlisturl = match[2].match(/(file:|src=)( '|'| "|"| |)(.*?)('|"| ).*?/);
 //        var playlisturl = match[2].match(/(file:|src=)( '|'| "|"| |)([^"]+)('|"| ).*?/);
-        // Robustly extract a URL from common attributes/patterns
+        // Robustly extract a URL from common attributes/patterns and script bodies
         var srcMatch = null;
         try {
-          // Prefer explicit src="..."
-          srcMatch = match[2].match(/(?:\s|^)src\s*=\s*(['"])(.*?)\1/i);
+          var attrsOrBody = match[2] || '';
+          // Prefer explicit src="..." on iframe/div
+          srcMatch = attrsOrBody.match(/(?:\s|^)src\s*=\s*(['"])(.*?)\1/i);
           if (!srcMatch) {
             // Sometimes lazy providers use data-src
-            srcMatch = match[2].match(/(?:\s|^)data-src\s*=\s*(['"])(.*?)\1/i);
+            srcMatch = attrsOrBody.match(/(?:\s|^)data-src\s*=\s*(['"])(.*?)\1/i);
           }
-          if (!srcMatch) {
-            // Playerjs style: file('...') or file: '...'
-            srcMatch = match[2].match(/\bfile\s*:\s*(?:\(|)(['"]?)(.*?)\1\)?/i);
+          // If it's a <script> block, search the whole block for PlayerJS file: patterns
+          if (!srcMatch && /^script$/i.test(match[1])) {
+            var block = (match[0] || '');
+            // file: "..." or file: '...'
+            srcMatch = block.match(/\bfile\s*:\s*(['"])(.*?)\1/);
+            if (!srcMatch) {
+              // file('...') variant
+              srcMatch = block.match(/\bfile\s*\(\s*(['"])(.*?)\1\s*\)/);
+            }
           }
         } catch (e) {}
         var playlisturl = '';
@@ -2660,6 +2704,11 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //            playlisturl = HTTPS + BASE_URL + '///' + playlisturl + '///';
           }
           dlog('Moviepage: normalized playlisturl=' + playlisturl);
+          // Fix common provider typos/concatenations seen in the wild
+          // Example: 'azure133sitsarl.com' -> 'azure133.sitsarl.com'
+          try {
+            playlisturl = playlisturl.replace(/(azure\d+)(sitsarl\.com)/i, '$1.$2');
+          } catch (e3) {}
 //          playlisturl = playlisturl + '///';
 //          playlisturl = playlisturl.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
         }
@@ -2689,7 +2738,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //        playlistname = unescape(playlistname);
 //        playlistname = decodeURIComponent(playlistname);
 */
-        var uri;
+  var uri;
 //        if (/kinorkn\.com/.test(playlisturl)) {
         if (/kinorkn/.test(playlisturl)) {
           playlistname = 'kinorkn.com';
@@ -2699,7 +2748,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
         }
 //        else if (/(vcdn\.icdn\.ws|.*?\.svetacdn\.in|.*?\.annacdn\.cc|cdn\.cdn-films\.xyz|me\.greenfilm\.xyz|films\.video-up\.online|kino\.stokino\.rest|full-hd\.ki1080no\.xyz|s.*?\.filmload\.me|kino.*?\.navigatorkino\.xyz|.*?up\.terobat\.work|up.*?\.kiberload\.pw|cloud.*?\.kifise\.xyz|server.*?\.film-s-load\.live|video\.kinosteel\.club|video\.kinogo\.lu)/.test(playlisturl)) {
 //        else if (/(icdn|svetacdn|annacdn|cdn-films|greenfilm|video-up|stokino|ki1080no|filmload|navigatorkino|terobat|kiberload|kifise|film-s-load|kinosteel|video\.kinogo\.lu)/.test(playlisturl)) {
-        else if (/(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm|azure\d+.*?sitsarl\.com)/.test(playlisturl)) {
+        else if (/(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm|azure\d+.*?sitsarl\.com|entouaedon\.com|\/playlist\/.*?\.txt)/.test(playlisturl)) {
           playlistname = 'cloud.cdnland.in';
 //          uri = PREFIX + ':cdnlandpage:' + playlisturl + '~' + title + '~' + icon;
 //          uri = PREFIX + ':cdnlandpage:' + escape(playlisturl) + '~' + escape(title) + '~' + escape(icon);
@@ -2763,9 +2812,11 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
   if (/(kinorkn|(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm)|((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo|namy)\.ws)|.*?\.(takedwn\.ws|newplayjj\.com)|azure\d+.*?sitsarl\.com)|shizahd|700filmov.*?\/movie\/)/.test(playlisturl)) {
           if (uri) {
             dlog('Moviepage: appending item for provider=' + (playlistname || '') + ', uri=' + uri);
+            // Decide display title: prefer site tab label, else provider name, else movie title
+            var displayTitle = currentLabel && currentLabel.length ? currentLabel : (playlistname || title);
             page.appendItem(uri, service.list, {
 //            title: new showtime.RichText(title),
-            title: new RichText(title),
+            title: new RichText(displayTitle),
 //            title: new showtime.RichText(name),
 //            title: new RichText(name),
 //            title: new showtime.RichText(playlistname),
@@ -2909,6 +2960,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //            source: new showtime.RichText(playlistname ? coloredStr('Источник: ', gray) + coloredStr(playlistname, blue) : ''),
 //            source: new RichText(playlistname ? coloredStr('Источник: ', gray) + coloredStr(playlistname, blue) : ''),
 //            tagline: new showtime.RichText(coloredStr(title, gray)),
+            // Keep the original movie title visible in tagline for clarity
             tagline: new RichText(coloredStr(title, gray)),
 //            tagline: new showtime.RichText(coloredStr(name, gray)),
 //            tagline: new RichText(coloredStr(name, gray)),
@@ -5311,30 +5363,180 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
   page.type = 'directory';
   page.model.contents = 'list';
 //  page.model.contents = 'grid';
-/*
-//  html = showtime.httpReq(url).toString();
-  html = http.request(url).toString();
-*/
-//  html = showtime.httpReq(url, {
-  html = http.request(url, {
-    debug: true,
-//    debug: false,
-//    noFollow: true,
-//    noFollow: false,
-    noFail: true,
-//    noFail: false,
-    compression: true,
-//    compression: false,
-//    caching: true,
-//    caching: false,
-//    cacheTime: 3600,
-//    cacheTime: 6000,
-//    postdata: postdata,
-//    postdata: {},
-//    headers: headers,
-//    headers: {},
-//  });
-  }).toString();
+  // Fetch helper with provider-specific fallbacks for azure*.sitsarl.com
+  function fetchWithCdnFallbacks(u) {
+    var options = {
+      debug: true,
+      noFail: true,
+      compression: true,
+    };
+    // Build a set of candidate URLs to try
+    var candidates = [];
+    try {
+      // Fix missing dot between azureNNN and sitsarl.com
+      var fixed = u.replace(/(azure\d+)\.?\b(sitsarl\.com)/i, '$1.$2');
+      // 1) original/fixed
+      candidates.push(fixed);
+      // 2) drop leading vidTIMESTAMP subdomain
+      candidates.push(fixed.replace(/https:\/\/(vid\d+\.)/i, 'https://'));
+      // 3) keep vid*, drop azureNNN.
+      candidates.push(fixed.replace(/https:\/\/(vid\d+\.)azure\d+\./i, 'https://$1'));
+      // 4) plain sitsarl.com (last resort)
+      candidates.push(fixed.replace(/https:\/\/[^/]*sitsarl\.com/i, 'https://sitsarl.com'));
+
+      // 5) Try entouaedon CDN that site uses for seasons
+      var pathSuffix = fixed.replace(/^https?:\/\/[^/]+/i, '');
+      // If pathSuffix is empty, keep original u's suffix
+      if (!pathSuffix || pathSuffix === fixed) {
+        pathSuffix = u.replace(/^https?:\/\/[^/]+/i, '');
+      }
+      // Force a sane default suffix
+      if (!pathSuffix || pathSuffix.length === 0) pathSuffix = '/';
+      candidates.push('https://vid11.entouaedon.com' + pathSuffix);
+      // Try a small pool of vid servers
+      for (var vi = 1; vi <= 20; vi++) {
+        var vn = (vi < 10 ? '0' + vi : '' + vi);
+        candidates.push('https://vid' + vn + '.entouaedon.com' + pathSuffix);
+      }
+    } catch(e) { candidates = [u]; }
+    var lastErr = null;
+    for (var i = 0; i < candidates.length; i++) {
+      try { dlog('CDNLAND fetch try[' + i + ']: ' + candidates[i]); } catch(e) {}
+      try {
+        var resp = http.request(candidates[i], options).toString();
+        if (resp && resp.length) {
+          try { dlog('CDNLAND fetch success with candidate[' + i + ']'); } catch(e) {}
+          return resp;
+        }
+      } catch (err) {
+        lastErr = err;
+        try { dlog('CDNLAND fetch failed candidate[' + i + ']: ' + err); } catch(e) {}
+      }
+    }
+    if (lastErr) throw lastErr;
+    return '';
+  }
+
+  // If we were passed a direct playlist URL, try to fetch it directly first.
+  try {
+    if (/\/playlist\/.*?\.txt(\?|$)/i.test(url)) {
+      try { dlog('CDNLAND direct playlist detected in URL, attempting GET: ' + url); } catch(e) {}
+      var direct = http.request(url, {debug:true, noFail:true, compression:true}).toString();
+      if (direct && direct.length > 0) {
+        var isSeriesDirect = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(direct);
+        var poster0 = icon;
+        if (isSeriesDirect) {
+          scrapercdnlandseries(page, direct, title, icon, poster0, '');
+        } else {
+          scrapercdnland(page, direct, title, icon, poster0, '');
+        }
+        page.loading = false;
+        return;
+      } else {
+        try { dlog('CDNLAND direct playlist GET returned empty, trying POST without CSRF'); } catch(e) {}
+        // Try POST without CSRF (some mirrors don't require it)
+        var directPost = http.request(url, {
+          debug:true,
+          noFail:true,
+          compression:true,
+          postdata: '',
+          headers: {
+            'Accept': '*/*',
+            'Origin': HTTPS + BASE_URL,
+            'Referer': REFERER,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': UA
+          }
+        }).toString();
+        if (directPost && directPost.length > 0) {
+          var isSeriesDirect2 = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(directPost);
+          var poster1 = icon;
+          if (isSeriesDirect2) {
+            scrapercdnlandseries(page, directPost, title, icon, poster1, '');
+          } else {
+            scrapercdnland(page, directPost, title, icon, poster1, '');
+          }
+          page.loading = false;
+          return;
+        }
+        try { dlog('CDNLAND direct playlist POST (no CSRF) returned empty, will try embed flow'); } catch(e) {}
+      }
+    }
+  } catch (e) {
+    try { dlog('CDNLAND direct playlist preflight error: ' + e); } catch(_) {}
+  }
+
+  var html = '';
+  try {
+    html = fetchWithCdnFallbacks(url);
+  } catch (e) {
+    try { dlog('CDNLAND fetchWithCdnFallbacks error: ' + e); } catch(_) {}
+    html = '';
+  }
+
+  // Fast path: some cdnland-like embeds require a CSRF token POST to a /playlist/*.txt endpoint on entouaedon CDN.
+  // Try to extract token and playlist path and fetch it directly to obtain seasons/episodes JSON.
+  try {
+    var csrf = html.match(/name=("|')csrf-token\1\s+content=("|')(.*?)\2/i);
+  var playlistPathMatch = html.match(/\/(playlist\/[\w\d\-_$+.=\\u!]+\.txt)/i);
+    if (csrf && csrf[3] && playlistPathMatch && playlistPathMatch[1]) {
+      var csrfToken = csrf[3];
+      var playlistPath = playlistPathMatch[1];
+      // Replace unicode escapes like \u0021 with their char (!) and unescape
+      try {
+        playlistPath = playlistPath.replace(/\\u([0-9a-fA-F]{4})/g, function(_, h){return String.fromCharCode(parseInt(h,16));});
+      } catch (e) {}
+      // Build candidate hosts to POST the playlist request
+      var suffix = playlistPath.charAt(0) === '/' ? playlistPath : ('/' + playlistPath);
+      var hosts = [];
+      hosts.push('https://vid11.entouaedon.com');
+      for (var vi = 1; vi <= 20; vi++) {
+        var vn = (vi < 10 ? '0' + vi : '' + vi);
+        hosts.push('https://vid' + vn + '.entouaedon.com');
+      }
+      var got = null;
+      for (var hi = 0; hi < hosts.length && !got; hi++) {
+        var purl = hosts[hi] + suffix;
+        try { dlog('CDNLAND playlist POST try[' + hi + ']: ' + purl); } catch(e) {}
+        try {
+          var resp = http.request(purl, {
+            debug: true,
+            noFail: true,
+            compression: true,
+            postdata: '',
+            headers: {
+              'Accept': '*/*',
+              'Origin': HTTPS + BASE_URL,
+              'Referer': REFERER,
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRF-Token': csrfToken,
+              'User-Agent': UA
+            }
+          }).toString();
+          if (resp && resp.length > 0) {
+            got = resp;
+            try { dlog('CDNLAND playlist POST success with host idx ' + hi); } catch(e) {}
+          }
+        } catch (perr) {
+          try { dlog('CDNLAND playlist POST failed host idx ' + hi + ': ' + perr); } catch(e) {}
+        }
+      }
+      if (got) {
+        // Decide if it's series or single by checking for markers
+        var isSeries = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(got);
+        var poster = icon;
+        if (isSeries) {
+          scrapercdnlandseries(page, got, title, icon, poster, '');
+        } else {
+          scrapercdnland(page, got, title, icon, poster, '');
+        }
+        page.loading = false;
+        return;
+      }
+    }
+  } catch (e) {
+    try { dlog('CDNLAND playlist POST flow error: ' + e); } catch(_) {}
+  }
 //  }).convertFromEncoding('utf-8').toString();
 //  }).convertFromEncoding('windows-1251').toString();
   try {
@@ -5543,23 +5745,36 @@ new page.Route(PREFIX + ':takedwnpage:(.*)~(.*)~(.*)', function (page, url, titl
         var re = /son":(.*?),.*?"episodes":\[(.*?)(\]\},\{"sea|\]\}\])/g;
 //        var re = /son":([^"]+),.*?"episodes":\[([^"]+)(\]\},\{"sea|\]\}\])/g;
         var match = re.exec(doc[1]);
+        var seasons = [];
         while (match) {
-          try {
-            var season = match[1];
+          var seasonLabel = '';
+          try { seasonLabel = (match[1] || '').toString().trim(); } catch (err) { seasonLabel = ''; }
+          // Prefer numeric parse directly; fallback to first number in label
+          var seasonNum = parseInt(seasonLabel, 10);
+          if (isNaN(seasonNum)) {
+            var sn = seasonLabel.match(/(\d{1,3})/);
+            seasonNum = sn && sn[1] ? parseInt(sn[1], 10) : 0;
           }
-          catch (err) {
-//            season = 0;
-            season = '';
-          }
-//          season = showtime.entityDecode(season);
-//          season = unescape(season);
-//          season = decodeURIComponent(season);
-          page.appendItem('', 'separator', {
-//            title: new showtime.RichText('Сезон ' + (season ? season : '')),
-            title: new RichText('Сезон ' + (season ? season : '')),
+          try { dlog('Takedwn series: seasonLabel=' + seasonLabel + ', seasonNum=' + seasonNum); } catch (e) {}
+          seasons.push({
+            seasonLabel: seasonLabel,
+            seasonNum: isNaN(seasonNum) ? 0 : seasonNum,
+            episodesBlock: match[2],
+            index: seasons.length
           });
-          scrapertakedwn(page, match[2], title, icon, poster, season);
           match = re.exec(doc[1]);
+        }
+        // Sort by season number ascending; stable fallback by original order
+        seasons.sort(function(a, b) {
+          if (a.seasonNum !== b.seasonNum) return a.seasonNum - b.seasonNum;
+          return a.index - b.index;
+        });
+        for (var i = 0; i < seasons.length; i++) {
+          var s = seasons[i];
+          page.appendItem('', 'separator', {
+            title: new RichText('Сезон ' + (s.seasonLabel ? s.seasonLabel : '')),
+          });
+          scrapertakedwn(page, s.episodesBlock, title, icon, poster, s.seasonLabel);
         }
       }
       else {
@@ -8838,119 +9053,120 @@ function scrapercdnlandseries(page, doc, title, icon, poster, translationid) {
 //  var re = /id([^"]+)comment([^"]+) .*?i&gt;([^"]+)&lt;.*?file([^"]+)poster\\&quot;:\\&quot;([^"]+)\\&quot;\}/g;
 //  var re = /id(.*?)comment(.*?) (.*?)file(.*?)\\&quot;\}/g;
 //  var re = /id([^"]+)comment([^"]+) ([^"]+)file([^"]+)\\&quot;\}/g;
-  var re = /\{"id":"(.*?)","comment":"(.*?) (.*?)"file":"(.*?)("download"|\}\})/g;
+  var re = /\{"id":"(.*?)","comment":"(.*?) (.*?)"file":"(\.*?)("download"|\}\})/g;
 //  var re = /\{"id":"([^"]+)","comment":"([^"]+) ([^"]+)"file":"([^"]+)("download"|\}\})/g;
   var match = re.exec(doc);
+
+  // Collect all seasons first to sort deterministically by season number
+  var seasons = [];
   while (match) {
+    // Extract season identifier
+    var season = '';
     try {
-      var season = match[1];
-//      season = season.replace(/(:|,|"|\\&quot;)/g, '').trim();
+      season = match[1];
       season = season.replace(/(_.*)/g, '').trim();
-    }
-    catch (err) {
-//      season = 0;
-      season = '';
-    }
-//    season = showtime.entityDecode(season);
-//    season = unescape(season);
-//    season = decodeURIComponent(season);
+    } catch (err) { season = ''; }
+
+    // Extract season label (often contains "Сезон N" or episode range)
+    var serie = '';
     try {
-      var serie = match[2];
-      serie = serie.replace(/(:|,|"|\\&quot;)/g, '').trim();
-//      serie = serie.replace(/\\\\/g, '\\').trim();
-    }
-    catch (err) {
-//      serie = 0;
-      serie = '';
-    }
-//    serie = showtime.entityDecode(serie);
-//    serie = unescape(serie);
-//    serie = decodeURIComponent(serie);
-//    var translation = match[3].match(/i&gt;(.*?)&lt;/);
-//    var translation = match[3].match(/i&gt;([^"]+)&lt;/);
-    var translation = match[3].match(/<i>(.*?)<\\\/i>/);
-//    var translation = match[3].match(/<i>([^"]+)<\\\/i>/);
+      serie = match[2];
+      serie = serie.replace(/(:|,|\"|\\&quot;)/g, '').trim();
+    } catch (err) { serie = ''; }
+
+    // Extract translation from italic tag
+    var translationMatch = null;
+    var translation = '';
     try {
-//      var translation = match[3];
-      translation = translation[1];
-//      translation = translation.replace(/(\\\\\w+|\\&quot;| \|)/g, '').trim();
-//      translation = translation.replace(/\\\\/g, '\\').trim();
-    }
-    catch (err) {
-      translation = '';
-    }
-//    translation = showtime.entityDecode(translation);
-//    translation = unescape(translation);
-//    translation = decodeURIComponent(translation);
+      translationMatch = match[3].match(/<i>(.*?)<\\\/i>/);
+      translation = translationMatch ? translationMatch[1] : '';
+    } catch (err) { translation = ''; }
+
+    // Normalize translation via JSON escape/unescape roundtrip (kept from original)
     translation = escape(translation);
-//    translation = encodeURIComponent(translation);
-    translation = {
-      translation: translation ? translation : void(0),
-//      translation: translation ? translation.replace(/<.*?>/g, '').trim() : void(0),
-    };
-//    translation = showtime.JSONEncode(translation);
+    translation = { translation: translation ? translation : void(0) };
     translation = JSON.stringify(translation);
-//    translation = showtime.entityDecode(translation);
     translation = unescape(translation);
-//    translation = decodeURIComponent(translation);
-//    translation = escape(translation);
-//    translation = encodeURIComponent(translation);
-//    translation = showtime.JSONDecode(translation);
     translation = JSON.parse(translation);
     translation = translation.translation;
-//    var poster = match[4].match(/poster\\&quot;:\\&quot;(.*)/);
-//    var poster = match[4].match(/poster\\&quot;:\\&quot;([^"]+)/);
-//    var poster = match[4].match(/poster\\&quot;:\\&quot;(.*?)\.jpg/);
-//    var poster = match[4].match(/poster\\&quot;:\\&quot;([^"]+)\.jpg/);
-    var poster = match[4].match(/"poster":"(.*?)"/);
-//    var poster = match[4].match(/"poster":"([^"]+)"/);
+
+    // Extract poster within this block
+    var posterMatch = match[4].match(/"poster":"(.*?)"/);
+    var seasonPoster = icon;
     try {
-//      var poster = match[5];
-      poster = poster[1];
-//      poster = poster.replace(/(\\\\\\\/\\\\\\\/|\\\/\\\/|\\)/g, '').trim();
-      poster = poster.replace(/\\\//g, '/').trim();
-      if (/http.*?:\/\//.test(poster)) {
-        poster = poster;
-//        poster = poster + '.jpg';
+      seasonPoster = posterMatch[1].replace(/\\\//g, '/').trim();
+      if (/http.*?:\/\//.test(seasonPoster)) {
+        // keep as is
+      } else if (/\/\//.test(seasonPoster)) {
+        seasonPoster = HTTPS + seasonPoster.replace(/(http:|https:|\/\/)/g, '').trim();
+      } else {
+        seasonPoster = HTTPS + BASE_URL + seasonPoster;
       }
-      else if (/\/\//.test(poster)) {
-        poster = HTTPS + poster.replace(/(http:|https:|\/\/)/g, '').trim();
-//        poster = HTTPS + poster.replace(/(http:|https:|\/\/)/g, '').trim() + '.jpg';
+      if (!/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(seasonPoster)) {
+        seasonPoster = icon;
       }
-      else {
-        poster = HTTPS + BASE_URL + poster;
-//        poster = HTTPS + BASE_URL + poster + '.jpg';
+    } catch (err) {
+      seasonPoster = icon;
+    }
+
+    // Compute numeric season for sorting.
+    // 1) Prefer an explicit "Сезон N" (or English "Season N") pattern in the label to avoid
+    //    accidentally picking up episode numbers like "1-13".
+    // 2) Fallback to the first digits found in the id if the explicit pattern is absent.
+    var seasonNum = 0;
+    var seasonFromLabel = null;
+    try {
+      // Try "Сезон 12" or "Season 12"
+      seasonFromLabel = (serie || '').match(/(?:Сезон|Season)\s*(\d{1,3})/i);
+      if (!seasonFromLabel) {
+        // Try "12 сезон" or "12 season"
+        seasonFromLabel = (serie || '').match(/(\d{1,3})\s*(?:сезон|season)/i);
       }
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(poster)) {
-        poster = poster;
-      }
-      else {
-        poster = icon;
-//        poster = LOGOICON;
-//        poster = LOGOLOGO;
-//        poster = LOGONONE;
-//        poster = '';
+    } catch (e) { seasonFromLabel = null; }
+    if (seasonFromLabel && seasonFromLabel[1]) {
+      seasonNum = parseInt(seasonFromLabel[1], 10);
+    } else {
+      // Try to extract from id forms like s12, season_12, sezon-12, сезон12
+      var idForm = (season || '').match(/(?:season|sezon|сезон|s)[_\s-]*?(\d{1,3})/i);
+      if (idForm && idForm[1]) {
+        seasonNum = parseInt(idForm[1], 10);
+      } else {
+        // As a last resort, drop ranges like "1-13" and pick a standalone number
+        var cleanedSerie = (serie || '').replace(/\d+\s*[-–—]\s*\d+/g, '');
+        var lone = cleanedSerie.match(/(?:^|\D)(\d{1,3})(?:\D|$)/);
+        seasonNum = lone && lone[1] ? parseInt(lone[1], 10) : 0;
       }
     }
-    catch (err) {
-      poster = icon;
-//      poster = LOGOICON;
-//      poster = LOGOLOGO;
-//      poster = LOGONONE;
-//      poster = '';
-    }
-//    poster = showtime.entityDecode(poster);
-//    poster = unescape(poster);
-//    poster = decodeURIComponent(poster);
-    page.appendItem('', 'separator', {
-//      title: new showtime.RichText('Сезон ' + (season ? season : '') + ' | Серия ' + (serie ? serie : '')),
-//      title: new RichText('Сезон ' + (season ? season : '') + ' | Серия ' + (serie ? serie : '')),
-//      title: new showtime.RichText('Сезон ' + (season ? season : '') + ' | Серия ' + (serie ? serie : '') + (translation ? ' [' + translation + ']' : '')),
-      title: new RichText('Сезон ' + (season ? season : '') + ' | Серия ' + (serie ? serie : '') + (translation ? ' [' + translation + ']' : '')),
+
+    try { dlog('CDNLAND series: label="' + (serie||'') + '", id="' + (season||'') + '", seasonNum=' + seasonNum); } catch (e) {}
+
+    seasons.push({
+      season: season,
+      seasonNum: isNaN(seasonNum) ? 0 : seasonNum,
+      serie: serie,
+      translation: translation,
+      posterBlock: match[4],
+      seasonPoster: seasonPoster,
+      index: seasons.length
     });
-    scrapercdnland(page, match[4], title, icon, poster, translationid, season, serie, translation);
-    page.entries++;
+
     match = re.exec(doc);
+  }
+
+  // Sort seasons by numeric value ascending; keep stable order when numbers equal
+  seasons.sort(function(a, b) {
+    if (a.seasonNum !== b.seasonNum) return a.seasonNum - b.seasonNum;
+    return a.index - b.index;
+  });
+
+  // Append in sorted order
+  for (var i = 0; i < seasons.length; i++) {
+    var s = seasons[i];
+    page.appendItem('', 'separator', {
+      title: new RichText('Сезон ' + (s.season ? s.season : '') + ' | Серия ' + (s.serie ? s.serie : '') + (s.translation ? ' [' + s.translation + ']' : '')),
+    });
+    scrapercdnland(page, s.posterBlock, title, icon, s.seasonPoster, translationid, s.season, s.serie, s.translation);
+    page.entries++;
   }
 };
 //function scrapercdnland(page, doc) {
