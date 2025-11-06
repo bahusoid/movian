@@ -128,6 +128,11 @@ var html = require('movian/html');
 //var html = 0;
 var urls = require('url');
 var UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36';
+var cdn_cdnland = require('./cdn_cdnland');
+var cdn_detect = require('./cdn_detect');
+// Registry to avoid duplicate dynamic inspectors per detected host/pattern
+var DYN_INSP = {};
+var cdn_detect = require('./cdn_detect');
 var result = '';
 var data = {};
 var items = [];
@@ -326,29 +331,27 @@ io.httpInspectorCreate(HTTPS + BASE_URL + '.*', function (ctrl) {
   ctrl.setHeader('Referer', REFERER);
 //  return 0;
 });
-// Ensure entouaedon (and sitsarl mirror) receive Kinogo headers expected by the backend
-io.httpInspectorCreate('http.*entouaedon.com.*', function (ctrl) {
-  ctrl.setHeader('Origin', HTTPS + BASE_URL);
-  ctrl.setHeader('Referer', REFERER);
-  ctrl.setHeader('User-Agent', UA);
-  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
-  return 0;
-});
-io.httpInspectorCreate('http.*sitsarl.com.*', function (ctrl) {
-  ctrl.setHeader('Origin', HTTPS + BASE_URL);
-  ctrl.setHeader('Referer', REFERER);
-  ctrl.setHeader('User-Agent', UA);
-  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
-  return 0;
-});
-// Player scripts on cdn-t.entouaedon.com
-io.httpInspectorCreate('http.*cdn-t\.entouaedon\.com.*', function (ctrl) {
-  ctrl.setHeader('Origin', HTTPS + BASE_URL);
-  ctrl.setHeader('Referer', REFERER);
-  ctrl.setHeader('User-Agent', UA);
-  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
-  return 0;
-});
+// Ensure dynamic CDN hosts receive Kinogo headers (vidNN.* and shard hosts)
+// Dynamic CDN shard inspectors:
+// We add inspectors lazily once a vid shard (e.g. vid1759962379) or cluster host (b-401 / cdn-401) is detected.
+// The vid shard prefix itself is discovered by `cdn_detect` from kinogo.js/theme scripts; not hardcoded.
+function registerDynamicInspector(pattern) {
+  try {
+    if (!pattern || DYN_INSP[pattern]) return;
+    DYN_INSP[pattern] = 1;
+    io.httpInspectorCreate(pattern, function (ctrl) {
+      ctrl.setHeader('Origin', HTTPS + BASE_URL);
+      ctrl.setHeader('Referer', REFERER);
+      ctrl.setHeader('User-Agent', UA);
+      ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
+      return 0;
+    });
+    dlog('DynamicInspector: registered ' + pattern);
+  } catch(e) { try { dlog('DynamicInspector: failed ' + pattern + ' err=' + e); } catch(_) {} }
+}
+// Pre-register generic wildcard patterns as a safety net (will be narrower once detection runs)
+registerDynamicInspector('http.*vid[0-9A-Za-z]+\.[^/]+.*');
+registerDynamicInspector('http.*(?:b|cdn)-\d+\.[^/]+.*');
 //io.httpInspectorCreate('http.*video/[a-f0-9]{16}/.*', function (ctrl) {
 //  ctrl.setHeader('User-Agent', UA);
 //  return 0;
@@ -2797,7 +2800,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
         }
 //        else if (/(vcdn\.icdn\.ws|.*?\.svetacdn\.in|.*?\.annacdn\.cc|cdn\.cdn-films\.xyz|me\.greenfilm\.xyz|films\.video-up\.online|kino\.stokino\.rest|full-hd\.ki1080no\.xyz|s.*?\.filmload\.me|kino.*?\.navigatorkino\.xyz|.*?up\.terobat\.work|up.*?\.kiberload\.pw|cloud.*?\.kifise\.xyz|server.*?\.film-s-load\.live|video\.kinosteel\.club|video\.kinogo\.lu)/.test(playlisturl)) {
 //        else if (/(icdn|svetacdn|annacdn|cdn-films|greenfilm|video-up|stokino|ki1080no|filmload|navigatorkino|terobat|kiberload|kifise|film-s-load|kinosteel|video\.kinogo\.lu)/.test(playlisturl)) {
-        else if (/(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm|azure\d+.*?sitsarl\.com|entouaedon\.com|\/playlist\/.*?\.txt)/.test(playlisturl)) {
+  else if (/(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm|vid\d+\.[a-z0-9.-]+|\/(?:playlist|hls|stream2?)\/.*?\.(?:txt|json|m3u8))/.test(playlisturl)) {
           playlistname = 'cloud.cdnland.in';
 //          uri = PREFIX + ':cdnlandpage:' + playlisturl + '~' + title + '~' + icon;
 //          uri = PREFIX + ':cdnlandpage:' + escape(playlisturl) + '~' + escape(title) + '~' + escape(icon);
@@ -5424,18 +5427,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         }
         return body || '';
       })(url);
-      if (!payload0 && /sitsarl\.com/i.test(url)) {
-        var alt0 = url.replace(/^https?:\/\/[^/]*sitsarl\.com/i, 'https://vid11.entouaedon.com');
-        try { dlog('CDNLAND: retry playlist on entouaedon: ' + alt0); } catch(e01) {}
-        payload0 = (function(purl){
-          var body = '';
-          try { body = http.request(purl, {debug:true, noFail:true, compression:true}).toString(); } catch(_) {}
-          if (!body || !body.length) {
-            try { body = http.request(purl, {debug:true, noFail:true, compression:true, postdata:'', headers:{'Accept':'*/*','Origin': HTTPS + BASE_URL,'Referer': REFERER,'Content-Type':'application/x-www-form-urlencoded','User-Agent': UA}}).toString(); } catch(_) {}
-          }
-          return body || '';
-        })(alt0);
-      }
+      // Do not hardcode alternate domains; rely on later dynamic baseOrigin logic
       if (payload0 && payload0.length) {
         var isSeries0 = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(payload0);
         var poster0 = icon;
@@ -5454,17 +5446,12 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
     } catch (e) { return ''; }
   }
 
-  function replaceToEntouaedon(u) {
-    try {
-      // Replace any sitsarl host to a sane default entouaedon host
-      return u.replace(/^https?:\/\/[^/]*sitsarl\.com/i, 'https://vid11.entouaedon.com');
-    } catch (e) { return u; }
-  }
+  // No host replacements to specific domains; use discovered baseOrigin only
 
   function safeGet(u) {
     try { dlog('CDNLAND GET: ' + u); } catch(e) {}
     try {
-      // Emulate browser context expected by entouaedon: kinogo Origin/Referer and UA/Accept-Language
+  // Emulate browser context expected by CDN: Kinogo Origin/Referer and UA/Accept-Language
       return http.request(u, {debug:true, noFail:true, compression:true, headers:{
         'User-Agent': UA,
         'Origin': HTTPS + BASE_URL,
@@ -5478,25 +5465,68 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
     }
   }
 
-  // 1) Try original URL; if DNS fails or empty, try entouaedon replacement
+  // 1) Fetch embed HTML from the given URL only
   var embedHtml = safeGet(url);
   var usedUrl = url;
-  if (!embedHtml || embedHtml.length === 0) {
-    var altUrl = replaceToEntouaedon(url);
-    if (altUrl !== url) {
-      var altHtml = safeGet(altUrl);
-      if (altHtml && altHtml.length) {
-        embedHtml = altHtml;
-        usedUrl = altUrl;
-      }
-    }
-  }
+  // Do not attempt to swap hosts to fixed domains
   // Compute origin of the page we actually fetched (used for resolving relative script URLs)
   var baseOrigin = getOrigin(usedUrl);
 
   // 2) Parse DOM, extract csrf meta and playlist path from scripts
   var csrfToken = '';
   var playlistPath = '';
+  // Early dynamic detection (JS port) to prefill host/path/csrf without hardcoded domains
+  try {
+    var det = cdn_detect.detect({ kinogoUrl: usedUrl, kinogoOrigin: (HTTPS + BASE_URL), UA: UA, dlog: dlog, allowKinolordfilm: true });
+    var canonicalTried = false;
+    if ((!det || !det.baseOrigin) && /\/serial\/[0-9a-f]{32,}\/iframe/i.test(usedUrl)) {
+      // Direct iframe unreachable case: try canonical kinolordfilm iframe explicitly
+      var hashMatch = usedUrl.match(/\/serial\/([0-9a-f]{32,})\/iframe/i);
+      if (hashMatch) {
+        var canon = 'https://kinolordfilm.com/serial/' + hashMatch[1] + '/iframe';
+        dlog('DETECT: direct iframe unreachable; forcing canonical fetch ' + canon);
+        det = cdn_detect.detect({ kinogoUrl: canon, kinogoOrigin: (HTTPS + BASE_URL), UA: UA, dlog: dlog, allowKinolordfilm: true });
+        canonicalTried = true;
+      }
+    }
+    // If detection succeeded but didn't provide a baseOrigin (common when playerConfigs parse fails) yet we got href/vidShard or serverPrefix, construct one now
+    if (det && !det.baseOrigin) {
+      var constructed = '';
+      if (det.serverPrefix && det.href) {
+        var h = det.href.replace(/^https?:\/\//,'');
+        var pref = det.serverPrefix.replace(/\/?$/,'');
+        if (!/\.$/.test(pref)) pref += '.';
+        constructed = (/^https?:\/\//.test(pref) ? '' : 'https://') + pref + h;
+      } else if (det.cluster && det.href) constructed = 'https://' + det.cluster + '.' + det.href.replace(/^https?:\/\//,'');
+      else if (det.vidShard && det.href) constructed = 'https://' + det.vidShard + '.' + det.href.replace(/^https?:\/\//,'');
+      else if (det.href) constructed = 'https://' + det.href.replace(/^https?:\/\//,'');
+      if (constructed) { det.baseOrigin = constructed; dlog('DETECT: constructed baseOrigin fallback ' + constructed); }
+      else if (canonicalTried) { det.baseOrigin = 'https://kinolordfilm.com'; dlog('DETECT: fallback baseOrigin set to canonical kinolordfilm.com'); }
+    }
+    if (det) {
+      if (det.baseOrigin && !baseOrigin) baseOrigin = det.baseOrigin;
+      if (det.playlistPath && !playlistPath) playlistPath = det.playlistPath;
+      if (det.csrfToken && !csrfToken) csrfToken = det.csrfToken;
+      if (det.playlistUrl && /^https?:\/\//i.test(det.playlistUrl)) {
+        if (!/^https?:\/\//i.test(playlistPath)) playlistPath = det.playlistUrl;
+      }
+      // Register narrow inspectors for this specific vid shard / cluster hosts if derivable
+      try {
+        if (det.baseOrigin) {
+          var host = det.baseOrigin.replace(/^https?:\/\//,'');
+          // pattern for this exact vid shard host
+          registerDynamicInspector('http.*' + host.replace(/\./g,'\\.') + '.*');
+          // domain suffix (after first dot) to capture b-### / cdn-### cluster hosts
+          var parts = host.split('.');
+            if (parts.length > 2) {
+              var suffix = parts.slice(1).join('.');
+              registerDynamicInspector('http.*(?:b|cdn)-\\d+\\.' + suffix.replace(/\./g,'\\.') + '.*');
+            }
+        }
+      } catch(_ireg) { dlog('DynamicInspector: narrow registration failed ' + _ireg); }
+      try { dlog('CDNLAND: early detect: host=' + (det.baseOrigin||'') + ' path=' + (det.playlistPath||'') + (det.csrfToken? ' [csrf]' : '') ); } catch(_ddbg) {}
+    }
+  } catch(_dterr) { try { dlog('CDNLAND: detect module error: ' + _dterr); } catch(_) {} }
   try {
     var dom = html.parse(embedHtml || '');
     // csrf token
@@ -5563,6 +5593,8 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
       } catch(_sre) {}
       // Deduplicate
       var seenSrc = {};
+  
+    // Note: kinolordfilm canonical fallback is player#2-specific; not applied in main cdnland route
       for (var si2 = 0; si2 < srcList.length && fetched < maxFetch; si2++) {
         var s = srcList[si2];
         if (!s || seenSrc[s]) continue;
@@ -5637,7 +5669,9 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
           if (pcJson && typeof pcJson === 'object') {
             if (!csrfToken && pcJson.key) csrfToken = pcJson.key;
             if (!playlistPath && pcJson.file) playlistPath = pcJson.file; // often like '/playlist/<token>.txt'
-            try { dlog('CDNLAND: playerConfigs parsed' + (csrfToken? ' [key]' : '') + (playlistPath? ' [file]' : '')); } catch(_pcd) {}
+            // Do not assume vid shard (e.g. vid11) from href; host will be detected from scripts/theme
+            if (pcJson.href) { try { dlog('CDNLAND: href detected in playerConfigs'); } catch(_bo) {} }
+            try { dlog('CDNLAND: playerConfigs parsed' + (csrfToken? ' [key]' : '') + (playlistPath? ' [file]' : '') + (baseOrigin? ' [host]' : '')); } catch(_pcd) {}
           }
         } catch(_pcp) {}
       }
@@ -5691,8 +5725,28 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
   var playlistUrl = '';
   if (playlistPath) {
     if (/^https?:\/\//i.test(playlistPath)) playlistUrl = playlistPath;
-    else playlistUrl = (baseOrigin || 'https://vid11.entouaedon.com') + (playlistPath.charAt(0) === '/' ? '' : '/') + playlistPath;
+    else {
+      // Dynamic host discovery: scan embed and collected scripts for vidXX.<domain>
+      try {
+        var hostCandidate = '';
+        // Reuse previously aggregated scriptsText if available
+        var rawAll = (embedHtml || '') + '\n' + (scriptsText || '');
+        var hm = rawAll.match(/https?:\/\/(vid\d+\.[a-z0-9.-]+)/i);
+        if (hm && hm[1]) hostCandidate = 'https://' + hm[1];
+        if (!hostCandidate) {
+          var hm2 = rawAll.match(/(vid\d+\.[a-z0-9.-]+)/i);
+          if (hm2 && hm2[1]) hostCandidate = 'https://' + hm2[1];
+        }
+        if (hostCandidate && !baseOrigin) {
+          baseOrigin = hostCandidate;
+          try { dlog('CDNLAND: dynamic host detected ' + baseOrigin); } catch(_hd) {}
+        }
+      } catch(_hostdet) { try { dlog('CDNLAND: host discovery error ' + _hostdet); } catch(_) {} }
+      if (!baseOrigin) { try { dlog('CDNLAND: no baseOrigin discovered; playlist URL may fail'); } catch(_) {} }
+      playlistUrl = (baseOrigin || '') + (playlistPath.charAt(0) === '/' ? '' : '/') + playlistPath;
+    }
     try { dlog('CDNLAND playlist URL built: ' + playlistUrl); } catch(eu) {}
+    // No static alt-root probing; baseOrigin must come from playerConfigs or embedded scripts
   }
 
   // 4) Fetch playlist JSON (prefer POST with CSRF; then GET with headers; then POST without CSRF; with cachebuster)
@@ -5746,20 +5800,12 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
   var payload = '';
   if (playlistUrl) {
     payload = fetchPlaylist(playlistUrl);
-    if (!payload && /sitsarl\.com/i.test(playlistUrl)) {
-      // Try same path on entouaedon if sitsarl playlist host is blocked
-      var altP = replaceToEntouaedon(playlistUrl);
-      if (altP !== playlistUrl) payload = fetchPlaylist(altP);
-    }
     // Generic low-risk fallback: try .json if .txt returned nothing
     if (!payload && /\.txt(\?|$)/i.test(playlistUrl)) {
       try { dlog('CDNLAND: retrying playlist as .json'); } catch(_djson) {}
       var jsonUrl = playlistUrl.replace(/\.txt(\b|$)/i, '.json');
       payload = fetchPlaylist(jsonUrl);
-      if (!payload && /sitsarl\.com/i.test(jsonUrl)) {
-        var jsonAlt = replaceToEntouaedon(jsonUrl);
-        if (jsonAlt !== jsonUrl) payload = fetchPlaylist(jsonAlt);
-      }
+      // No static host swap for .json either
     }
   }
 
@@ -5945,10 +5991,10 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         var token = tok.charAt(0) === '~' ? tok.substr(1) : tok;
         // Token from JSON usually already contains !! at the end; don't duplicate it.
         var hasBangBang = /!!$/.test(token);
-        var base = baseOrigin || 'https://vid11.entouaedon.com';
+  var base = baseOrigin || '';
+  if (!base) return '';
         var url = base + (base.charAt(base.length-1) === '/' ? '' : '/') + 'playlist/' + token + (hasBangBang ? '' : '!!') + '.txt';
-        // If host is sitsarl mirror, normalize to entouaedon which we know works
-        if (/sitsarl\.com/i.test(url)) url = replaceToEntouaedon(url);
+  // Do not rewrite sitsarl mirror to any specific domain; rely on actual provided host
         return url;
       }
 
@@ -5980,7 +6026,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         if (!payload) payload = req('GET', u);
         if (!payload) payload = req('GET', u + (u.indexOf('?')>=0?'&':'?') + 'cb=' + Date.now());
         if (!payload) payload = req('POST', u);
-        if (!payload && /sitsarl\.com/i.test(u)) payload = req('POST', replaceToEntouaedon(u));
+  // Do not attempt static host substitution for sitsarl
         payload = (payload || '');
         if (payload.length < 4) return '';
   // Try parse JSON first, else plain string
@@ -6012,7 +6058,17 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
             var rel = mrel[1].trim();
             // Extract host marker from path
             var mh = rel.match(/\/(?:stream2?|hls)\/(?:((?:b|cdn)-\d{1,4}))\//i);
-            var host = mh && mh[1] ? (mh[1] + '.entouaedon.com') : '';
+            var host = '';
+            try {
+              if (cache && cache.baseOrigin) {
+                var suf = (cache.baseOrigin||'').replace(/^https?:\/\//,'');
+                var parts = suf.split('.');
+                if (parts.length >= 2) {
+                  var domainSuffix = parts.slice(1).join('.');
+                  host = (mh && mh[1] ? (mh[1] + '.' + domainSuffix) : '');
+                }
+              }
+            } catch(_dsuf) {}
             if (host) {
               if (rel.charAt(0) !== '/') rel = '/' + rel;
               var abs = 'https://' + host + rel;
@@ -6117,7 +6173,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         try {
           var playUrl = fileStr;
 
-          // playUrl = "https://b-401.entouaedon.com/stream2/b-401/36dc763296fb529d2a465105a46fb25d/MJTMsp1RshGTygnMNRUR2N2MSlnWXZEdMNDZzQWe5MDZzMmdZJTO1R2RWVHZDljekhkSsl1VwYnWtx2cihVT290RVFzTUJFaNRUVw4kanFzTHpEbZpnWo1EVBd3TH5EbNRlSo5keW1mWqNWP:1762376150:91.215.146.225:e39048c1af7e08135c0026b13ed0d2f74daa82d6135722117aaeb0ca44e4e6da/index.m3u8";
+          // Example playUrl shape: https://b-XYZ.<root>/stream2/b-XYZ/<id>/<token>/index.m3u8
           dlog('CDNLAND: append single source: ' + playUrl);
           var item = page.appendItem(playUrl, service.list, {
             title: new RichText(displayTitle || 'Эпизод'),
@@ -6158,53 +6214,10 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         var isSeriesJSON = false;
         for (var ii = 0; ii < items.length; ii++) { if (items[ii] && (items[ii].playlist || items[ii].folder)) { isSeriesJSON = true; break; } }
         if (isSeriesJSON) {
-          // Collect seasons with numeric sorting
-          var seasons = [];
-          for (var i = 0; i < items.length; i++) {
-            var it = items[i] || {};
-            var label = it.comment || it.title || '';
-            var sid = it.id || '';
-            var sPoster = it.poster || poster || icon;
-            var mnum = (label.match(/(?:Сезон|Season)\s*(\d{1,3})/i) || label.match(/(\d{1,3})\s*(?:сезон|season)/i) || sid.match(/(?:season|sezon|сезон|s)[_\s-]*?(\d{1,3})/i));
-            var snum = mnum && mnum[1] ? parseInt(mnum[1], 10) : 0;
-            seasons.push({ label: label, id: sid, num: isNaN(snum) ? 0 : snum, poster: sPoster, pl: (it.playlist || it.folder) });
-          }
-          seasons.sort(function(a,b){ if (a.num !== b.num) return a.num - b.num; return 0; });
-          // Build translations index: translatorId -> { name, seasons: {sid: {label, poster, episodes:[...]}} }
-          var trIndex = {};
-          for (var s = 0; s < seasons.length; s++) {
-            var S = seasons[s];
-            var eps = S.pl || [];
-            for (var e = 0; e < eps.length; e++) {
-              var ep = eps[e] || {};
-              var etitle = ep.comment || ep.title || ('Серия ' + (e+1));
-              var eposter = ep.poster || S.poster || poster || icon;
-              var epl = ep.playlist || ep.folder || [];
-              if (!epl || !epl.length) continue;
-              for (var q = 0; q < epl.length; q++) {
-                var qit = epl[q] || {};
-                // Revert translator id/name derivation to earlier stable approach: only from qit
-                var tname = qit.title || qit.comment || '';
-                var tid = (qit.translator || qit.translationid || tname || '0') + '';
-                if (!trIndex[tid]) trIndex[tid] = { id: tid, name: tname || ('Перевод ' + tid), seasons: {} };
-                var T = trIndex[tid];
-                if (!T.seasons[S.id || (S.num+'')]) T.seasons[S.id || (S.num+'')] = { id: (S.id || (S.num+'')), num: S.num, label: S.label, poster: S.poster, episodes: [] };
-                var Ss = T.seasons[S.id || (S.num+'')];
-                // Prefer file/hls/src from quality item, then episode-level file, then first child in nested playlist
-                var tok = qit.file || qit.hls || qit.src || ep.file || ep.hls || ep.src || '';
-                if (!tok && qit.playlist && qit.playlist.length) {
-                  var c0 = qit.playlist[0] || {};
-                  tok = c0.file || c0.hls || c0.src || '';
-                }
-                if (!tok && ep.playlist && ep.playlist.length) {
-                  var e0 = ep.playlist[0] || {};
-                  tok = e0.file || e0.hls || e0.src || '';
-                }
-                if (!tok) { try { dlog('CDNLAND: [index] empty token for ep=' + (ep.id || (S.id + '-' + (e+1))) + ' tr=' + tid); } catch(_) {} }
-                Ss.episodes.push({ id: (ep.id || (S.id + '-' + (e+1))), title: etitle, display: (tname || ''), token: tok, poster: eposter });
-              }
-            }
-          }
+          // Use extracted CDNLAND index builder (strict parsing)
+          var built = cdn_cdnland.buildIndex(items, poster, icon, dlog);
+          var seasons = built.seasons || [];
+          var trIndex = built.trIndex || {};
           try {
             var trDiag = [];
             for (var k in trIndex) {
@@ -6228,9 +6241,10 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
             var T2 = trIndex[trKeys[ti]];
             var seasonsCount = Object.keys(T2.seasons).length;
             var epCount = 0; try { for (var sk in T2.seasons) epCount += (T2.seasons[sk].episodes||[]).length; } catch(_ec) {}
+            var tDisp = (T2.id === '0') ? 'Оригинал' : (T2.name || ('Перевод ' + T2.id));
             try {
               page.appendItem(PREFIX + ':cdnland_tr:' + cacheId + '~' + encodeURIComponent(T2.id), 'directory', {
-                title: new RichText((T2.name || ('Перевод ' + T2.id)) + ' (' + seasonsCount + ' сез., ' + epCount + ' сер.)'),
+                title: new RichText(tDisp + ' (' + seasonsCount + ' сез., ' + epCount + ' сер.)'),
                 icon: icon,
                 backdrops: poster ? [{url: poster}] : [{url: icon}],
                 tagline: new RichText(coloredStr(title, gray))
@@ -6405,6 +6419,41 @@ new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cac
   if (!E) { try { dlog('CDNLAND: [play] episode not found: ' + epId); } catch(_) {} page.error('Эпизод не найден'); page.loading = false; return; }
   var tokenOrFile = E.token || E.file || '';
   try { dlog('CDNLAND: [play] resolving ep=' + epId + ' tokenOrFile=' + (tokenOrFile ? tokenOrFile.substring(0,64) + (tokenOrFile.length>64?'…':'') : '(empty)')); } catch(_) {}
+  // If token is relative and baseOrigin in cache points to a dead azure/sitsarl host, attempt to redetect via canonical iframe
+  function looksDeadHost(h) { return /azure\d+\.sitsarl\.com|sitsarl\.com/i.test(h||''); }
+  if ((!/^https?:\/\//i.test(tokenOrFile)) && (!cache.baseOrigin || looksDeadHost(cache.baseOrigin))) {
+    try {
+      var usedUrl = cache.usedUrl || '';
+      var det2 = cdn_detect.detect({ kinogoUrl: usedUrl, kinogoOrigin: (HTTPS + BASE_URL), UA: UA, dlog: dlog, allowKinolordfilm: true });
+      if ((!det2 || !det2.baseOrigin) && /\/serial\/[0-9a-f]{32,}\/iframe/i.test(usedUrl)) {
+        var hm = usedUrl.match(/\/serial\/([0-9a-f]{32,})\/iframe/i);
+        if (hm) {
+          var canon2 = 'https://kinolordfilm.com/serial/' + hm[1] + '/iframe';
+          dlog('CDNLAND: [play] re-detect via canonical ' + canon2);
+          det2 = cdn_detect.detect({ kinogoUrl: canon2, kinogoOrigin: (HTTPS + BASE_URL), UA: UA, dlog: dlog, allowKinolordfilm: true });
+        }
+      }
+      if (det2) {
+        if (!det2.baseOrigin && (det2.cluster || det2.vidShard) && det2.href) {
+          det2.baseOrigin = 'https://' + (det2.cluster || det2.vidShard) + '.' + det2.href.replace(/^https?:\/\//,'');
+        }
+        if (det2.baseOrigin) {
+          cache.baseOrigin = det2.baseOrigin;
+          if (det2.csrfToken) cache.csrfToken = det2.csrfToken;
+          try {
+            var host2 = det2.baseOrigin.replace(/^https?:\/\//,'');
+            registerDynamicInspector('http.*' + host2.replace(/\./g,'\\.') + '.*');
+            var parts2 = host2.split('.');
+            if (parts2.length > 2) {
+              var suffix2 = parts2.slice(1).join('.');
+              registerDynamicInspector('http.*(?:b|cdn)-\\d+\\.' + suffix2.replace(/\./g,'\\.') + '.*');
+            }
+          } catch(_ireg2) {}
+          dlog('CDNLAND: [play] updated baseOrigin from detect: ' + cache.baseOrigin);
+        }
+      }
+    } catch(_re_det) { dlog('CDNLAND: [play] redetect failed: ' + _re_det); }
+  }
   // Minimal helpers to reuse token resolution logic with cached context
   function tryParsePlayerJSON(txt) {
     if (!txt) return null; var s = (''+txt).trim(); var m = s.match(/(\{[\s\S]*\}|\[[\s\S]*\])/); if (!m) return null; try { return JSON.parse(m[1]); } catch(e1){} try { return JSON.parse(m[1].replace(/\\"/g,'"')); } catch(e2){} return null;
@@ -6412,13 +6461,18 @@ new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cac
   function buildTokenPlaylistUrl(baseOrigin, tok) {
     var token = tok.charAt(0) === '~' ? tok.substr(1) : tok;
     var hasBangBang = /!!$/.test(token);
-    var base = baseOrigin || 'https://vid11.entouaedon.com';
-    var url = base + (base.charAt(base.length-1) === '/' ? '' : '/') + 'playlist/' + token + (hasBangBang ? '' : '!!') + '.txt';
-    return url;
+  var base = baseOrigin || '';
+  if (!base) return '';
+  var url = base + (base.charAt(base.length-1) === '/' ? '' : '/') + 'playlist/' + token + (hasBangBang ? '' : '!!') + '.txt';
+  return url;
   }
   function fetchTokenFile(baseOrigin, csrfToken, tok) {
+    var tokenRaw = tok.charAt(0) === '~' ? tok.substr(1) : tok;
+    var encodedToken = encodeURIComponent(tokenRaw.replace(/!!$/,''));
     var u = buildTokenPlaylistUrl(baseOrigin, tok);
-    try { dlog('CDNLAND: [play] fetching token playlist: ' + u); } catch(_) {}
+    var uNoBang = baseOrigin + (baseOrigin.charAt(baseOrigin.length-1) === '/' ? '' : '/') + 'playlist/' + tokenRaw.replace(/!!$/,'') + '.txt';
+    var uEncoded = baseOrigin + (baseOrigin.charAt(baseOrigin.length-1) === '/' ? '' : '/') + 'playlist/' + encodedToken + '!!.txt';
+    var attempts = [u, uNoBang, uEncoded];
     var payload = '';
     function req(method, url, addHeaders) {
       try {
@@ -6440,10 +6494,20 @@ new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cac
       } catch(e) { /* ignore */ }
       return '';
     }
-    if (csrfToken) payload = req('POST', u, {'X-CSRF-TOKEN': csrfToken, 'X-CSRF-Token': csrfToken, 'x-csrf-token': csrfToken});
-    if (!payload) payload = req('GET', u);
-    if (!payload) payload = req('GET', u + (u.indexOf('?')>=0?'&':'?') + 'cb=' + Date.now());
-    if (!payload) payload = req('POST', u);
+    for (var ai=0; ai<attempts.length && !payload; ai++) {
+      var cur = attempts[ai];
+      try { dlog('CDNLAND: [play] fetching token playlist attempt ' + (ai+1) + ': ' + cur); } catch(_) {}
+      if (csrfToken) payload = req('POST', cur, {'X-CSRF-TOKEN': csrfToken, 'X-CSRF-Token': csrfToken, 'x-csrf-token': csrfToken});
+      if (!payload) payload = req('GET', cur);
+      if (!payload) payload = req('GET', cur + (cur.indexOf('?')>=0?'&':'?') + 'cb=' + Date.now());
+      if (!payload) payload = req('POST', cur);
+      // Fallback: JSON variant
+      if (!payload) {
+        var jsonVariant = cur.replace(/\.txt(\?|$)/, '.json$1');
+        payload = req('GET', jsonVariant);
+        if (!payload && csrfToken) payload = req('POST', jsonVariant, {'X-CSRF-TOKEN': csrfToken});
+      }
+    }
   payload = (payload || '');
   try { dlog('CDNLAND: [play] token payload len=' + payload.length + (payload.length<64? (', body=' + JSON.stringify(payload)) : '')); } catch(_) {}
     if (payload.length < 4) return '';
@@ -6462,9 +6526,22 @@ new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cac
       var mrel = txt.match(/\n\s*([^\n#][^\s"']*\.(?:m3u8|m3u))\s*(?:\n|$)/i);
       if (mrel && mrel[1]) {
         var rel = mrel[1].trim();
-        var mh = rel.match(/\/(?:stream2?|hls)\/((?:b|cdn)-\d{1,4})\//i);
-        var host = mh && mh[1] ? (mh[1] + '.entouaedon.com') : '';
-        if (host) { if (rel.charAt(0) !== '/') rel = '/' + rel; return 'https://' + host + rel; }
+        if (rel.charAt(0) !== '/') rel = '/' + rel;
+        // Try to construct absolute using cache.baseOrigin suffix if available
+        try {
+          var mh = rel.match(/\/(?:stream2?|hls)\/((?:b|cdn)-\d{1,4})\//i);
+          var cluster = mh && mh[1] ? mh[1] : '';
+          if (cluster && cache && cache.baseOrigin) {
+            var suf = (cache.baseOrigin||'').replace(/^https?:\/\//,'');
+            var parts = suf.split('.');
+            if (parts.length >= 2) {
+              var domainSuffix = parts.slice(1).join('.');
+              return 'https://' + cluster + '.' + domainSuffix + rel;
+            }
+          }
+        } catch(_absr) {}
+        // Fallback: return relative and let caller handle
+        return rel;
       }
       return '';
     }
@@ -6474,33 +6551,42 @@ new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cac
   }
   var finalUrl = '';
   try {
-    var t = tokenOrFile || '';
-    if (/^~/.test(t)) {
-      finalUrl = fetchTokenFile(cache.baseOrigin, cache.csrfToken, t);
-      // If token likely failed due to stale CSRF (tiny '10' response etc.), try to refresh CSRF from baseOrigin and retry once
-      if (!finalUrl && cache.baseOrigin) {
-        try {
-          var rootHtml = http.request(cache.baseOrigin + '/', {debug:true, noFail:true, compression:true, headers:{
-            'User-Agent': UA,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Origin': (HTTPS + BASE_URL),
-            'Referer': REFERER,
-            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
-          }}).toString();
-          var m = rootHtml && rootHtml.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i);
-          if (m && m[1]) {
-            cache.csrfToken = m[1];
-            try { dlog('CDNLAND: [play] refreshed csrfToken from baseOrigin'); } catch(_) {}
-            finalUrl = fetchTokenFile(cache.baseOrigin, cache.csrfToken, t);
-          }
-        } catch(_refCsrf) {}
+    // Before resolving token, prefer cluster host (b-###/cdn-###) if available from a fresh detect
+    try {
+      var usedUrl = cache.usedUrl || '';
+      var det2 = cdn_detect.detect({ kinogoUrl: usedUrl, kinogoOrigin: (HTTPS + BASE_URL), UA: UA, dlog: dlog, allowKinolordfilm: true });
+      if ((!det2 || !det2.baseOrigin) && /\/serial\/[0-9a-f]{32,}\/iframe/i.test(usedUrl)) {
+        var hm = usedUrl.match(/\/serial\/([0-9a-f]{32,})\/iframe/i);
+        if (hm) {
+          var canon2 = 'https://kinolordfilm.com/serial/' + hm[1] + '/iframe';
+          det2 = cdn_detect.detect({ kinogoUrl: canon2, kinogoOrigin: (HTTPS + BASE_URL), UA: UA, dlog: dlog, allowKinolordfilm: true });
+        }
       }
-    } else if (/\[[^\]]+\]/.test(t)) {
-      var mOne = t.match(/\[(.*?)\]([^,\n\r"']+)/);
-      if (mOne && mOne[2]) { finalUrl = mOne[2].trim().replace(/\\\//g,'/'); }
-    } else if (/^https?:\/\//i.test(t)) {
-      finalUrl = t;
-    }
+      if (det2 && det2.href) {
+        var hrefSuffix = det2.href.replace(/^https?:\/\//,'');
+        // If detector found an explicit cluster, switch to it (this often matches the working host for playlist)
+        if (det2.cluster) {
+          cache.baseOrigin = 'https://' + det2.cluster + '.' + hrefSuffix;
+          dlog('CDNLAND: [play] prefer cluster baseOrigin ' + cache.baseOrigin);
+        } else if (!cache.baseOrigin && (det2.serverPrefix || det2.vidShard)) {
+          // Else construct from serverPrefix or vidShard
+          var pref = (det2.serverPrefix || ('https://' + det2.vidShard + '.')).replace(/\/?$/,'');
+          if (!/\.$/.test(pref)) pref += '.';
+          cache.baseOrigin = (/^https?:\/\//.test(pref)? '' : 'https://') + pref + hrefSuffix;
+          dlog('CDNLAND: [play] constructed baseOrigin ' + cache.baseOrigin);
+        }
+      }
+    } catch(_preDet) {}
+    var ctx = {
+      baseOrigin: cache.baseOrigin,
+      csrfToken: cache.csrfToken,
+      UA: UA,
+      ORIGIN: (HTTPS + BASE_URL),
+      REFERER: REFERER
+    };
+    var res = cdn_cdnland.resolveToken(ctx, tokenOrFile || '', dlog);
+    if (res && res.csrfToken) cache.csrfToken = res.csrfToken;
+    finalUrl = res && res.url ? res.url : '';
   } catch(_rf) {}
   if (!finalUrl) { page.error('Не удалось получить ссылку для эпизода'); page.loading = false; return; }
   // hls: prefix not needed; use plain URL
