@@ -1,10 +1,38 @@
 ﻿/**
- *  KinoGo plugin for Movian
+    // Try extracting from inline playerConfigs assignment (contains key and file)
+    function extractJsonObjectAfterAssignment(src, varName) {
+      if (!src || !varName) return '';
+      try {
+        var p = src.indexOf(varName);
+        if (p < 0) return '';
+        p = src.indexOf('=', p);
+        if (p < 0) return '';
+        var i = src.indexOf('{', p);
+        if (i < 0) return '';
+        var depth = 0, inStr = false, strCh = '';
+        for (var j = i; j < src.length; j++) {
+          var ch = src.charAt(j);
+          if (inStr) {
+            if (ch === '\\' && j + 1 < src.length) { j++; continue; }
+            if (ch === strCh) inStr = false;
+            continue;
+          }
+          if (ch === '"' || ch === "'") { inStr = true; strCh = ch; continue; }
+          if (ch === '{') depth++;
+          else if (ch === '}') {
+            depth--;
+            if (depth === 0) return src.substring(i, j + 1);
+          }
+        }
+      } catch(e) {}
+      return '';
+    }
  *
- *  Copyright (C) 2022-2024 kovalDN
- *
+      var pcRaw = extractJsonObjectAfterAssignment((decodedHtml||''), 'playerConfigs');
+      if (!pcRaw) pcRaw = extractJsonObjectAfterAssignment((scriptsText||''), 'playerConfigs');
+      if (pcRaw) {
  *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
+          var pcJson = JSON.parse(pcRaw
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
  *
@@ -68,15 +96,13 @@ var LOGOEXIT = Plugin.path + 'src/exit.png';
 //var listview = Plugin.path + 'src/list.view';
 var NAME = 'kinogo';
 
-// Simple debug logger for Movian log
+// Unified debug logger (matches HDRezka style: console.error/console.log go to Movian log when debug enabled)
 function dlog(msg) {
-  if (service.debug) {
-    try {
-    print('KinoGo@dev [DEBUG]: ' + msg);
-  } catch (e) {
-    try { console.log('KinoGo@dev [DEBUG]: ' + msg); } catch (e2) {}
-  }
-  }
+  if (!service || !service.debug) return;
+  // Prefer console.error (often flushed to log file) then print fallback
+  try { console.error('KinoGo@dev ' + msg); return; } catch(e1) {}
+  try { console.log('KinoGo@dev ' + msg); return; } catch(e2) {}
+  try { print('KinoGo@dev ' + msg); } catch(e3) {}
 }
 //var service = require('showtime/service');
 var service = require('movian/service');
@@ -299,6 +325,29 @@ io.httpInspectorCreate(HTTPS + BASE_URL + '.*', function (ctrl) {
 //  ctrl.setHeader('Referer', HTTPS + BASE_URL + '/');
   ctrl.setHeader('Referer', REFERER);
 //  return 0;
+});
+// Ensure entouaedon (and sitsarl mirror) receive Kinogo headers expected by the backend
+io.httpInspectorCreate('http.*entouaedon.com.*', function (ctrl) {
+  ctrl.setHeader('Origin', HTTPS + BASE_URL);
+  ctrl.setHeader('Referer', REFERER);
+  ctrl.setHeader('User-Agent', UA);
+  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
+  return 0;
+});
+io.httpInspectorCreate('http.*sitsarl.com.*', function (ctrl) {
+  ctrl.setHeader('Origin', HTTPS + BASE_URL);
+  ctrl.setHeader('Referer', REFERER);
+  ctrl.setHeader('User-Agent', UA);
+  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
+  return 0;
+});
+// Player scripts on cdn-t.entouaedon.com
+io.httpInspectorCreate('http.*cdn-t\.entouaedon\.com.*', function (ctrl) {
+  ctrl.setHeader('Origin', HTTPS + BASE_URL);
+  ctrl.setHeader('Referer', REFERER);
+  ctrl.setHeader('User-Agent', UA);
+  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
+  return 0;
 });
 //io.httpInspectorCreate('http.*video/[a-f0-9]{16}/.*', function (ctrl) {
 //  ctrl.setHeader('User-Agent', UA);
@@ -5342,6 +5391,16 @@ new page.Route(PREFIX + ':playlistpage:(.*)~(.*)~(.*)', function (page, url, tit
 //plugin.addURI(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, title, icon) {
 new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, title, icon) {
   page.loading = true;
+  // Ensure page renders appended items
+  try {
+    page.type = 'directory';
+    if (page.model && page.model.contents !== undefined) {
+      page.model.contents = 'list';
+    } else {
+      page.contents = 'items';
+    }
+    if (title) page.metadata.title = new RichText(title);
+  } catch(__ui) {}
 //  url = showtime.entityDecode(url);
 //  url = unescape(url);
 //  url = decodeURIComponent(url);
@@ -5349,301 +5408,1107 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
 //  title = unescape(title);
 //  title = decodeURIComponent(title);
 //  icon = showtime.entityDecode(icon);
-//  icon = unescape(icon);
-//  icon = decodeURIComponent(icon);
-  page.metadata.background = LOGOBACKGROUND;
-//  setPageHeader(page, title);
-//  page.metadata.logo = LOGO;
-//  page.metadata.logo = icon;
-//  page.metadata.icon = LOGO;
-//  page.metadata.icon = icon;
-//  page.metadata.title = title;
-//  page.metadata.title = new showtime.RichText(title);
-  page.metadata.title = new RichText(title);
-  page.type = 'directory';
-  page.model.contents = 'list';
-//  page.model.contents = 'grid';
-  // Fetch helper with provider-specific fallbacks for azure*.sitsarl.com
-  function fetchWithCdnFallbacks(u) {
-    var options = {
-      debug: true,
-      noFail: true,
-      compression: true,
-    };
-    // Build a set of candidate URLs to try
-    var candidates = [];
-    try {
-      // Fix missing dot between azureNNN and sitsarl.com
-      var fixed = u.replace(/(azure\d+)\.?\b(sitsarl\.com)/i, '$1.$2');
-      // 1) original/fixed
-      candidates.push(fixed);
-      // 2) drop leading vidTIMESTAMP subdomain
-      candidates.push(fixed.replace(/https:\/\/(vid\d+\.)/i, 'https://'));
-      // 3) keep vid*, drop azureNNN.
-      candidates.push(fixed.replace(/https:\/\/(vid\d+\.)azure\d+\./i, 'https://$1'));
-      // 4) plain sitsarl.com (last resort)
-      candidates.push(fixed.replace(/https:\/\/[^/]*sitsarl\.com/i, 'https://sitsarl.com'));
+  // Simple, clean implementation: fetch embed HTML (with minimal fallback), parse DOM for csrf-token and playlist path,
+  // then fetch the playlist JSON and render it.
 
-      // 5) Try entouaedon CDN that site uses for seasons
-      var pathSuffix = fixed.replace(/^https?:\/\/[^/]+/i, '');
-      // If pathSuffix is empty, keep original u's suffix
-      if (!pathSuffix || pathSuffix === fixed) {
-        pathSuffix = u.replace(/^https?:\/\/[^/]+/i, '');
-      }
-      // Force a sane default suffix
-      if (!pathSuffix || pathSuffix.length === 0) pathSuffix = '/';
-      candidates.push('https://vid11.entouaedon.com' + pathSuffix);
-      // Try a small pool of vid servers
-      for (var vi = 1; vi <= 20; vi++) {
-        var vn = (vi < 10 ? '0' + vi : '' + vi);
-        candidates.push('https://vid' + vn + '.entouaedon.com' + pathSuffix);
-      }
-    } catch(e) { candidates = [u]; }
-    var lastErr = null;
-    for (var i = 0; i < candidates.length; i++) {
-      try { dlog('CDNLAND fetch try[' + i + ']: ' + candidates[i]); } catch(e) {}
-      try {
-        var resp = http.request(candidates[i], options).toString();
-        if (resp && resp.length) {
-          try { dlog('CDNLAND fetch success with candidate[' + i + ']'); } catch(e) {}
-          return resp;
+  // 0) If we were passed a direct playlist URL, handle it immediately
+  try {
+    if (/\/playlist\/.*?\.txt(\?|$)/i.test(url)) {
+      try { dlog('CDNLAND: direct playlist URL detected, fetching: ' + url); } catch(e0) {}
+      var payload0 = (function(purl){
+        var body = '';
+        // Try POST with CSRF (none here), then GET, then POST without CSRF
+        try { body = http.request(purl, {debug:true, noFail:true, compression:true}).toString(); } catch(_) {}
+        if (!body || !body.length) {
+          try { body = http.request(purl, {debug:true, noFail:true, compression:true, postdata:'', headers:{'Accept':'*/*','Origin': HTTPS + BASE_URL,'Referer': REFERER,'Content-Type':'application/x-www-form-urlencoded','User-Agent': UA}}).toString(); } catch(_) {}
         }
-      } catch (err) {
-        lastErr = err;
-        try { dlog('CDNLAND fetch failed candidate[' + i + ']: ' + err); } catch(e) {}
+        return body || '';
+      })(url);
+      if (!payload0 && /sitsarl\.com/i.test(url)) {
+        var alt0 = url.replace(/^https?:\/\/[^/]*sitsarl\.com/i, 'https://vid11.entouaedon.com');
+        try { dlog('CDNLAND: retry playlist on entouaedon: ' + alt0); } catch(e01) {}
+        payload0 = (function(purl){
+          var body = '';
+          try { body = http.request(purl, {debug:true, noFail:true, compression:true}).toString(); } catch(_) {}
+          if (!body || !body.length) {
+            try { body = http.request(purl, {debug:true, noFail:true, compression:true, postdata:'', headers:{'Accept':'*/*','Origin': HTTPS + BASE_URL,'Referer': REFERER,'Content-Type':'application/x-www-form-urlencoded','User-Agent': UA}}).toString(); } catch(_) {}
+          }
+          return body || '';
+        })(alt0);
+      }
+      if (payload0 && payload0.length) {
+        var isSeries0 = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(payload0);
+        var poster0 = icon;
+        if (isSeries0) scrapercdnlandseries(page, payload0, title, icon, poster0, '');
+        else scrapercdnland(page, payload0, title, icon, poster0, '');
+        page.loading = false;
+        return;
       }
     }
-    if (lastErr) throw lastErr;
+  } catch (e00) { try { dlog('CDNLAND: direct playlist preflight error: ' + e00); } catch(_) {} }
+
+  function getOrigin(u) {
+    try {
+      var m = u.match(/^(https?:\/\/[^/]+)/i);
+      return m ? m[1] : '';
+    } catch (e) { return ''; }
+  }
+
+  function replaceToEntouaedon(u) {
+    try {
+      // Replace any sitsarl host to a sane default entouaedon host
+      return u.replace(/^https?:\/\/[^/]*sitsarl\.com/i, 'https://vid11.entouaedon.com');
+    } catch (e) { return u; }
+  }
+
+  function safeGet(u) {
+    try { dlog('CDNLAND GET: ' + u); } catch(e) {}
+    try {
+      // Emulate browser context expected by entouaedon: kinogo Origin/Referer and UA/Accept-Language
+      return http.request(u, {debug:true, noFail:true, compression:true, headers:{
+        'User-Agent': UA,
+        'Origin': HTTPS + BASE_URL,
+        'Referer': REFERER,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+      }}).toString();
+    } catch (err) {
+      try { dlog('CDNLAND GET failed: ' + err); } catch(_) {}
+      return '';
+    }
+  }
+
+  // 1) Try original URL; if DNS fails or empty, try entouaedon replacement
+  var embedHtml = safeGet(url);
+  var usedUrl = url;
+  if (!embedHtml || embedHtml.length === 0) {
+    var altUrl = replaceToEntouaedon(url);
+    if (altUrl !== url) {
+      var altHtml = safeGet(altUrl);
+      if (altHtml && altHtml.length) {
+        embedHtml = altHtml;
+        usedUrl = altUrl;
+      }
+    }
+  }
+  // Compute origin of the page we actually fetched (used for resolving relative script URLs)
+  var baseOrigin = getOrigin(usedUrl);
+
+  // 2) Parse DOM, extract csrf meta and playlist path from scripts
+  var csrfToken = '';
+  var playlistPath = '';
+  try {
+    var dom = html.parse(embedHtml || '');
+    // csrf token
+    try {
+      var heads = dom.root.getElementsByTagName ? dom.root.getElementsByTagName('head') : [];
+      if (heads && heads.length) {
+        var metas = heads[0].getElementsByTagName ? heads[0].getElementsByTagName('meta') : [];
+        for (var i = 0; i < metas.length; i++) {
+          var nm = metas[i].attributes ? metas[i].attributes.getNamedItem('name') : null;
+          if (nm && /(csrf-token|x-csrf-token|csrf)/i.test(nm.value)) {
+            var ct = metas[i].attributes ? metas[i].attributes.getNamedItem('content') : null;
+            if (ct && ct.value) csrfToken = ct.value;
+          }
+        }
+      }
+      try { dlog('CDNLAND: csrf-token ' + (csrfToken ? 'found' : 'not found via DOM')); } catch(_dbg1) {}
+    } catch(eh) {}
+    if (!csrfToken) {
+      var m1 = (embedHtml||'').match(/name=("|')csrf-token\1\s+content=("|')(.*?)\2/i);
+      if (m1 && m1[3]) csrfToken = m1[3];
+    }
+    // Fallback: try fetching the host root to obtain a CSRF meta if not present on iframe 404 body
+    if (!csrfToken && baseOrigin) {
+      try {
+        var rootHtml = http.request(baseOrigin + '/', {debug:true, noFail:true, compression:true, headers:{
+          'User-Agent': UA,
+          'Origin': HTTPS + BASE_URL,
+          'Referer': REFERER,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+        }}).toString();
+        var m2 = (rootHtml||'').match(/name=("|')csrf-token\1\s+content=("|')(.*?)\2/i);
+        if (m2 && m2[3]) csrfToken = m2[3];
+        try { dlog('CDNLAND: csrf-token ' + (csrfToken ? 'found on root page' : 'still not found')); } catch(_dbg1b) {}
+      } catch(_rt) {}
+    }
+
+    // scripts: look for /playlist/*.txt|.json (may contain \uXXXX)
+    var scriptsText = '';
+    try {
+      var scripts = dom.root.getElementsByTagName('script');
+      for (var si = 0; si < scripts.length; si++) {
+        if (scripts[si].textContent) scriptsText += scripts[si].textContent + '\n';
+      }
+    } catch(es) {}
+    try { dlog('CDNLAND: inline scripts bytes=' + scriptsText.length); } catch(_dbg2) {}
+    // Also fetch a few external scripts to look for playlist hints (from DOM and via regex fallback)
+    try {
+      var fetched = 0, maxFetch = 6;
+      var srcList = [];
+      try {
+        var scripts2 = dom.root.getElementsByTagName('script');
+        for (var sj = 0; sj < scripts2.length; sj++) {
+          var srcAttr = scripts2[sj].attributes ? scripts2[sj].attributes.getNamedItem('src') : null;
+          if (srcAttr && srcAttr.value) srcList.push(srcAttr.value.trim());
+        }
+      } catch(_sdom) {}
+      // Fallback: regex-search in raw HTML for <script src="...">
+      try {
+        var re = /<script[^>]+src=(['"])(.*?)\1/ig, m;
+        while ((m = re.exec(embedHtml))) {
+          if (m[2]) srcList.push(m[2]);
+        }
+      } catch(_sre) {}
+      // Deduplicate
+      var seenSrc = {};
+      for (var si2 = 0; si2 < srcList.length && fetched < maxFetch; si2++) {
+        var s = srcList[si2];
+        if (!s || seenSrc[s]) continue;
+        seenSrc[s] = 1;
+        var abs = s;
+        if (/^\/\//.test(s)) abs = (HTTPS.replace(/:\/\/$/, '') + ':') + s; // protocol-relative
+        else if (/^\//.test(s)) abs = (baseOrigin || (HTTPS + BASE_URL)) + s;
+        else if (!/^https?:\/\//i.test(s)) abs = (baseOrigin || (HTTPS + BASE_URL)) + '/' + s;
+        try { dlog('CDNLAND: fetching external script: ' + abs); } catch(exf) {}
+        try {
+          var stxt = http.request(abs, {debug:true, noFail:true, compression:true, headers:{
+            'User-Agent': UA,
+            'Referer': usedUrl,
+            // Important: use Kinogo origin to mimic browser context
+            'Origin': (HTTPS + BASE_URL),
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+          }}).toString();
+          if (stxt && stxt.length) {
+            scriptsText += '\n' + stxt + '\n';
+            fetched++;
+          }
+        } catch (ejs) { /* ignore individual failures */ }
+      }
+      try { dlog('CDNLAND: external scripts fetched=' + fetched); } catch(_exn) {}
+    } catch (es2) {}
+    // Decode unicode escapes and HTML entities in the whole embed to improve matching
+    var decodedHtml = (embedHtml || '');
+    try {
+      decodedHtml = decodedHtml.replace(/\\u([0-9a-fA-F]{4})/g, function(_,h){return String.fromCharCode(parseInt(h,16));});
+      decodedHtml = decodedHtml
+        .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&#(\d+);/g, function(_,d){return String.fromCharCode(parseInt(d,10));})
+        .replace(/&#x([0-9a-fA-F]+);/g, function(_,h){return String.fromCharCode(parseInt(h,16));});
+    } catch (edAll) {}
+    // Try extracting from inline playerConfigs assignment (contains key and file)
+    try {
+      function extractJsonObjectAfterAssignment(src, varName) {
+        if (!src || !varName) return '';
+        try {
+          var p = src.indexOf(varName);
+          if (p < 0) return '';
+          p = src.indexOf('=', p);
+          if (p < 0) return '';
+          var i = src.indexOf('{', p);
+          if (i < 0) return '';
+          var depth = 0, inStr = false, strCh = '';
+          for (var j = i; j < src.length; j++) {
+            var ch = src.charAt(j);
+            if (inStr) {
+              if (ch === '\\' && j + 1 < src.length) { j++; continue; }
+              if (ch === strCh) inStr = false;
+              continue;
+            }
+            if (ch === '"' || ch === "'") { inStr = true; strCh = ch; continue; }
+            if (ch === '{') depth++;
+            else if (ch === '}') {
+              depth--;
+              if (depth === 0) return src.substring(i, j + 1);
+            }
+          }
+        } catch(e) {}
+        return '';
+      }
+      var pcRaw = extractJsonObjectAfterAssignment((decodedHtml||''), 'playerConfigs');
+      if (!pcRaw) pcRaw = extractJsonObjectAfterAssignment((scriptsText||''), 'playerConfigs');
+      if (pcRaw) {
+        try {
+          var pcJson = JSON.parse(pcRaw
+            .replace(/&quot;/g,'"')
+            .replace(/\\u([0-9a-fA-F]{4})/g, function(_,h){return String.fromCharCode(parseInt(h,16));}));
+          if (pcJson && typeof pcJson === 'object') {
+            if (!csrfToken && pcJson.key) csrfToken = pcJson.key;
+            if (!playlistPath && pcJson.file) playlistPath = pcJson.file; // often like '/playlist/<token>.txt'
+            try { dlog('CDNLAND: playerConfigs parsed' + (csrfToken? ' [key]' : '') + (playlistPath? ' [file]' : '')); } catch(_pcd) {}
+          }
+        } catch(_pcp) {}
+      }
+    } catch(_pce) {}
+
+    // Try to find absolute playlist first (any host)
+    var pmAbs = decodedHtml.match(/https?:\/\/[^'"\s]+\/playlist\/[^'"\s]+\.(?:txt|json)/i);
+    if (pmAbs && pmAbs[0]) {
+      playlistPath = pmAbs[0];
+      try { dlog('CDNLAND playlist ABS path found: ' + playlistPath); } catch(epl1) {}
+    }
+    if (!playlistPath) {
+      // Try from scripts or anywhere in HTML as a relative path
+      var pmScriptRel = scriptsText.match(/\/(playlist\/[^'"\s]+\.(?:txt|json))/i);
+      var pmRel = pmScriptRel || decodedHtml.match(/\/(playlist\/[^'"\s]+\.(?:txt|json))/i);
+      if (pmRel && pmRel[1]) {
+        playlistPath = pmRel[1];
+        try { dlog('CDNLAND playlist REL path found: ' + playlistPath); } catch(epl2) {}
+      }
+    }
+    if (!playlistPath) {
+      // Try PlayerJS file: '...'
+      var pf1 = scriptsText.match(/\bfile\s*:\s*(['"])(.*?)\1/i);
+      var pf2 = scriptsText.match(/\bfile\s*\(\s*(['"])(.*?)\1\s*\)/i);
+      var cand = (pf1 && pf1[2]) ? pf1[2] : ((pf2 && pf2[2]) ? pf2[2] : '');
+      if (cand && /playlist\/.+\.(?:txt|json)/i.test(cand)) {
+        playlistPath = cand;
+        try { dlog('CDNLAND playlist from PlayerJS file: ' + playlistPath); } catch(epl3) {}
+      }
+    }
+    // Decode any remaining \\uXXXX in just the path
+    try { playlistPath = playlistPath.replace(/\\u([0-9a-fA-F]{4})/g, function(_,h){return String.fromCharCode(parseInt(h,16));}); } catch(ed) {}
+  } catch (e) {
+    try { dlog('CDNLAND DOM parse error: ' + e); } catch(_) {}
+  }
+
+  // 3) Build playlist URL
+  if (!playlistPath) {
+    // As a fallback, try deriving playlist directly from embed URL token
+    try { dlog('CDNLAND: playlist path not found in scripts'); } catch(e) {}
+    try {
+      var mm = usedUrl.match(/\/((?:serial|movie|video))\/([A-Za-z0-9_-]+)\/iframe/i);
+      if (mm && mm[2]) {
+        var guessId = mm[2];
+        // first try .txt then .json
+        playlistPath = '/playlist/' + guessId + '.txt';
+        try { dlog('CDNLAND: guessing playlist path from URL token: ' + playlistPath); } catch(_g1) {}
+      }
+    } catch(_gf) {}
+  }
+  var playlistUrl = '';
+  if (playlistPath) {
+    if (/^https?:\/\//i.test(playlistPath)) playlistUrl = playlistPath;
+    else playlistUrl = (baseOrigin || 'https://vid11.entouaedon.com') + (playlistPath.charAt(0) === '/' ? '' : '/') + playlistPath;
+    try { dlog('CDNLAND playlist URL built: ' + playlistUrl); } catch(eu) {}
+  }
+
+  // 4) Fetch playlist JSON (prefer POST with CSRF; then GET with headers; then POST without CSRF; with cachebuster)
+  function fetchPlaylist(purl) {
+    var headers = {
+      'Accept': 'application/json, text/plain, */*',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      // Critical: use Kinogo Origin/Referer like the browser did (per HAR)
+      'Origin': (HTTPS + BASE_URL),
+      'Referer': REFERER,
+      'User-Agent': UA,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+    };
+    var body = '';
+    if (csrfToken) {
+      // Send multiple casings to avoid any backend quirks (headers are case-insensitive, but be extra safe)
+      headers['X-CSRF-TOKEN'] = csrfToken;   // as seen in some scripts
+      headers['X-CSRF-Token'] = csrfToken;   // common casing
+      headers['x-csrf-token'] = csrfToken;   // as seen in HAR
+      try {
+        body = http.request(purl, {debug:true, noFail:true, compression:true, postdata:'', headers: headers}).toString();
+        if (body && body.length > 0) return body;
+      } catch(e1) {
+        try { dlog('CDNLAND playlist POST with CSRF failed: ' + e1); } catch(_) {}
+      }
+    }
+    try {
+      body = http.request(purl, {debug:true, noFail:true, compression:true, headers: headers}).toString();
+      if (body && body.length > 0) return body;
+    } catch(e2) {
+      try { dlog('CDNLAND playlist GET failed: ' + e2); } catch(_) {}
+    }
+    // Try GET with cache-buster
+    try {
+      var cbUrl = purl + (purl.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+      body = http.request(cbUrl, {debug:true, noFail:true, compression:true, headers: headers}).toString();
+      if (body && body.length > 0) return body;
+    } catch(e2b) {
+      try { dlog('CDNLAND playlist GET (cb) failed: ' + e2b); } catch(_) {}
+    }
+    try {
+      body = http.request(purl, {debug:true, noFail:true, compression:true, postdata:'', headers: headers}).toString();
+      if (body && body.length > 0) return body;
+    } catch(e3) {
+      try { dlog('CDNLAND playlist POST (no CSRF) failed: ' + e3); } catch(_) {}
+    }
     return '';
   }
 
-  // If we were passed a direct playlist URL, try to fetch it directly first.
-  try {
-    if (/\/playlist\/.*?\.txt(\?|$)/i.test(url)) {
-      try { dlog('CDNLAND direct playlist detected in URL, attempting GET: ' + url); } catch(e) {}
-      var direct = http.request(url, {debug:true, noFail:true, compression:true}).toString();
-      if (direct && direct.length > 0) {
-        var isSeriesDirect = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(direct);
-        var poster0 = icon;
-        if (isSeriesDirect) {
-          scrapercdnlandseries(page, direct, title, icon, poster0, '');
-        } else {
-          scrapercdnland(page, direct, title, icon, poster0, '');
+  var payload = '';
+  if (playlistUrl) {
+    payload = fetchPlaylist(playlistUrl);
+    if (!payload && /sitsarl\.com/i.test(playlistUrl)) {
+      // Try same path on entouaedon if sitsarl playlist host is blocked
+      var altP = replaceToEntouaedon(playlistUrl);
+      if (altP !== playlistUrl) payload = fetchPlaylist(altP);
+    }
+    // Generic low-risk fallback: try .json if .txt returned nothing
+    if (!payload && /\.txt(\?|$)/i.test(playlistUrl)) {
+      try { dlog('CDNLAND: retrying playlist as .json'); } catch(_djson) {}
+      var jsonUrl = playlistUrl.replace(/\.txt(\b|$)/i, '.json');
+      payload = fetchPlaylist(jsonUrl);
+      if (!payload && /sitsarl\.com/i.test(jsonUrl)) {
+        var jsonAlt = replaceToEntouaedon(jsonUrl);
+        if (jsonAlt !== jsonUrl) payload = fetchPlaylist(jsonAlt);
+      }
+    }
+  }
+
+  if (payload && payload.length > 0) {
+    if (payload.length < 10) { try { dlog('CDNLAND: payload too small (' + payload.length + '), treating as empty'); } catch(_ts) {} payload = ''; }
+  }
+
+  if (payload && payload.length > 0) {
+    try {
+      try { dlog('CDNLAND: payload bytes=' + payload.length); } catch(_pd) {}
+
+      // Helper: attempt to extract and parse a JSON block from payload
+      function tryParsePlayerJSON(txt) {
+        if (!txt) return null;
+        var s = ('' + txt).trim();
+        // Decode common HTML entities in case server wrapped it
+        try {
+          s = s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+               .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+               .replace(/&#(\d+);/g, function(_,d){return String.fromCharCode(parseInt(d,10));})
+               .replace(/&#x([0-9a-fA-F]+);/g, function(_,h){return String.fromCharCode(parseInt(h,16));});
+        } catch(_e) {}
+        var m = s.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+        if (!m) return null;
+        try { return JSON.parse(m[1]); } catch(e1) {}
+        // Some playlists escape backslashes excessively, try unescaping once
+        try { return JSON.parse(m[1].replace(/\\"/g, '"')); } catch(e2) {}
+        return null;
+      }
+
+      // Helper: base64-like decode used by some tokenized sources ("~..."), tolerant of - _ $ variations
+      function tryBase64UrlishDecode(s) {
+        try {
+          if (!s) return '';
+          // Normalize URL-safe/Base64 variants
+          var t = ('' + s).replace(/-/g, '+').replace(/_/g, '/').replace(/\$/g, '=');
+          // Pad to multiple of 4
+          while (t.length % 4 !== 0) t += '=';
+          var b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+          var out = '';
+          var i = 0;
+          t = t.replace(/[^A-Za-z0-9\+\/\=]/g, '');
+          while (i < t.length) {
+            var enc1 = b64.indexOf(t.charAt(i++));
+            var enc2 = b64.indexOf(t.charAt(i++));
+            var enc3 = b64.indexOf(t.charAt(i++));
+            var enc4 = b64.indexOf(t.charAt(i++));
+            if (enc1 < 0 || enc2 < 0 || enc3 < 0 || enc4 < 0) return '';
+            var chr1 = (enc1 << 2) | (enc2 >> 4);
+            var chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+            var chr3 = ((enc3 & 3) << 6) | enc4;
+            out += String.fromCharCode(chr1);
+            if (enc3 != 64) out += String.fromCharCode(chr2);
+            if (enc4 != 64) out += String.fromCharCode(chr3);
+          }
+          return out;
+        } catch(_e) { return ''; }
+      }
+
+      // RC4 (ARCFOUR) stream cipher for common site obfuscations
+      function rc4(key, data) {
+        try {
+          var s = [], i, j = 0, x, res = '';
+          for (i = 0; i < 256; i++) s[i] = i;
+          for (i = 0; i < 256; i++) {
+            j = (j + s[i] + key.charCodeAt(i % key.length)) & 255;
+            x = s[i]; s[i] = s[j]; s[j] = x;
+          }
+          i = 0; j = 0;
+          for (var y = 0; y < data.length; y++) {
+            i = (i + 1) & 255;
+            j = (j + s[i]) & 255;
+            x = s[i]; s[i] = s[j]; s[j] = x;
+            var k = s[(s[i] + s[j]) & 255];
+            res += String.fromCharCode(data.charCodeAt(y) ^ k);
+          }
+          return res;
+        } catch(e) { return ''; }
+      }
+
+      // Simple XOR with repeating key
+      function xorWithKey(data, key) {
+        try {
+          var out = '';
+          for (var i = 0; i < data.length; i++) {
+            out += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+          }
+          return out;
+        } catch(e) { return ''; }
+      }
+
+      // Collect candidate keys from scripts and context (csrfToken, obvious literals)
+      function collectCandidateKeys() {
+        var keys = [];
+        var seen = {};
+        function add(k) { if (k && k.length >= 4 && !seen[k]) { seen[k] = 1; keys.push(k); } }
+        try { if (csrfToken) add(csrfToken); } catch(_ck0) {}
+        try {
+          var st = (scriptsText || '');
+          // Common patterns like key: "...", token: '...', salt="..."
+          var re = /(key|token|salt|secret)\s*[:=]\s*(["'])([^"']{6,128})\2/ig, m;
+          while ((m = re.exec(st))) add(m[3]);
+          // playerConfigs.key was already picked via csrfToken, but scan raw embed too
+          var m2 = (st.match(/playerConfigs\s*=\s*\{[\s\S]*?key\s*:\s*(["'])([^"']{6,128})\1/i));
+          if (m2 && m2[2]) add(m2[2]);
+        } catch(_ck1) {}
+        return keys;
+      }
+
+      // Attempt to resolve a token that starts with '~' to a direct URL
+      function tryResolveTokenToUrl(tok) {
+        if (!tok || tok.charAt(0) !== '~') return '';
+        var core = tok.substr(1);
+        // Heuristic 1: base64/url-safe decode attempt
+        var dec = tryBase64UrlishDecode(core);
+        if (dec && /https?:\/\//i.test(dec)) {
+          try { dlog('CDNLAND: token base64-decoded to URL: ' + dec.substr(0, 120) + (dec.length > 120 ? '…' : '')); } catch(_l1) {}
+          return dec;
         }
-        page.loading = false;
-        return;
-      } else {
-        try { dlog('CDNLAND direct playlist GET returned empty, trying POST without CSRF'); } catch(e) {}
-        // Try POST without CSRF (some mirrors don't require it)
-        var directPost = http.request(url, {
-          debug:true,
-          noFail:true,
-          compression:true,
-          postdata: '',
-          headers: {
-            'Accept': '*/*',
-            'Origin': HTTPS + BASE_URL,
-            'Referer': REFERER,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': UA
+        // Heuristic 2: sometimes a second decode layer
+        if (dec && /^[A-Za-z0-9\-_$+/]+$/.test(dec)) {
+          var dec2 = tryBase64UrlishDecode(dec);
+          if (dec2 && /https?:\/\//i.test(dec2)) {
+            try { dlog('CDNLAND: token double-decoded to URL: ' + dec2.substr(0, 120) + (dec2.length > 120 ? '…' : '')); } catch(_l2) {}
+            return dec2;
           }
-        }).toString();
-        if (directPost && directPost.length > 0) {
-          var isSeriesDirect2 = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(directPost);
-          var poster1 = icon;
-          if (isSeriesDirect2) {
-            scrapercdnlandseries(page, directPost, title, icon, poster1, '');
-          } else {
-            scrapercdnland(page, directPost, title, icon, poster1, '');
+        }
+        // Heuristic 3: sometimes decoded text contains embedded http
+        if (dec) {
+          var m = dec.match(/https?:\/\/[^\s"']+/i);
+          if (m && m[0]) {
+            try { dlog('CDNLAND: token decoded contained URL: ' + m[0].substr(0, 120) + (m[0].length > 120 ? '…' : '')); } catch(_l3) {}
+            return m[0];
           }
+        }
+        // Site-specific: try RC4/XOR over the base64-decoded blob with various keys
+        var keys = collectCandidateKeys();
+        if (dec && keys.length) {
+          for (var ki = 0; ki < keys.length; ki++) {
+            var k = keys[ki];
+            // RC4
+            var r1 = rc4(k, dec);
+            if (r1 && /https?:\/\//i.test(r1)) {
+              try { dlog('CDNLAND: token resolved via RC4(' + (k.length) + '): ' + r1.substr(0, 120) + (r1.length > 120 ? '…' : '')); } catch(_l4) {}
+              return r1;
+            }
+            // Sometimes after RC4 it is still base64
+            var r1b = tryBase64UrlishDecode(r1 || '');
+            if (r1b && /https?:\/\//i.test(r1b)) {
+              try { dlog('CDNLAND: token RC4+base64 resolved: ' + r1b.substr(0, 120) + (r1b.length > 120 ? '…' : '')); } catch(_l4b) {}
+              return r1b;
+            }
+            // XOR
+            var r2 = xorWithKey(dec, k);
+            if (r2 && /https?:\/\//i.test(r2)) {
+              try { dlog('CDNLAND: token resolved via XOR(' + (k.length) + '): ' + r2.substr(0, 120) + (r2.length > 120 ? '…' : '')); } catch(_l5) {}
+              return r2;
+            }
+            var r2b = tryBase64UrlishDecode(r2 || '');
+            if (r2b && /https?:\/\//i.test(r2b)) {
+              try { dlog('CDNLAND: token XOR+base64 resolved: ' + r2b.substr(0, 120) + (r2b.length > 120 ? '…' : '')); } catch(_l5b) {}
+              return r2b;
+            }
+          }
+        }
+        // Last chance: try reversing and decoding
+        if (dec) {
+          var rev = dec.split('').reverse().join('');
+          var mr = rev.match(/https?:\/\/[^\s"']+/i);
+          if (mr && mr[0]) return mr[0].split('').reverse().join('');
+        }
+        return '';
+      }
+
+  var dbgTokensSeen = 0, dbgTokensResolved = 0;
+  // Test mode: stop after first successfully appended playable item to avoid
+  // hammering the provider while verifying token resolution path
+  var stopAfterFirst = true;
+  try { if (stopAfterFirst) dlog('CDNLAND: STOP_AFTER_FIRST is enabled for test'); } catch(_sf) {}
+
+      // Build playlist URL for a per-episode token
+      function buildTokenPlaylistUrl(tok) {
+        var token = tok.charAt(0) === '~' ? tok.substr(1) : tok;
+        // Token from JSON usually already contains !! at the end; don't duplicate it.
+        var hasBangBang = /!!$/.test(token);
+        var base = baseOrigin || 'https://vid11.entouaedon.com';
+        var url = base + (base.charAt(base.length-1) === '/' ? '' : '/') + 'playlist/' + token + (hasBangBang ? '' : '!!') + '.txt';
+        // If host is sitsarl mirror, normalize to entouaedon which we know works
+        if (/sitsarl\.com/i.test(url)) url = replaceToEntouaedon(url);
+        return url;
+      }
+
+      // Fetch per-episode token playlist and return its resolved file string (URL or bracketed list)
+      function fetchTokenFile(tok) {
+        var u = buildTokenPlaylistUrl(tok);
+        try { dlog('CDNLAND: fetching token playlist: ' + u); } catch(_ft) {}
+        var payload = '';
+        function req(method, url, addHeaders) {
+          try {
+            var headers = {
+              'User-Agent': UA,
+              'Accept': '*/*',
+              'Origin': (HTTPS + BASE_URL),
+              'Referer': REFERER,
+              'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+            };
+            if (addHeaders) for (var k in addHeaders) headers[k] = addHeaders[k];
+            var resp = http.request(url, { method: method, debug:true, noFail:true, compression:true, headers: headers, postdata: (method === 'POST' ? '' : null) });
+            if (resp && resp.statuscode >= 200 && resp.statuscode < 300) return resp.toString();
+          } catch(e) { /* ignore */ }
+          return '';
+        }
+        // Try POST with CSRF
+        if (csrfToken) {
+          payload = req('POST', u, {'X-CSRF-TOKEN': csrfToken, 'X-CSRF-Token': csrfToken, 'x-csrf-token': csrfToken});
+        }
+        // Fallbacks
+        if (!payload) payload = req('GET', u);
+        if (!payload) payload = req('GET', u + (u.indexOf('?')>=0?'&':'?') + 'cb=' + Date.now());
+        if (!payload) payload = req('POST', u);
+        if (!payload && /sitsarl\.com/i.test(u)) payload = req('POST', replaceToEntouaedon(u));
+        payload = (payload || '');
+        if (payload.length < 4) return '';
+  // Try parse JSON first, else plain string
+        var j = tryParsePlayerJSON(payload);
+        if (j && typeof j === 'object') {
+          // Favor direct file/hls/src inside
+          var f = j.file || j.hls || j.src || '';
+          if (!f && j.playlist && j.playlist.length) {
+            // Sometimes contains a nested list of one
+            var it = j.playlist[0] || {};
+            f = it.file || it.hls || it.src || '';
+          }
+          if (!f && j.folder && j.folder.length) {
+            var it2 = j.folder[0] || {};
+            f = it2.file || it2.hls || it2.src || '';
+          }
+          if (f) return f;
+        }
+        // Plain: could be direct URL or an HLS playlist content or bracket list
+        var txt = (payload || '').replace(/^[\s\uFEFF\u200B]+|[\s\uFEFF\u200B]+$/g, '');
+        if (/^https?:\/\//i.test(txt)) return txt;
+        // If it's an M3U playlist content, extract the first absolute URL if present
+        if (/^#EXTM3U/.test(txt)) {
+          var m = txt.match(/https?:\/\/[^\s"']+/i);
+          if (m && m[0]) { try { dlog('CDNLAND: token m3u absolute URL: ' + m[0].substr(0,120) + (m[0].length>120?'…':'')); } catch(_) {} return m[0]; }
+          // Try to resolve common relative forms like /stream2/cdn-401/... or /stream2/b-401/.../index.m3u8
+          var mrel = txt.match(/\n\s*([^\n#][^\s"']*\.(?:m3u8|m3u))\s*(?:\n|$)/i);
+          if (mrel && mrel[1]) {
+            var rel = mrel[1].trim();
+            // Extract host marker from path
+            var mh = rel.match(/\/(?:stream2?|hls)\/(?:((?:b|cdn)-\d{1,4}))\//i);
+            var host = mh && mh[1] ? (mh[1] + '.entouaedon.com') : '';
+            if (host) {
+              if (rel.charAt(0) !== '/') rel = '/' + rel;
+              var abs = 'https://' + host + rel;
+              try { dlog('CDNLAND: token m3u relative -> ' + abs.substr(0,120) + (abs.length>120?'…':'')); } catch(_) {}
+              return abs;
+            }
+          }
+          return '';
+        }
+        // Else try to extract a URL anywhere in the text
+        var m2 = txt.match(/https?:\/\/[^\s"']+/i);
+        if (m2 && m2[0]) return m2[0];
+        return txt;
+      }
+
+      // Helper: append a single file item (mp4/m3u8) or delegate bracket-quality string to legacy parser
+      function appendFileOrQualityList(page, fileStr, displayTitle, title, icon, poster, translationid, season, serie, translation) {
+        if (!fileStr) return 0;
+        var appended = 0;
+        // Decode common JS-escaped sequences that may appear in JSON values
+        try {
+          fileStr = ('' + fileStr)
+            .replace(/\\u0021/gi, '!')
+            .replace(/\\u0026/gi, '&')
+            .replace(/\\u002F/gi, '/')
+            .replace(/\\u003F/gi, '?')
+            .replace(/\\\//g, '/')
+            .replace(/\\\\/g, '\\')
+            .replace(/\\u([0-9a-fA-F]{4})/g, function(_,h){return String.fromCharCode(parseInt(h,16));});
+        } catch(_dec) {}
+          // Some providers return an obfuscated token starting with '~' instead of a direct URL.
+          if (/^~/.test(fileStr)) {
+            dbgTokensSeen++;
+            // First try local decode heuristics
+            var resolved = tryResolveTokenToUrl(fileStr);
+            if (!resolved) {
+              // Official flow: use token as /playlist/<token>!!.txt to get per-episode URL
+              resolved = fetchTokenFile(fileStr);
+            }
+            if (resolved) {
+              dbgTokensResolved++;
+              fileStr = resolved;
+            } else {
+              try { dlog('CDNLAND: got token but could not resolve via decode nor remote fetch: ' + fileStr.substr(0, 72) + '…'); } catch(_tok) {}
+              return 0;
+            }
+          }
+        // If it's a bracket quality list, reuse legacy parser
+        if (/\[[^\]]+\]/.test(fileStr) && /(https?:)?\//.test(fileStr)) {
+            // Try to resolve any embedded tokens inside the bracket list first
+            if (/~[A-Za-z0-9\-_$+/]+/.test(fileStr)) {
+              fileStr = fileStr.replace(/:~([A-Za-z0-9\-_$+/]+)/g, function(all, tok){
+                var tokFull = '~' + tok;
+                dbgTokensSeen++;
+                var r = tryResolveTokenToUrl(tokFull);
+                if (!r) r = fetchTokenFile(tokFull);
+                if (r) { dbgTokensResolved++; return ':' + r; }
+                try { dlog('CDNLAND: token in bracket list unresolved: ' + tokFull.substr(0, 48) + '…'); } catch(_tb) {}
+                return all; // leave as-is
+              });
+            }
+          if (stopAfterFirst) {
+            // Append only the first quality pair
+            var mOne = fileStr.match(/\[(.*?)\]([^,\n\r"']+)/);
+            if (mOne && mOne[2]) {
+              var qname = (mOne[1] || '').trim();
+              var qurl = (mOne[2] || '').trim();
+              try {
+                qurl = qurl.replace(/\\\//g, '/');
+                if (/^~/.test(qurl)) {
+                  var resQ = tryResolveTokenToUrl(qurl);
+                  if (!resQ) resQ = fetchTokenFile(qurl);
+                  if (resQ) qurl = resQ; else return 0;
+                }
+                if (/^\/\//.test(qurl)) qurl = (HTTPS.replace(/:\/\/$/, '') + ':') + qurl;
+                else if (!/^https?:\/\//i.test(qurl)) qurl = HTTPS + BASE_URL + qurl;
+                // hls: prefix not needed in Movian; use plain URL
+                // if (/\.m3u8(\?|$)/i.test(qurl)) qurl = 'hls:' + qurl;
+              } catch(_nu) {}
+              try { dlog('CDNLAND: append single quality source: ' + qurl.substr(0, 160) + (qurl.length>160?'…':'')); } catch(_) {}
+              try {
+                page.appendItem(qurl, service.list, {
+                  title: new RichText(qname || displayTitle || 'Эпизод'),
+                  icon: icon,
+                  backdrops: poster ? [{url: poster}] : [{url: icon}],
+                  genre: new RichText((season ? coloredStr('Сезон: ', gray) + coloredStr(season, orange) + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + coloredStr(serie, orange) : '')),
+                  source: new RichText((translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
+                  tagline: new RichText(coloredStr(title, gray))
+                });
+                appended += 1;
+              } catch(_ao) {}
+              return appended;
+            }
+          }
+          var before = page.entries || 0;
+          scrapercdnland(page, fileStr, title, icon, poster, translationid, season, serie, translation);
+          var after = page.entries || 0;
+          appended += Math.max(0, (after - before));
+          return appended;
+        }
+        // Else treat as a single source
+        try {
+          var playUrl = fileStr;
+
+          // playUrl = "https://b-401.entouaedon.com/stream2/b-401/36dc763296fb529d2a465105a46fb25d/MJTMsp1RshGTygnMNRUR2N2MSlnWXZEdMNDZzQWe5MDZzMmdZJTO1R2RWVHZDljekhkSsl1VwYnWtx2cihVT290RVFzTUJFaNRUVw4kanFzTHpEbZpnWo1EVBd3TH5EbNRlSo5keW1mWqNWP:1762376150:91.215.146.225:e39048c1af7e08135c0026b13ed0d2f74daa82d6135722117aaeb0ca44e4e6da/index.m3u8";
+          dlog('CDNLAND: append single source: ' + playUrl);
+          var item = page.appendItem(playUrl, service.list, {
+            title: new RichText(displayTitle || 'Эпизод'),
+            icon: icon,
+            backdrops: poster ? [{url: poster}] : [{url: icon}],
+            genre: new RichText((season ? coloredStr('Сезон: ', gray) + coloredStr(season, orange) + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + coloredStr(serie, orange) : '')),
+            source: new RichText((translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
+            tagline: new RichText(coloredStr(title, gray))
+          });
+          dlog('CDNLAND: appended single source: ' + item);
+          appended += 1;
+        } catch(_a) {
+          try { dlog('CDNLAND: append single source failed: ' + _a); } catch(_) {}
+        }
+        return appended;
+      }
+
+      // Try JSON-based render first
+      var json = tryParsePlayerJSON(payload);
+      var totalAppended = 0;
+  if (json && typeof json === 'object') {
+        try { if (json.key) { csrfToken = json.key; dlog('CDNLAND: updated csrfToken from playlist JSON'); } } catch(_kset) {}
+        try { dlog('CDNLAND: JSON playlist detected'); } catch(_dj) {}
+        // Normalize to an array of items
+        var items = Array.isArray(json) ? json : (json.playlist || json.folder || json.items || []);
+        // Log a compact snapshot (truncate large fields) for debugging translations vs episodes classification
+        try {
+          var snap = [];
+          for (var si=0; si < items.length && si < 12; si++) {
+            var it0 = items[si] || {};
+            var k = {i:si, title:(it0.title||it0.comment||''), hasChild: !!(it0.playlist||it0.folder), file: (it0.file? (''+it0.file).substring(0,80):''), tr:(it0.translator||it0.translationid||''), id:(it0.id||'')};
+            snap.push(k);
+          }
+          dlog('CDNLAND: playlist snapshot ' + JSON.stringify(snap));
+        } catch(_snap) {}
+        var poster = json.poster || icon;
+        // Heuristic: if items contain child playlists, treat as series (seasons -> episodes)
+        var isSeriesJSON = false;
+        for (var ii = 0; ii < items.length; ii++) { if (items[ii] && (items[ii].playlist || items[ii].folder)) { isSeriesJSON = true; break; } }
+        if (isSeriesJSON) {
+          // Collect seasons with numeric sorting
+          var seasons = [];
+          for (var i = 0; i < items.length; i++) {
+            var it = items[i] || {};
+            var label = it.comment || it.title || '';
+            var sid = it.id || '';
+            var sPoster = it.poster || poster || icon;
+            var mnum = (label.match(/(?:Сезон|Season)\s*(\d{1,3})/i) || label.match(/(\d{1,3})\s*(?:сезон|season)/i) || sid.match(/(?:season|sezon|сезон|s)[_\s-]*?(\d{1,3})/i));
+            var snum = mnum && mnum[1] ? parseInt(mnum[1], 10) : 0;
+            seasons.push({ label: label, id: sid, num: isNaN(snum) ? 0 : snum, poster: sPoster, pl: (it.playlist || it.folder) });
+          }
+          seasons.sort(function(a,b){ if (a.num !== b.num) return a.num - b.num; return 0; });
+          // Build translations index: translatorId -> { name, seasons: {sid: {label, poster, episodes:[...]}} }
+          var trIndex = {};
+          for (var s = 0; s < seasons.length; s++) {
+            var S = seasons[s];
+            var eps = S.pl || [];
+            for (var e = 0; e < eps.length; e++) {
+              var ep = eps[e] || {};
+              var etitle = ep.comment || ep.title || ('Серия ' + (e+1));
+              var eposter = ep.poster || S.poster || poster || icon;
+              var epl = ep.playlist || ep.folder || [];
+              if (!epl || !epl.length) continue;
+              for (var q = 0; q < epl.length; q++) {
+                var qit = epl[q] || {};
+                // Revert translator id/name derivation to earlier stable approach: only from qit
+                var tname = qit.title || qit.comment || '';
+                var tid = (qit.translator || qit.translationid || tname || '0') + '';
+                if (!trIndex[tid]) trIndex[tid] = { id: tid, name: tname || ('Перевод ' + tid), seasons: {} };
+                var T = trIndex[tid];
+                if (!T.seasons[S.id || (S.num+'')]) T.seasons[S.id || (S.num+'')] = { id: (S.id || (S.num+'')), num: S.num, label: S.label, poster: S.poster, episodes: [] };
+                var Ss = T.seasons[S.id || (S.num+'')];
+                // Prefer file/hls/src from quality item, then episode-level file, then first child in nested playlist
+                var tok = qit.file || qit.hls || qit.src || ep.file || ep.hls || ep.src || '';
+                if (!tok && qit.playlist && qit.playlist.length) {
+                  var c0 = qit.playlist[0] || {};
+                  tok = c0.file || c0.hls || c0.src || '';
+                }
+                if (!tok && ep.playlist && ep.playlist.length) {
+                  var e0 = ep.playlist[0] || {};
+                  tok = e0.file || e0.hls || e0.src || '';
+                }
+                if (!tok) { try { dlog('CDNLAND: [index] empty token for ep=' + (ep.id || (S.id + '-' + (e+1))) + ' tr=' + tid); } catch(_) {} }
+                Ss.episodes.push({ id: (ep.id || (S.id + '-' + (e+1))), title: etitle, display: (tname || ''), token: tok, poster: eposter });
+              }
+            }
+          }
+          try {
+            var trDiag = [];
+            for (var k in trIndex) {
+              var o = trIndex[k];
+              trDiag.push({tr:k, name:o.name, seasons:Object.keys(o.seasons).length});
+            }
+            dlog('CDNLAND: translators collected ' + JSON.stringify(trDiag));
+          } catch(_trd) {}
+          // Store in a lightweight cache for drill-down routes
+          if (!this._cdnlandCache) { this._cdnlandCache = {}; this._cdnlandCacheSeq = 1; }
+          var cacheId = 'c' + (this._cdnlandCacheSeq++);
+          this._cdnlandCache[cacheId] = { title: title, icon: icon, poster: poster, seasons: seasons, translators: trIndex, csrfToken: csrfToken, baseOrigin: baseOrigin, usedUrl: usedUrl };
+          // Mirror cache to a global map to ensure availability across route contexts
+          try { CDNLAND_CACHE = CDNLAND_CACHE || {}; CDNLAND_CACHE[cacheId] = this._cdnlandCache[cacheId]; } catch(_gcache) {}
+          try { dlog('CDNLAND: cached playlist index as ' + cacheId + ', translators=' + Object.keys(trIndex).length); } catch(_cdbg) {}
+          // UI: show translations section
+          try { page.appendItem('', 'separator', { title: new RichText('Переводы') }); } catch(_sep2) {}
+          var trKeys = Object.keys(trIndex).sort(function(a,b){ var A=trIndex[a].name||'', B=trIndex[b].name||''; return A.localeCompare(B); });
+          var navAdded = 0;
+          for (var ti = 0; ti < trKeys.length; ti++) {
+            var T2 = trIndex[trKeys[ti]];
+            var seasonsCount = Object.keys(T2.seasons).length;
+            var epCount = 0; try { for (var sk in T2.seasons) epCount += (T2.seasons[sk].episodes||[]).length; } catch(_ec) {}
+            try {
+              page.appendItem(PREFIX + ':cdnland_tr:' + cacheId + '~' + encodeURIComponent(T2.id), 'directory', {
+                title: new RichText((T2.name || ('Перевод ' + T2.id)) + ' (' + seasonsCount + ' сез., ' + epCount + ' сер.)'),
+                icon: icon,
+                backdrops: poster ? [{url: poster}] : [{url: icon}],
+                tagline: new RichText(coloredStr(title, gray))
+              });
+              navAdded++;
+            } catch(_ai) {}
+          }
+          totalAppended += navAdded;
+          // In test mode, stop here to avoid further work
+          if (stopAfterFirst && totalAppended > 0) {
+            try { dlog('CDNLAND: early exit after building translations (test mode)'); } catch(_eet) {}
+            page.loading = false;
+            return;
+          }
+        } else {
+          // Single movie or flat playlist of qualities/files
+          var arr = items.length ? items : [json];
+          var earlyStop2 = false;
+          for (var k = 0; k < arr.length && !earlyStop2; k++) {
+            var it2 = arr[k] || {};
+            var innerList = (it2.playlist || it2.folder || []);
+            if (innerList && innerList.length) {
+              for (var kq = 0; kq < innerList.length; kq++) {
+                var pit = innerList[kq] || {};
+                var inc3 = appendFileOrQualityList(page, pit.file || '', pit.comment || pit.title || '', title, icon, poster, '', '', '', '');
+                totalAppended += inc3;
+                if (stopAfterFirst) { earlyStop2 = true; break; }
+              }
+              if (earlyStop2) break;
+            } else {
+              var inc4 = appendFileOrQualityList(page, it2.file || '', it2.comment || it2.title || '', title, icon, poster, '', '', '', '');
+              totalAppended += inc4;
+              if (stopAfterFirst) { earlyStop2 = true; break; }
+            }
+          }
+        }
+        // If test mode is on and we appended something, return immediately to surface the item
+        if (stopAfterFirst && totalAppended > 0) {
+          try { dlog('CDNLAND: early exit after first item (test mode)'); } catch(_ee) {}
           page.loading = false;
           return;
         }
-        try { dlog('CDNLAND direct playlist POST (no CSRF) returned empty, will try embed flow'); } catch(e) {}
       }
+
+  try { dlog('CDNLAND: token stats seen=' + dbgTokensSeen + ' resolved=' + dbgTokensResolved); } catch(_tstat) {}
+
+  if (!totalAppended && !stopAfterFirst) {
+        // Fallback to legacy regex-based parsers
+        var isSeries = /tv_series|\{"id":".*?","comment":".*?".*?file":"|"playlist"\s*:\s*\[/i.test(payload);
+        try { dlog('CDNLAND: detected ' + (isSeries ? 'series' : 'single') + ' playlist (legacy)'); } catch(_pt) {}
+        var poster = icon;
+        var before = page.entries || 0;
+        if (isSeries) scrapercdnlandseries(page, payload, title, icon, poster, '');
+        else scrapercdnland(page, payload, title, icon, poster, '');
+        var after = page.entries || 0;
+        totalAppended = Math.max(0, (after - before));
+      } else if (!totalAppended && stopAfterFirst) {
+        try { dlog('CDNLAND: stop-after-first: skipping legacy fallback'); } catch(_sk) {}
+      }
+
+      try { dlog('CDNLAND: appended items = ' + totalAppended); } catch(_pa) {}
+      if (!totalAppended) {
+        try { page.error('Не удалось распаковать источники этого плеера (все ссылки токенизированы). Попробуйте другой источник или другой домен/UA.'); } catch(_pe2) {}
+      }
+      page.loading = false;
+      return;
+    } catch (fatal) {
+      try { dlog('CDNLAND: fatal parse error: ' + fatal); } catch(_fe) {}
+      try { page.error('Ошибка при разборе плейлиста этого плеера'); } catch(_pe) {}
+      page.loading = false;
+      return;
     }
-  } catch (e) {
-    try { dlog('CDNLAND direct playlist preflight error: ' + e); } catch(_) {}
   }
 
-  var html = '';
-  try {
-    html = fetchWithCdnFallbacks(url);
-  } catch (e) {
-    try { dlog('CDNLAND fetchWithCdnFallbacks error: ' + e); } catch(_) {}
-    html = '';
-  }
+  // If everything fails, show a friendly error with hints
+  page.error('Не удалось загрузить плейлист этого плеера. Попробуйте другие источники или измените домен/UA в настройках.');
+  page.loading = false;
+  return;
+});
 
-  // Fast path: some cdnland-like embeds require a CSRF token POST to a /playlist/*.txt endpoint on entouaedon CDN.
-  // Try to extract token and playlist path and fetch it directly to obtain seasons/episodes JSON.
+// Drill-down: show seasons for a selected translator
+new page.Route(PREFIX + ':cdnland_tr:(.*)~(.*)', function (page, cacheId, translatorIdEnc) {
+  page.loading = true;
   try {
-    var csrf = html.match(/name=("|')csrf-token\1\s+content=("|')(.*?)\2/i);
-  var playlistPathMatch = html.match(/\/(playlist\/[\w\d\-_$+.=\\u!]+\.txt)/i);
-    if (csrf && csrf[3] && playlistPathMatch && playlistPathMatch[1]) {
-      var csrfToken = csrf[3];
-      var playlistPath = playlistPathMatch[1];
-      // Replace unicode escapes like \u0021 with their char (!) and unescape
+    page.type = 'directory';
+    if (page.model && page.model.contents !== undefined) page.model.contents = 'list'; else page.contents = 'items';
+  } catch(__ui) {}
+  try {
+    var translatorId = decodeURIComponent(translatorIdEnc || '');
+    var cache = (this._cdnlandCache || {})[cacheId];
+    if (!cache) { page.error('Истек кэш плейлиста'); page.loading = false; return; }
+    var T = (cache.translators || {})[translatorId];
+    if (!T) { page.error('Перевод не найден'); page.loading = false; return; }
+    var seasonsKeys = Object.keys(T.seasons || {}).sort(function(a,b){ var ai=parseInt(a,10)||0, bi=parseInt(b,10)||0; return ai-bi; });
+    try { page.metadata.title = new RichText('Перевод: ' + (T.name || translatorId)); } catch(_) {}
+    for (var i=0;i<seasonsKeys.length;i++) {
+      var sid = seasonsKeys[i];
+      var S = T.seasons[sid];
+      var label = 'Сезон ' + (S.id || sid) + (S.label ? (' | ' + S.label) : '');
+      page.appendItem(PREFIX + ':cdnland_tr_season:' + cacheId + '~' + encodeURIComponent(translatorId) + '~' + encodeURIComponent(sid), 'directory', {
+        title: new RichText(label),
+        icon: cache.icon,
+        backdrops: cache.poster ? [{url: cache.poster}] : [{url: cache.icon}],
+        tagline: new RichText(coloredStr((cache.title || ''), gray))
+      });
+    }
+  } catch(e) { try { dlog('CDNLAND tr route error: ' + e); } catch(_) {} }
+  page.loading = false;
+});
+
+// Drill-down: list episodes within a translator + season (URLs are deferred)
+new page.Route(PREFIX + ':cdnland_tr_season:(.*)~(.*)~(.*)', function (page, cacheId, translatorIdEnc, seasonIdEnc) {
+  page.loading = true;
+  try {
+    page.type = 'directory';
+    if (page.model && page.model.contents !== undefined) page.model.contents = 'list'; else page.contents = 'items';
+  } catch(__ui) {}
+  try {
+    var translatorId = decodeURIComponent(translatorIdEnc || '');
+    var seasonId = decodeURIComponent(seasonIdEnc || '');
+    var cache = (this._cdnlandCache || {})[cacheId];
+    if (!cache) { page.error('Истек кэш плейлиста'); page.loading = false; return; }
+    var T = (cache.translators || {})[translatorId];
+    if (!T) { page.error('Перевод не найден'); page.loading = false; return; }
+    var S = (T.seasons || {})[seasonId];
+    if (!S) { page.error('Сезон не найден'); page.loading = false; return; }
+    try { page.metadata.title = new RichText('Перевод: ' + (T.name||translatorId) + ' • Сезон ' + (S.id||seasonId)); } catch(_) {}
+    var eps = S.episodes || [];
+    // Sort by episode number if parsable
+    eps.sort(function(a,b){
+      var na = parseInt((a.title||'').match(/\d+/),10) || 0;
+      var nb = parseInt((b.title||'').match(/\d+/),10) || 0;
+      if (na!==nb) return na-nb; return (a.title||'').localeCompare(b.title||'');
+    });
+    for (var i=0;i<eps.length;i++) {
+      var E = eps[i];
+      var etitle = E.title || ('Серия ' + (i+1));
+      // Defer actual URL retrieval; link to a placeholder route
+      var playUri = PREFIX + ':cdnland_play:' + cacheId + '~' + encodeURIComponent(translatorId) + '~' + encodeURIComponent(seasonId) + '~' + encodeURIComponent(E.id||('ep'+i));
+      page.appendItem(playUri, service.list, {
+        title: new RichText(etitle),
+        icon: cache.icon,
+        backdrops: cache.poster ? [{url: cache.poster}] : [{url: cache.icon}],
+        source: new RichText(coloredStr('Перевод: ', gray) + coloredStr((T.name||translatorId), blue)),
+        tagline: new RichText(coloredStr((cache.title||''), gray))
+      });
+    }
+  } catch(e) { try { dlog('CDNLAND tr season route error: ' + e); } catch(_) {} }
+  page.loading = false;
+});
+
+// Resolve a single episode on click and start playback immediately
+new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cacheId, translatorIdEnc, seasonIdEnc, epIdEnc) {
+  page.loading = true;
+  var translatorId = decodeURIComponent(translatorIdEnc || '');
+  var seasonId = decodeURIComponent(seasonIdEnc || '');
+  var epId = decodeURIComponent(epIdEnc || '');
+  // Try both instance and global cache fallback
+  var cacheMap = this._cdnlandCache || (typeof CDNLAND_CACHE !== 'undefined' ? CDNLAND_CACHE : {});
+  var cache = (cacheMap || {})[cacheId];
+  if (!cache) { try { dlog('CDNLAND: [play] cache not found for ' + cacheId); } catch(_) {} page.error('Истек кэш плейлиста'); page.loading = false; return; }
+  var T = (cache.translators || {})[translatorId];
+  if (!T) { try { dlog('CDNLAND: [play] translator not found: ' + translatorId); } catch(_) {} page.error('Перевод не найден'); page.loading = false; return; }
+  var S = (T.seasons || {})[seasonId];
+  if (!S) { try { dlog('CDNLAND: [play] season not found: ' + seasonId); } catch(_) {} page.error('Сезон не найден'); page.loading = false; return; }
+  var E = null;
+  try {
+    var arr = S.episodes || [];
+    for (var i=0;i<arr.length;i++) if ((arr[i].id||'') === epId) { E = arr[i]; break; }
+    if (!E && arr.length) E = arr[0];
+  } catch(_se) {}
+  if (!E) { try { dlog('CDNLAND: [play] episode not found: ' + epId); } catch(_) {} page.error('Эпизод не найден'); page.loading = false; return; }
+  var tokenOrFile = E.token || E.file || '';
+  try { dlog('CDNLAND: [play] resolving ep=' + epId + ' tokenOrFile=' + (tokenOrFile ? tokenOrFile.substring(0,64) + (tokenOrFile.length>64?'…':'') : '(empty)')); } catch(_) {}
+  // Minimal helpers to reuse token resolution logic with cached context
+  function tryParsePlayerJSON(txt) {
+    if (!txt) return null; var s = (''+txt).trim(); var m = s.match(/(\{[\s\S]*\}|\[[\s\S]*\])/); if (!m) return null; try { return JSON.parse(m[1]); } catch(e1){} try { return JSON.parse(m[1].replace(/\\"/g,'"')); } catch(e2){} return null;
+  }
+  function buildTokenPlaylistUrl(baseOrigin, tok) {
+    var token = tok.charAt(0) === '~' ? tok.substr(1) : tok;
+    var hasBangBang = /!!$/.test(token);
+    var base = baseOrigin || 'https://vid11.entouaedon.com';
+    var url = base + (base.charAt(base.length-1) === '/' ? '' : '/') + 'playlist/' + token + (hasBangBang ? '' : '!!') + '.txt';
+    return url;
+  }
+  function fetchTokenFile(baseOrigin, csrfToken, tok) {
+    var u = buildTokenPlaylistUrl(baseOrigin, tok);
+    try { dlog('CDNLAND: [play] fetching token playlist: ' + u); } catch(_) {}
+    var payload = '';
+    function req(method, url, addHeaders) {
       try {
-        playlistPath = playlistPath.replace(/\\u([0-9a-fA-F]{4})/g, function(_, h){return String.fromCharCode(parseInt(h,16));});
-      } catch (e) {}
-      // Build candidate hosts to POST the playlist request
-      var suffix = playlistPath.charAt(0) === '/' ? playlistPath : ('/' + playlistPath);
-      var hosts = [];
-      hosts.push('https://vid11.entouaedon.com');
-      for (var vi = 1; vi <= 20; vi++) {
-        var vn = (vi < 10 ? '0' + vi : '' + vi);
-        hosts.push('https://vid' + vn + '.entouaedon.com');
-      }
-      var got = null;
-      for (var hi = 0; hi < hosts.length && !got; hi++) {
-        var purl = hosts[hi] + suffix;
-        try { dlog('CDNLAND playlist POST try[' + hi + ']: ' + purl); } catch(e) {}
-        try {
-          var resp = http.request(purl, {
-            debug: true,
-            noFail: true,
-            compression: true,
-            postdata: '',
-            headers: {
-              'Accept': '*/*',
-              'Origin': HTTPS + BASE_URL,
-              'Referer': REFERER,
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-CSRF-Token': csrfToken,
-              'User-Agent': UA
-            }
-          }).toString();
-          if (resp && resp.length > 0) {
-            got = resp;
-            try { dlog('CDNLAND playlist POST success with host idx ' + hi); } catch(e) {}
-          }
-        } catch (perr) {
-          try { dlog('CDNLAND playlist POST failed host idx ' + hi + ': ' + perr); } catch(e) {}
+        var headers = {
+          'User-Agent': UA,
+          'Accept': '*/*',
+          'Origin': (HTTPS + BASE_URL),
+          'Referer': REFERER,
+          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+        };
+        // Server often expects AJAX semantics for token POST
+        if (method === 'POST') {
+          headers['X-Requested-With'] = 'XMLHttpRequest';
+          headers['Content-Type'] = 'text/plain; charset=UTF-8';
         }
-      }
-      if (got) {
-        // Decide if it's series or single by checking for markers
-        var isSeries = /tv_series|\{"id":".*?","comment":".*?".*?file":"/i.test(got);
-        var poster = icon;
-        if (isSeries) {
-          scrapercdnlandseries(page, got, title, icon, poster, '');
-        } else {
-          scrapercdnland(page, got, title, icon, poster, '');
-        }
-        page.loading = false;
-        return;
-      }
+        if (addHeaders) for (var k in addHeaders) headers[k] = addHeaders[k];
+        var resp = http.request(url, { method: method, debug:true, noFail:true, compression:true, headers: headers, postdata: (method === 'POST' ? '' : null) });
+        if (resp && resp.statuscode >= 200 && resp.statuscode < 300) return resp.toString();
+      } catch(e) { /* ignore */ }
+      return '';
     }
-  } catch (e) {
-    try { dlog('CDNLAND playlist POST flow error: ' + e); } catch(_) {}
+    if (csrfToken) payload = req('POST', u, {'X-CSRF-TOKEN': csrfToken, 'X-CSRF-Token': csrfToken, 'x-csrf-token': csrfToken});
+    if (!payload) payload = req('GET', u);
+    if (!payload) payload = req('GET', u + (u.indexOf('?')>=0?'&':'?') + 'cb=' + Date.now());
+    if (!payload) payload = req('POST', u);
+  payload = (payload || '');
+  try { dlog('CDNLAND: [play] token payload len=' + payload.length + (payload.length<64? (', body=' + JSON.stringify(payload)) : '')); } catch(_) {}
+    if (payload.length < 4) return '';
+    var j = tryParsePlayerJSON(payload);
+    if (j && typeof j === 'object') {
+      var f = j.file || j.hls || j.src || '';
+      if (!f && j.playlist && j.playlist.length) { var it = j.playlist[0] || {}; f = it.file || it.hls || it.src || ''; }
+      if (!f && j.folder && j.folder.length) { var it2 = j.folder[0] || {}; f = it2.file || it2.hls || it2.src || ''; }
+      if (f) return f;
+    }
+    var txt = (payload || '').replace(/^[\s\uFEFF\u200B]+|[\s\uFEFF\u200B]+$/g, '');
+    if (/^https?:\/\//i.test(txt)) return txt;
+    if (/^#EXTM3U/.test(txt)) {
+      var m = txt.match(/https?:\/\/[^\s"']+/i);
+      if (m && m[0]) return m[0];
+      var mrel = txt.match(/\n\s*([^\n#][^\s"']*\.(?:m3u8|m3u))\s*(?:\n|$)/i);
+      if (mrel && mrel[1]) {
+        var rel = mrel[1].trim();
+        var mh = rel.match(/\/(?:stream2?|hls)\/((?:b|cdn)-\d{1,4})\//i);
+        var host = mh && mh[1] ? (mh[1] + '.entouaedon.com') : '';
+        if (host) { if (rel.charAt(0) !== '/') rel = '/' + rel; return 'https://' + host + rel; }
+      }
+      return '';
+    }
+    var m2 = txt.match(/https?:\/\/[^\s"']+/i);
+    if (m2 && m2[0]) return m2[0];
+    return txt;
   }
-//  }).convertFromEncoding('utf-8').toString();
-//  }).convertFromEncoding('windows-1251').toString();
+  var finalUrl = '';
   try {
-//    var doc = html.match(/<body style="overflow: hidden;">([\s\S]*?)<\/body>/);
-    var doc = html.match(/<body style=.*?>([\s\S]*?)<\/body>/);
-    if (doc) {
-      var translations = doc[1].match(/<div class="translations">([\s\S]*?)<\/div>/);
-      if (translations) {
-        page.appendItem('', 'separator', {
-//          title: new showtime.RichText('Переводы:'),
-          title: new RichText('Переводы:'),
-        });
-//        var re = /<option[\S\s]*?value="([\S\s]*?)"[\S\s]*?>([\S\s]*?)<\/option>/g;
-        var re = /<option[\S\s]*?value="(.*?)"[\S\s]*?>([\S\s]*?)<\/option>/g;
-//        var re = /<option[\S\s]*?value="([^"]+)"[\S\s]*?>([\S\s]*?)<\/option>/g;
-        var match = re.exec(translations[1]);
-        while (match) {
-          try {
-            var translationsid = match[1];
-          }
-          catch (err) {
-            translationsid = '';
-          }
-//          translationsid = showtime.entityDecode(translationsid);
-//          translationsid = unescape(translationsid);
-//          translationsid = decodeURIComponent(translationsid);
-          try {
-            var translation = match[2];
-            translation = translation.replace(/<br>/g, '').trim();
-          }
-          catch (err) {
-            translation = '';
-          }
-//          translation = showtime.entityDecode(translation);
-//          translation = unescape(translation);
-//          translation = decodeURIComponent(translation);
-          page.appendPassiveItem('directory', '', {
-//          page.appendPassiveItem('video', '', {
-//          page.appendPassiveItem(service.list, '', {
-//            title: new showtime.RichText('[' + translationsid + ']' + ' ' + translation),
-            title: new RichText('[' + translationsid + ']' + ' ' + translation),
-//            icon: icon,
-//            icon: LOGOICON,
-//            icon: LOGOLOGO,
-//            icon: LOGONONE,
-//            icon: logoquality,
-            icon: '',
-          });
-          match = re.exec(translations[1]);
-        }
-      }
-//      var files = doc[1].match(/<input type="hidden" id="files" value="([\s\S]*?)">/);
-//      var files = doc[1].match(/<input type="hidden" id="files" value="(.*?)">/);
-//      var files = doc[1].match(/<input type="hidden" id="files" value="([^"]+)">/);
-      var files = doc[1].match(/<input type="hidden" id="fs" value='(.*?)'>/);
-//      var files = doc[1].match(/<input type="hidden" id="fs" value='([^"]+)'>/);
-//      var series = doc[1].match(/"tv_series"/);
-      var series = doc[1].match(/tv_series">/);
-      if (series) {
-//        var re = /&quot;([\s\S]*?)&quot;:&quot;\[([\s\S]*?)\]&quot;(,|\})/g;
-//        var re = /&quot;(.*?)&quot;:&quot;\[(.*?)\]&quot;(,|\})/g;
-//        var re = /&quot;([^"]+)&quot;:&quot;\[([^"]+)\]&quot;(,|\})/g;
-        var re = /"([0-9]+)":\[\{"id":.*?"folder":\[(.*?)\]\}\](,|\})/g;
-//        var re = /"([0-9]+)":\[\{"id":.*?"folder":\[([^"]+)\]\}\](,|\})/g;
-//        var re = /"([0-9]+)":\[\{(.*?)\]\}\](,|\})/g;
-//        var re = /"([0-9]+)":\[\{([^"]+)\]\}\](,|\})/g;
-      }
-      else {
-//        re = /&quot;([\S\s]*?)&quot;:&quot;([\s\S]*?)&quot;(,|\})/g;
-//        re = /&quot;(.*?)&quot;:&quot;(.*?)&quot;(,|\})/g;
-//        re = /&quot;([^"]+)&quot;:&quot;([^"]+)&quot;(,|\})/g;
-        re = /"([0-9]+)":"(.*?)"(,|\})/g;
-//        re = /"([0-9]+)":"([^"]+)"(,|\})/g;
-      }
-      var match = re.exec(files[1]);
-      while (match) {
+    var t = tokenOrFile || '';
+    if (/^~/.test(t)) {
+      finalUrl = fetchTokenFile(cache.baseOrigin, cache.csrfToken, t);
+      // If token likely failed due to stale CSRF (tiny '10' response etc.), try to refresh CSRF from baseOrigin and retry once
+      if (!finalUrl && cache.baseOrigin) {
         try {
-          var translationid = match[1];
-        }
-        catch (err) {
-//          translationid = 0;
-          translationid = '';
-        }
-//        translationid = showtime.entityDecode(translationid);
-//        translationid = unescape(translationid);
-//        translationid = decodeURIComponent(translationid);
-        if (translations) {
-          page.appendItem('', 'separator', {
-//            title: new showtime.RichText('Перевод ' + (translationid ? '[' + translationid + ']' : '')),
-            title: new RichText('Перевод ' + (translationid ? '[' + translationid + ']' : '')),
-          });
-        }
-        var poster = icon;
-//        poster = showtime.entityDecode(poster);
-//        poster = unescape(poster);
-//        poster = decodeURIComponent(poster);
-        if (series) {
-          scrapercdnlandseries(page, match[2], title, icon, poster, translationid);
-        }
-        else {
-          scrapercdnland(page, match[2], title, icon, poster, translationid);
-        }
-        match = re.exec(files[1]);
+          var rootHtml = http.request(cache.baseOrigin + '/', {debug:true, noFail:true, compression:true, headers:{
+            'User-Agent': UA,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Origin': (HTTPS + BASE_URL),
+            'Referer': REFERER,
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+          }}).toString();
+          var m = rootHtml && rootHtml.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i);
+          if (m && m[1]) {
+            cache.csrfToken = m[1];
+            try { dlog('CDNLAND: [play] refreshed csrfToken from baseOrigin'); } catch(_) {}
+            finalUrl = fetchTokenFile(cache.baseOrigin, cache.csrfToken, t);
+          }
+        } catch(_refCsrf) {}
       }
+    } else if (/\[[^\]]+\]/.test(t)) {
+      var mOne = t.match(/\[(.*?)\]([^,\n\r"']+)/);
+      if (mOne && mOne[2]) { finalUrl = mOne[2].trim().replace(/\\\//g,'/'); }
+    } else if (/^https?:\/\//i.test(t)) {
+      finalUrl = t;
     }
-  }
-  catch (err) {}
+  } catch(_rf) {}
+  if (!finalUrl) { page.error('Не удалось получить ссылку для эпизода'); page.loading = false; return; }
+  // hls: prefix not needed; use plain URL
+  // if (/\.m3u8(\?|$)/i.test(finalUrl)) finalUrl = 'hls:' + finalUrl;
+  try { dlog('CDNLAND: [play] start ' + finalUrl.substr(0,160) + (finalUrl.length>160?'…':'')); } catch(_) {}
+  // Start playback immediately (redirect for better compatibility)
+  page.type = 'video';
+  try { page.redirect(finalUrl); } catch(_redir) { page.source = finalUrl; }
   page.loading = false;
 });
 //plugin.addURI(PREFIX + ':takedwnpage:(.*)~(.*)~(.*)', function (page, url, title, icon) {
@@ -5876,7 +6741,8 @@ new page.Route(PREFIX + ':takedwnpage:(.*)~(.*)~(.*)', function (page, url, titl
 //        uri = encodeURIComponent(playlisturl);
         if (/\.m3u8/.test(playlisturl)) {
 //          uri = uri;
-          uri = 'hls:' + uri;
+          // hls: prefix not needed; use plain URL
+          // uri = 'hls:' + uri;
 //          uri = 'movianDRM:hls:' + uri;
           if (service.movianDRM) {
 //            uri = 'movianDRM:hls:' + uri;
@@ -9499,7 +10365,8 @@ function scrapertakedwn(page, doc, title, icon, poster, season) {
 //    uri = encodeURIComponent(playlisturl);
     if (/\.m3u8/.test(playlisturl)) {
 //      uri = uri;
-      uri = 'hls:' + uri;
+  // hls: prefix not needed; use plain URL
+  // uri = 'hls:' + uri;
 //      uri = 'movianDRM:hls:' + uri;
       if (service.movianDRM) {
 //        uri = 'movianDRM:hls:' + uri;
