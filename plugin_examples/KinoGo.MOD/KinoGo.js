@@ -5914,150 +5914,6 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         return null;
       }
 
-      // Helper: base64-like decode used by some tokenized sources ("~..."), tolerant of - _ $ variations
-      function tryBase64UrlishDecode(s) {
-        try {
-          if (!s) return '';
-          // Normalize URL-safe/Base64 variants
-          var t = ('' + s).replace(/-/g, '+').replace(/_/g, '/').replace(/\$/g, '=');
-          // Pad to multiple of 4
-          while (t.length % 4 !== 0) t += '=';
-          var b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-          var out = '';
-          var i = 0;
-          t = t.replace(/[^A-Za-z0-9\+\/\=]/g, '');
-          while (i < t.length) {
-            var enc1 = b64.indexOf(t.charAt(i++));
-            var enc2 = b64.indexOf(t.charAt(i++));
-            var enc3 = b64.indexOf(t.charAt(i++));
-            var enc4 = b64.indexOf(t.charAt(i++));
-            if (enc1 < 0 || enc2 < 0 || enc3 < 0 || enc4 < 0) return '';
-            var chr1 = (enc1 << 2) | (enc2 >> 4);
-            var chr2 = ((enc2 & 15) << 4) | (enc3 >> 2);
-            var chr3 = ((enc3 & 3) << 6) | enc4;
-            out += String.fromCharCode(chr1);
-            if (enc3 != 64) out += String.fromCharCode(chr2);
-            if (enc4 != 64) out += String.fromCharCode(chr3);
-          }
-          return out;
-        } catch(_e) { return ''; }
-      }
-
-      // RC4 (ARCFOUR) stream cipher for common site obfuscations
-      function rc4(key, data) {
-        try {
-          var s = [], i, j = 0, x, res = '';
-          for (i = 0; i < 256; i++) s[i] = i;
-          for (i = 0; i < 256; i++) {
-            j = (j + s[i] + key.charCodeAt(i % key.length)) & 255;
-            x = s[i]; s[i] = s[j]; s[j] = x;
-          }
-          i = 0; j = 0;
-          for (var y = 0; y < data.length; y++) {
-            i = (i + 1) & 255;
-            j = (j + s[i]) & 255;
-            x = s[i]; s[i] = s[j]; s[j] = x;
-            var k = s[(s[i] + s[j]) & 255];
-            res += String.fromCharCode(data.charCodeAt(y) ^ k);
-          }
-          return res;
-        } catch(e) { return ''; }
-      }
-
-      // Simple XOR with repeating key
-      function xorWithKey(data, key) {
-        try {
-          var out = '';
-          for (var i = 0; i < data.length; i++) {
-            out += String.fromCharCode(data.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-          }
-          return out;
-        } catch(e) { return ''; }
-      }
-
-      // Collect candidate keys from scripts and context (csrfToken, obvious literals)
-      function collectCandidateKeys() {
-        var keys = [];
-        var seen = {};
-        function add(k) { if (k && k.length >= 4 && !seen[k]) { seen[k] = 1; keys.push(k); } }
-        try { if (csrfToken) add(csrfToken); } catch(_ck0) {}
-        try {
-          var st = (scriptsText || '');
-          // Common patterns like key: "...", token: '...', salt="..."
-          var re = /(key|token|salt|secret)\s*[:=]\s*(["'])([^"']{6,128})\2/ig, m;
-          while ((m = re.exec(st))) add(m[3]);
-          // playerConfigs.key was already picked via csrfToken, but scan raw embed too
-          var m2 = (st.match(/playerConfigs\s*=\s*\{[\s\S]*?key\s*:\s*(["'])([^"']{6,128})\1/i));
-          if (m2 && m2[2]) add(m2[2]);
-        } catch(_ck1) {}
-        return keys;
-      }
-
-      // Attempt to resolve a token that starts with '~' to a direct URL
-      function tryResolveTokenToUrl(tok) {
-        if (!tok || tok.charAt(0) !== '~') return '';
-        var core = tok.substr(1);
-        // Heuristic 1: base64/url-safe decode attempt
-        var dec = tryBase64UrlishDecode(core);
-        if (dec && /https?:\/\//i.test(dec)) {
-          try { dlog('CDNLAND: token base64-decoded to URL: ' + dec.substr(0, 120) + (dec.length > 120 ? '…' : '')); } catch(_l1) {}
-          return dec;
-        }
-        // Heuristic 2: sometimes a second decode layer
-        if (dec && /^[A-Za-z0-9\-_$+/]+$/.test(dec)) {
-          var dec2 = tryBase64UrlishDecode(dec);
-          if (dec2 && /https?:\/\//i.test(dec2)) {
-            try { dlog('CDNLAND: token double-decoded to URL: ' + dec2.substr(0, 120) + (dec2.length > 120 ? '…' : '')); } catch(_l2) {}
-            return dec2;
-          }
-        }
-        // Heuristic 3: sometimes decoded text contains embedded http
-        if (dec) {
-          var m = dec.match(/https?:\/\/[^\s"']+/i);
-          if (m && m[0]) {
-            try { dlog('CDNLAND: token decoded contained URL: ' + m[0].substr(0, 120) + (m[0].length > 120 ? '…' : '')); } catch(_l3) {}
-            return m[0];
-          }
-        }
-        // Site-specific: try RC4/XOR over the base64-decoded blob with various keys
-        var keys = collectCandidateKeys();
-        if (dec && keys.length) {
-          for (var ki = 0; ki < keys.length; ki++) {
-            var k = keys[ki];
-            // RC4
-            var r1 = rc4(k, dec);
-            if (r1 && /https?:\/\//i.test(r1)) {
-              try { dlog('CDNLAND: token resolved via RC4(' + (k.length) + '): ' + r1.substr(0, 120) + (r1.length > 120 ? '…' : '')); } catch(_l4) {}
-              return r1;
-            }
-            // Sometimes after RC4 it is still base64
-            var r1b = tryBase64UrlishDecode(r1 || '');
-            if (r1b && /https?:\/\//i.test(r1b)) {
-              try { dlog('CDNLAND: token RC4+base64 resolved: ' + r1b.substr(0, 120) + (r1b.length > 120 ? '…' : '')); } catch(_l4b) {}
-              return r1b;
-            }
-            // XOR
-            var r2 = xorWithKey(dec, k);
-            if (r2 && /https?:\/\//i.test(r2)) {
-              try { dlog('CDNLAND: token resolved via XOR(' + (k.length) + '): ' + r2.substr(0, 120) + (r2.length > 120 ? '…' : '')); } catch(_l5) {}
-              return r2;
-            }
-            var r2b = tryBase64UrlishDecode(r2 || '');
-            if (r2b && /https?:\/\//i.test(r2b)) {
-              try { dlog('CDNLAND: token XOR+base64 resolved: ' + r2b.substr(0, 120) + (r2b.length > 120 ? '…' : '')); } catch(_l5b) {}
-              return r2b;
-            }
-          }
-        }
-        // Last chance: try reversing and decoding
-        if (dec) {
-          var rev = dec.split('').reverse().join('');
-          var mr = rev.match(/https?:\/\/[^\s"']+/i);
-          if (mr && mr[0]) return mr[0].split('').reverse().join('');
-        }
-        return '';
-      }
-
   var dbgTokensSeen = 0, dbgTokensResolved = 0;
 
       // Build playlist URL for a per-episode token
@@ -6174,12 +6030,8 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
           // Some providers return an obfuscated token starting with '~' instead of a direct URL.
           if (/^~/.test(fileStr)) {
             dbgTokensSeen++;
-            // First try local decode heuristics
-            var resolved = tryResolveTokenToUrl(fileStr);
-            if (!resolved) {
-              // Official flow: use token as /playlist/<token>!!.txt to get per-episode URL
-              resolved = fetchTokenFile(fileStr);
-            }
+            // Official flow: use token as /playlist/<token>!!.txt to get per-episode URL
+            var resolved = fetchTokenFile(fileStr);
             if (resolved) {
               dbgTokensResolved++;
               fileStr = resolved;
@@ -6195,8 +6047,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
               fileStr = fileStr.replace(/:~([A-Za-z0-9\-_$+/]+)/g, function(all, tok){
                 var tokFull = '~' + tok;
                 dbgTokensSeen++;
-                var r = tryResolveTokenToUrl(tokFull);
-                if (!r) r = fetchTokenFile(tokFull);
+                var r = fetchTokenFile(tokFull);
                 if (r) { dbgTokensResolved++; return ':' + r; }
                 try { dlog('CDNLAND: token in bracket list unresolved: ' + tokFull.substr(0, 48) + '…'); } catch(_tb) {}
                 return all; // leave as-is
