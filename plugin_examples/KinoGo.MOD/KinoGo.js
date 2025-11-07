@@ -6177,9 +6177,34 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
             var T2 = trIndex[trKeys[ti]];
             var seasonsCount = Object.keys(T2.seasons).length;
             var epCount = 0; try { for (var sk in T2.seasons) epCount += (T2.seasons[sk].episodes||[]).length; } catch(_ec) {}
+            // Check if seasons are consecutive from 1 to seasonsCount
+            var seasonNums = Object.keys(T2.seasons).map(function(s){ return parseInt(s,10) || 0; }).sort(function(a,b){return a-b;});
+            var isConsecutive = seasonNums.length === seasonsCount && seasonNums[0] === 1 && seasonNums[seasonNums.length-1] === seasonsCount;
+            var displayTitle;
+            if (isConsecutive) {
+              displayTitle = (T2.name || ('Перевод ' + T2.id)) + ' (' + seasonsCount + ' сезонов | ' + epCount + ' серий)';
+            } else {
+              // Build season ranges
+              var ranges = [];
+              if (seasonNums.length > 0) {
+                var start = seasonNums[0];
+                var end = start;
+                for (var i = 1; i < seasonNums.length; i++) {
+                  if (seasonNums[i] === end + 1) {
+                    end = seasonNums[i];
+                  } else {
+                    ranges.push(start === end ? '' + start : start + '-' + end);
+                    start = end = seasonNums[i];
+                  }
+                }
+                ranges.push(start === end ? '' + start : start + '-' + end);
+              }
+              var seasonStr = 'сезоны ' + ranges.join(', ') + ' | ' + epCount + ' серий';
+              displayTitle = (T2.name || ('Перевод ' + T2.id)) + ' (' + seasonStr + ')';
+            }
             try {
               page.appendItem(PREFIX + ':cdnland_tr:' + cacheId + '~' + encodeURIComponent(T2.id), 'directory', {
-                title: new RichText((T2.name || ('Перевод ' + T2.id)) + ' (' + seasonsCount + ' сез., ' + epCount + ' сер.)'),
+                title: new RichText(displayTitle),
                 icon: icon,
                 backdrops: poster ? [{url: poster}] : [{url: icon}],
                 tagline: new RichText(coloredStr(title, gray))
