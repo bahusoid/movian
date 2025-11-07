@@ -6059,10 +6059,6 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
       }
 
   var dbgTokensSeen = 0, dbgTokensResolved = 0;
-  // Test mode: stop after first successfully appended playable item to avoid
-  // hammering the provider while verifying token resolution path
-  var stopAfterFirst = false;
-  try { if (stopAfterFirst) dlog('CDNLAND: STOP_AFTER_FIRST is enabled for test'); } catch(_sf) {}
 
       // Build playlist URL for a per-episode token
       function buildTokenPlaylistUrl(tok) {
@@ -6206,39 +6202,6 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
                 return all; // leave as-is
               });
             }
-          if (stopAfterFirst) {
-            // Append only the first quality pair
-            var mOne = fileStr.match(/\[(.*?)\]([^,\n\r"']+)/);
-            if (mOne && mOne[2]) {
-              var qname = (mOne[1] || '').trim();
-              var qurl = (mOne[2] || '').trim();
-              try {
-                qurl = qurl.replace(/\\\//g, '/');
-                if (/^~/.test(qurl)) {
-                  var resQ = tryResolveTokenToUrl(qurl);
-                  if (!resQ) resQ = fetchTokenFile(qurl);
-                  if (resQ) qurl = resQ; else return 0;
-                }
-                if (/^\/\//.test(qurl)) qurl = (HTTPS.replace(/:\/\/$/, '') + ':') + qurl;
-                else if (!/^https?:\/\//i.test(qurl)) qurl = HTTPS + BASE_URL + qurl;
-                // hls: prefix not needed in Movian; use plain URL
-                // if (/\.m3u8(\?|$)/i.test(qurl)) qurl = 'hls:' + qurl;
-              } catch(_nu) {}
-              try { dlog('CDNLAND: append single quality source: ' + qurl.substr(0, 160) + (qurl.length>160?'…':'')); } catch(_) {}
-              try {
-                page.appendItem(qurl, service.list, {
-                  title: new RichText(qname || displayTitle || 'Эпизод'),
-                  icon: icon,
-                  backdrops: poster ? [{url: poster}] : [{url: icon}],
-                  genre: new RichText((season ? coloredStr('Сезон: ', gray) + coloredStr(season, orange) + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + coloredStr(serie, orange) : '')),
-                  source: new RichText((translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
-                  tagline: new RichText(coloredStr(title, gray))
-                });
-                appended += 1;
-              } catch(_ao) {}
-              return appended;
-            }
-          }
           var before = page.entries || 0;
           scrapercdnland(page, fileStr, title, icon, poster, translationid, season, serie, translation);
           var after = page.entries || 0;
@@ -6372,17 +6335,10 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
             } catch(_ai) {}
           }
           totalAppended += navAdded;
-          // In test mode, stop here to avoid further work
-          if (stopAfterFirst && totalAppended > 0) {
-            try { dlog('CDNLAND: early exit after building translations (test mode)'); } catch(_eet) {}
-            page.loading = false;
-            return;
-          }
         } else {
           // Single movie or flat playlist of qualities/files
           var arr = items.length ? items : [json];
-          var earlyStop2 = false;
-          for (var k = 0; k < arr.length && !earlyStop2; k++) {
+          for (var k = 0; k < arr.length; k++) {
             var it2 = arr[k] || {};
             var innerList = (it2.playlist || it2.folder || []);
             if (innerList && innerList.length) {
@@ -6390,21 +6346,12 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
                 var pit = innerList[kq] || {};
                 var inc3 = appendFileOrQualityList(page, pit.file || '', pit.comment || pit.title || '', title, icon, poster, '', '', '', '');
                 totalAppended += inc3;
-                if (stopAfterFirst) { earlyStop2 = true; break; }
               }
-              if (earlyStop2) break;
             } else {
               var inc4 = appendFileOrQualityList(page, it2.file || '', it2.comment || it2.title || '', title, icon, poster, '', '', '', '');
               totalAppended += inc4;
-              if (stopAfterFirst) { earlyStop2 = true; break; }
             }
           }
-        }
-        // If test mode is on and we appended something, return immediately to surface the item
-        if (stopAfterFirst && totalAppended > 0) {
-          try { dlog('CDNLAND: early exit after first item (test mode)'); } catch(_ee) {}
-          page.loading = false;
-          return;
         }
       } else {
         // Plain text: treat as single source (movie case)
@@ -6413,7 +6360,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
 
   try { dlog('CDNLAND: token stats seen=' + dbgTokensSeen + ' resolved=' + dbgTokensResolved); } catch(_tstat) {}
 
-  if (!totalAppended && !stopAfterFirst) {
+  if (!totalAppended) {
         // Fallback to legacy regex-based parsers
         var isSeries = /tv_series|\{"id":".*?","comment":".*?".*?file":"|"playlist"\s*:\s*\[/i.test(payload);
         try { dlog('CDNLAND: detected ' + (isSeries ? 'series' : 'single') + ' playlist (legacy)'); } catch(_pt) {}
@@ -6424,8 +6371,6 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         else scrapercdnland(page, payload, title, icon, poster, '');
         var after = page.entries || 0;
         totalAppended = Math.max(0, (after - before));
-      } else if (!totalAppended && stopAfterFirst) {
-        try { dlog('CDNLAND: stop-after-first: skipping legacy fallback'); } catch(_sk) {}
       }
 
       try { dlog('CDNLAND: appended items = ' + totalAppended); } catch(_pa) {}
