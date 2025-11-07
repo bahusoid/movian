@@ -293,6 +293,27 @@ settings.createMultiOpt('domain', 'Выбор домена', [
 });
 
 updateUrl();
+var registeredCdnHosts = {};
+function ensureCdnInspector(host) {
+  try {
+    if (!host) return;
+    var h = ('' + host).replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    if (!h || registeredCdnHosts[h]) return;
+    registeredCdnHosts[h] = 1;
+    var escaped = h.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    var pattern = 'http.*' + escaped + '.*';
+    io.httpInspectorCreate(pattern, function (ctrl) {
+      ctrl.setHeader('Origin', HTTPS + BASE_URL);
+      ctrl.setHeader('Referer', REFERER);
+      ctrl.setHeader('User-Agent', UA);
+      ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
+      return 0;
+    });
+    try { dlog('CDNLAND: registered inspector for ' + h); } catch(_log) {}
+  } catch (e) {
+    try { dlog('CDNLAND: ensureCdnInspector failed ' + e); } catch(_e) {}
+  }
+}
 //var inspect_url = BASE_URL.replace(/^http.*(\w{4,15}.\w{2,3})$/gm,'.*\.$1') + '.*';
 //var inspect_url = HTTPS + BASE_URL.replace(/^http.*(\w{4,15}.\w{2,3})$/gm,'.*\.$1') + '.*';
 //print(inspect_url)
@@ -325,14 +346,6 @@ io.httpInspectorCreate(HTTPS + BASE_URL + '.*', function (ctrl) {
 //  ctrl.setHeader('Referer', HTTPS + BASE_URL + '/');
   ctrl.setHeader('Referer', REFERER);
 //  return 0;
-});
-// Ensure derived vidNN hosts receive Kinogo headers expected by the backend
-io.httpInspectorCreate('http.*vid[0-9]+\.[^/]+.*', function (ctrl) {
-  ctrl.setHeader('Origin', HTTPS + BASE_URL);
-  ctrl.setHeader('Referer', REFERER);
-  ctrl.setHeader('User-Agent', UA);
-  ctrl.setHeader('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
-  return 0;
 });
 // Player scripts on cdn-t.entouaedon.com
 io.httpInspectorCreate('http.*cdn-t\.entouaedon\.com.*', function (ctrl) {
@@ -2790,7 +2803,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
         }
 //        else if (/(vcdn\.icdn\.ws|.*?\.svetacdn\.in|.*?\.annacdn\.cc|cdn\.cdn-films\.xyz|me\.greenfilm\.xyz|films\.video-up\.online|kino\.stokino\.rest|full-hd\.ki1080no\.xyz|s.*?\.filmload\.me|kino.*?\.navigatorkino\.xyz|.*?up\.terobat\.work|up.*?\.kiberload\.pw|cloud.*?\.kifise\.xyz|server.*?\.film-s-load\.live|video\.kinosteel\.club|video\.kinogo\.lu)/.test(playlisturl)) {
 //        else if (/(icdn|svetacdn|annacdn|cdn-films|greenfilm|video-up|stokino|ki1080no|filmload|navigatorkino|terobat|kiberload|kifise|film-s-load|kinosteel|video\.kinogo\.lu)/.test(playlisturl)) {
-        else if (/(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm|azure\d+.*?sitsarl\.com|entouaedon\.com|\/playlist\/.*?\.txt)/.test(playlisturl)) {
+        else if (/(fotpro135alto|icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm|azure\d+.*?sitsarl\.com|entouaedon\.com|\/playlist\/.*?\.txt)/.test(playlisturl)) {
           playlistname = 'cloud.cdnland.in';
 //          uri = PREFIX + ':cdnlandpage:' + playlisturl + '~' + title + '~' + icon;
 //          uri = PREFIX + ':cdnlandpage:' + escape(playlisturl) + '~' + escape(title) + '~' + escape(icon);
@@ -2851,7 +2864,8 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //        if (playlistname) {
 //        if (/(kinorkn\.com|vcdn\.icdn\.ws|.*?\.svetacdn\.in|.*?\.annacdn\.cc|cdn\.cdn-films\.xyz|me\.greenfilm\.xyz|films\.video-up\.online|kino\.stokino\.rest|full-hd\.ki1080no\.xyz|s.*?\.filmload\.me|kino.*?\.navigatorkino\.xyz|.*?up\.terobat\.work|up.*?\.kiberload\.pw|cloud.*?\.kifise\.xyz|server.*?\.film-s-load\.live|video\.kinosteel\.club|video\.kinogo\.lu|api\.tobaco\.ws|api.*?\.tobaco\.ws|api\.topdbltj\.ws|api.*?\.topdbltj\.ws|api.*?\.delivembd\.ws|api.*?\.synchroncode\.com|api\.hostemb\.ws|shizahd\.ru|700filmov\.ru\/movie\/)/.test(playlisturl)) {
 //        if (/(kinorkn|icdn|svetacdn|annacdn|cdn-films|greenfilm|video-up|stokino|ki1080no|filmload|navigatorkino|terobat|kiberload|kifise|film-s-load|kinosteel|video\.kinogo\.lu|tobaco|topdbltj|delivembd|synchroncode|hostemb|shizahd|700filmov.*?\/movie\/)/.test(playlisturl)) {
-  if (/(kinorkn|(icdn|video-up|stokino|filmload|terobat|kiberload|film-s-load|svetacdn|annacdn|kinosteel|video\.kinogo\.lu|cdn-films|greenfilm|ki1080no|navigatorkino|kifise|mediafilm)|((api|apiplayers|me|meplayers).*?\.(kinogram\.best|placehere\.link|ameytools\.club|delivembed\.cc|(synchroncode|buildplayer|mir-dikogo-zapada)\.com|(embedstorage|multikland)\.net|(tobaco|topdbltj|delivembd|hostemb|loadbox|getcodes|strvid|ebder|framprox|embprox|bedemp2|embr|lessornot|linktodo|namy)\.ws)|.*?\.(takedwn\.ws|newplayjj\.com)|azure\d+.*?sitsarl\.com)|shizahd|700filmov.*?\/movie\/)/.test(playlisturl)) {
+
+   {
           if (uri) {
             dlog('Moviepage: appending item for provider=' + (playlistname || '') + ', uri=' + uri);
             // Decide display title: prefer site tab label, else provider name, else movie title
@@ -5469,7 +5483,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
   function detectKindFromUrl(u) {
     try {
       if (/\/serial\//i.test(u)) return 'serial';
-      if (/\/(film|movie)\//i.test(u)) return 'film';
+      if (/\/(film|movie)\//i.test(u)) return 'movie';
     } catch (e) {}
     return '';
   }
@@ -5480,15 +5494,15 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
     var base = 'https://kinolordfilm.com';
     var variants = [
       base + '/' + kind + '/' + token + '/iframe',
-      base + '/' + kind + '/' + token + '/',
-      base + '/' + kind + '/' + token
+      // base + '/' + kind + '/' + token + '/',
+      // base + '/' + kind + '/' + token
     ];
     for (var i = 0; i < variants.length; i++) list.push(variants[i]);
     if (kind !== 'film') {
       variants = [
-        base + '/film/' + token + '/iframe',
-        base + '/film/' + token + '/',
-        base + '/film/' + token
+        base + '/movie/' + token + '/iframe',
+        // base + '/movie/' + token + '/',
+        // base + '/movie/' + token
       ];
       for (i = 0; i < variants.length; i++) list.push(variants[i]);
     }
@@ -5518,18 +5532,19 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
     return null;
   }
 
-  // 1) Try original URL; if inaccessible, retry without Origin and finally via kinolord fallback
-  var embedHtml = safeGet(url);
-  var usedUrl = url;
-  if (!embedHtml || embedHtml.length === 0) {
-    embedHtml = safeGet(url, REFERER, false);
+  // 1) Fetch iframe via kinolord fallback only (skip original host)
+  var embedHtml = '';
+  var usedUrl = '';
+  var kinolord = tryKinolordFallback(url);
+  if (kinolord && kinolord.html) {
+    embedHtml = kinolord.html;
+    usedUrl = kinolord.url;
   }
-  if (!embedHtml || embedHtml.length === 0) {
-    var kinolord = tryKinolordFallback(url);
-    if (kinolord && kinolord.html) {
-      embedHtml = kinolord.html;
-      usedUrl = kinolord.url;
-    }
+  if (!embedHtml || !embedHtml.length) {
+    try { dlog('CDNLAND: kinolord fallback failed to supply iframe HTML'); } catch(_noembed) {}
+    page.error('Не удалось загрузить плеер cdnland (нет рабочего kinolord iframe).');
+    page.loading = false;
+    return;
   }
   // Compute origin of the page we actually fetched (used for resolving relative script URLs)
   var baseOrigin = getOrigin(usedUrl);
@@ -5540,16 +5555,24 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
   var shardPrefix = '';
   var playlistHost = '';
   var playlistDomain = '';
-  var primaryToken = '';
+  var playlistFileValue = '';
 
   // 2) Parse DOM, extract csrf meta and playlist path from scripts
   var csrfToken = '';
-  var playlistPath = '';
   try {
-    var dom = html.parse(embedHtml || '');
+    dlog("HTML:"  + embedHtml);
+
+    var dom = null;
+    try {
+      dom = html.parse(embedHtml || '');
+    } catch(parseErr) {
+      try { dlog('CDNLAND: html.parse failed: ' + parseErr); } catch(_perr) {}
+      dom = null;
+    }
+    var root = dom && dom.root ? dom.root : null;
     // csrf token
     try {
-      var heads = dom.root.getElementsByTagName ? dom.root.getElementsByTagName('head') : [];
+      var heads = root && root.getElementsByTagName ? root.getElementsByTagName('head') : [];
       if (heads && heads.length) {
         var metas = heads[0].getElementsByTagName ? heads[0].getElementsByTagName('meta') : [];
         for (var i = 0; i < metas.length; i++) {
@@ -5585,7 +5608,8 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
     // scripts: look for /playlist/*.txt|.json (may contain \uXXXX)
     var scriptsText = '';
     try {
-      var scripts = dom.root.getElementsByTagName('script');
+      if (!root || !root.getElementsByTagName) throw 'no-root';
+      var scripts = root.getElementsByTagName('script');
       for (var si = 0; si < scripts.length; si++) {
         if (scripts[si].textContent) scriptsText += scripts[si].textContent + '\n';
       }
@@ -5596,10 +5620,12 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
       var fetched = 0, maxFetch = 6;
       var srcList = [];
       try {
-        var scripts2 = dom.root.getElementsByTagName('script');
-        for (var sj = 0; sj < scripts2.length; sj++) {
-          var srcAttr = scripts2[sj].attributes ? scripts2[sj].attributes.getNamedItem('src') : null;
-          if (srcAttr && srcAttr.value) srcList.push(srcAttr.value.trim());
+        if (root && root.getElementsByTagName) {
+          var scripts2 = root.getElementsByTagName('script');
+          for (var sj = 0; sj < scripts2.length; sj++) {
+            var srcAttr = scripts2[sj].attributes ? scripts2[sj].attributes.getNamedItem('src') : null;
+            if (srcAttr && srcAttr.value) srcList.push(srcAttr.value.trim());
+          }
         }
       } catch(_sdom) {}
       // Fallback: regex-search in raw HTML for <script src="...">
@@ -5706,10 +5732,9 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
             .replace(/\\u([0-9a-fA-F]{4})/g, function(_,h){return String.fromCharCode(parseInt(h,16));}));
           if (pcJson && typeof pcJson === 'object') {
             if (!csrfToken && pcJson.key) csrfToken = pcJson.key;
-            if (!primaryToken && pcJson.file) primaryToken = pcJson.file;
-            if (!playlistPath && pcJson.file && /playlist\/[^"']+\.(?:txt|json)/i.test(pcJson.file)) playlistPath = pcJson.file; // often like '/playlist/<token>.txt'
+            if (!playlistFileValue && pcJson.file) playlistFileValue = pcJson.file;
             if (!playerHref && pcJson.href) playerHref = pcJson.href;
-            try { dlog('CDNLAND: playerConfigs parsed' + (csrfToken? ' [key]' : '') + (playlistPath? ' [file]' : '')); } catch(_pcd) {}
+            try { dlog('CDNLAND: playerConfigs parsed' + (csrfToken? ' [key]' : '') + (playlistFileValue? ' [file]' : '')); } catch(_pcd) {}
           }
         } catch(_pcp) {}
       }
@@ -5739,84 +5764,68 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         .replace(/\/.*$/, '');
       playlistHost = (shardPrefix + cleanHref).replace(/\/+$/, '');
       playlistDomain = cleanHref;
+      ensureCdnInspector(playlistHost);
       try { dlog('CDNLAND: derived playlist host ' + playlistHost); } catch(_plh) {}
     }
     if (playlistHost) baseOrigin = playlistHost;
-
-    // Try to find absolute playlist first (any host)
-    var pmAbs = decodedHtml.match(/https?:\/\/[^'"\s]+\/playlist\/[^'"\s]+\.(?:txt|json)/i);
-    if (pmAbs && pmAbs[0]) {
-      playlistPath = pmAbs[0];
-      try { dlog('CDNLAND playlist ABS path found: ' + playlistPath); } catch(epl1) {}
+    if (playlistFileValue) {
+      try {
+        playlistFileValue = ('' + playlistFileValue).replace(/\\u([0-9a-fA-F]{4})/g, function(_,h){return String.fromCharCode(parseInt(h,16));});
+      } catch(_pfu) {}
+      playlistFileValue = ('' + playlistFileValue).trim();
     }
-    if (!playlistPath) {
-      // Try from scripts or anywhere in HTML as a relative path
-      var pmScriptRel = scriptsText.match(/\/(playlist\/[^'"\s]+\.(?:txt|json))/i);
-      var pmRel = pmScriptRel || decodedHtml.match(/\/(playlist\/[^'"\s]+\.(?:txt|json))/i);
-      if (pmRel && pmRel[1]) {
-        playlistPath = pmRel[1];
-        try { dlog('CDNLAND playlist REL path found: ' + playlistPath); } catch(epl2) {}
-      }
-    }
-    if (!playlistPath) {
-      // Try PlayerJS file: '...'
-      var pf1 = scriptsText.match(/\bfile\s*:\s*(['"])(.*?)\1/i);
-      var pf2 = scriptsText.match(/\bfile\s*\(\s*(['"])(.*?)\1\s*\)/i);
-      var cand = (pf1 && pf1[2]) ? pf1[2] : ((pf2 && pf2[2]) ? pf2[2] : '');
-      if (cand && /playlist\/.+\.(?:txt|json)/i.test(cand)) {
-        playlistPath = cand;
-        try { dlog('CDNLAND playlist from PlayerJS file: ' + playlistPath); } catch(epl3) {}
-      }
-    }
-    // Decode any remaining \\uXXXX in just the path
-    try { playlistPath = playlistPath.replace(/\\u([0-9a-fA-F]{4})/g, function(_,h){return String.fromCharCode(parseInt(h,16));}); } catch(ed) {}
   } catch (e) {
     try { dlog('CDNLAND DOM parse error: ' + e); } catch(_) {}
   }
 
-  // 3) Build playlist URL
-  if (!playlistPath) {
-    // As a fallback, try deriving playlist directly from embed URL token
-    try { dlog('CDNLAND: playlist path not found in scripts'); } catch(e) {}
-    try {
-      var mm = usedUrl.match(/\/((?:serial|movie|video))\/([A-Za-z0-9_-]+)\/iframe/i);
-      if (mm && mm[2]) {
-        var guessId = mm[2];
-        // first try .txt then .json
-        playlistPath = '/playlist/' + guessId + '.txt';
-        try { dlog('CDNLAND: guessing playlist path from URL token: ' + playlistPath); } catch(_g1) {}
-      }
-    } catch(_gf) {}
-  }
-  if (playlistPath && /^https?:\/\//i.test(playlistPath) && !playlistHost) {
-    try {
-      var hostGuess = playlistPath.match(/^(https?:\/\/[^/]+)/i);
-      if (hostGuess && hostGuess[1]) {
-        playlistHost = hostGuess[1];
-        baseOrigin = playlistHost;
-        try {
-          playlistDomain = hostGuess[1].replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
-        } catch(_hd) {}
-        try { dlog('CDNLAND: adopted playlist host from absolute path ' + playlistHost); } catch(_hp) {}
-      }
-    } catch(_hg) {}
-  }
-  var playlistUrl = '';
-  if (playlistPath) {
-    if (/^https?:\/\//i.test(playlistPath)) playlistUrl = playlistPath;
-    else if (playlistHost) {
-      playlistUrl = playlistHost.replace(/\/+$/, '') + (playlistPath.charAt(0) === '/' ? '' : '/') + playlistPath;
+  // 3) Build playlist URL from playerConfigs.file
+  function normalizePlaylistFile(value) {
+    if (!value) return '';
+    var normalized = ('' + value).trim();
+    if (!normalized) return '';
+    var hadTilde = false;
+    if (normalized.charAt(0) === '~') {
+      normalized = normalized.substr(1);
+      hadTilde = true;
+      normalized = normalized.replace(/^\/+/, '');
+      if (!/^playlist\//i.test(normalized)) normalized = 'playlist/' + normalized;
+      normalized = '/' + normalized;
+      if (normalized && !/\.(?:txt|json)(?:\?|$)/i.test(normalized)) normalized += '.txt';
     }
-    if (playlistUrl) try { dlog('CDNLAND playlist URL built: ' + playlistUrl); } catch(eu) {}
-    if (!playlistUrl) try { dlog('CDNLAND: failed to build playlist URL from path ' + playlistPath); } catch(_nb) {}
+    return normalized;
   }
-  if (!playlistUrl && primaryToken && playlistHost && !/playlist\/[^"']+\.(?:txt|json)/i.test(primaryToken)) {
-    var tokenCandidate = primaryToken;
-    var tokenBody = tokenCandidate.charAt(0) === '~' ? tokenCandidate.substr(1) : tokenCandidate;
-    var hasBangBangPrimary = /!!$/.test(tokenBody);
-    var primaryBase = playlistHost.replace(/\/+$/, '');
-    playlistUrl = primaryBase + '/playlist/' + tokenBody + (hasBangBangPrimary ? '' : '!!') + '.txt';
-    try { dlog('CDNLAND: fallback playlist URL from primary token: ' + playlistUrl); } catch(_ptok) {}
+
+  function resolvePlaylistUrl(path, host) {
+    if (!path) return '';
+    if (/^https?:\/\//i.test(path)) return path;
+    var base = host || '';
+    if (!base) return '';
+    base = base.replace(/\/+$/, '');
+    if (!base) return '';
+    return base + (path.charAt(0) === '/' ? path : '/' + path);
+  }
+
+  var playlistUrl = '';
+  var normalizedFile = normalizePlaylistFile(playlistFileValue);
+  if (normalizedFile) {
+    playlistUrl = resolvePlaylistUrl(normalizedFile, playlistHost);
+    if (!playlistHost && /^https?:\/\//i.test(playlistUrl)) {
+      try {
+        var hostMatch = playlistUrl.match(/^(https?:\/\/[^/]+)/i);
+        if (hostMatch && hostMatch[1]) {
+          playlistHost = hostMatch[1];
+          baseOrigin = playlistHost;
+          playlistDomain = hostMatch[1].replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+          ensureCdnInspector(playlistHost);
+        }
+      } catch(_ph) {}
+    }
+  }
+  if (playlistUrl) {
+    try { dlog('CDNLAND playlist URL built: ' + playlistUrl); } catch(eu) {}
+    ensureCdnInspector(playlistUrl);
+  } else {
+    try { dlog('CDNLAND: failed to build playlist URL via playerConfigs.file (value=' + playlistFileValue + ')'); } catch(_np) {}
   }
 
   // 4) Fetch playlist JSON (prefer POST with CSRF; then GET with headers; then POST without CSRF; with cachebuster)
@@ -6052,7 +6061,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
   var dbgTokensSeen = 0, dbgTokensResolved = 0;
   // Test mode: stop after first successfully appended playable item to avoid
   // hammering the provider while verifying token resolution path
-  var stopAfterFirst = true;
+  var stopAfterFirst = false;
   try { if (stopAfterFirst) dlog('CDNLAND: STOP_AFTER_FIRST is enabled for test'); } catch(_sf) {}
 
       // Build playlist URL for a per-episode token
@@ -6138,6 +6147,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
               var scheme = schemeMatch && schemeMatch[1] ? schemeMatch[1] : 'https';
               var abs = scheme + '://' + host + rel;
               if (!playlistDomain && domainSuffix) playlistDomain = domainSuffix;
+              ensureCdnInspector(scheme + '://' + host);
               try { dlog('CDNLAND: token m3u relative -> ' + abs.substr(0,120) + (abs.length>120?'…':'')); } catch(_) {}
               return abs;
             }
@@ -6396,6 +6406,9 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
           page.loading = false;
           return;
         }
+      } else {
+        // Plain text: treat as single source (movie case)
+        totalAppended += appendFileOrQualityList(page, payload, title, title, icon, poster, '', '', '', '');
       }
 
   try { dlog('CDNLAND: token stats seen=' + dbgTokensSeen + ' resolved=' + dbgTokensResolved); } catch(_tstat) {}
@@ -6406,6 +6419,7 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
         try { dlog('CDNLAND: detected ' + (isSeries ? 'series' : 'single') + ' playlist (legacy)'); } catch(_pt) {}
         var poster = icon;
         var before = page.entries || 0;
+        page.entries = 0;
         if (isSeries) scrapercdnlandseries(page, payload, title, icon, poster, '');
         else scrapercdnland(page, payload, title, icon, poster, '');
         var after = page.entries || 0;
@@ -6515,6 +6529,7 @@ new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cac
   var cacheMap = this._cdnlandCache || (typeof CDNLAND_CACHE !== 'undefined' ? CDNLAND_CACHE : {});
   var cache = (cacheMap || {})[cacheId];
   if (!cache) { try { dlog('CDNLAND: [play] cache not found for ' + cacheId); } catch(_) {} page.error('Истек кэш плейлиста'); page.loading = false; return; }
+  ensureCdnInspector(cache.playlistHost || cache.baseOrigin);
   var T = (cache.translators || {})[translatorId];
   if (!T) { try { dlog('CDNLAND: [play] translator not found: ' + translatorId); } catch(_) {} page.error('Перевод не найден'); page.loading = false; return; }
   var S = (T.seasons || {})[seasonId];
@@ -6599,6 +6614,7 @@ new page.Route(PREFIX + ':cdnland_play:(.*)~(.*)~(.*)~(.*)', function (page, cac
           if (rel.charAt(0) !== '/') rel = '/' + rel;
           var schemeMatch2 = (cache.playlistHost || cache.baseOrigin || '').match(/^(https?):\/\//i);
           var scheme2 = schemeMatch2 && schemeMatch2[1] ? schemeMatch2[1] : 'https';
+          ensureCdnInspector(scheme2 + '://' + host);
           return scheme2 + '://' + host + rel;
         }
       }
@@ -10175,181 +10191,15 @@ function scrapercdnlandseries(page, doc, title, icon, poster, translationid) {
 };
 //function scrapercdnland(page, doc) {
 function scrapercdnland(page, doc, title, icon, poster, translationid, season, serie, translation) {
-//  title = showtime.entityDecode(title);
-//  title = unescape(title);
-//  title = decodeURIComponent(title);
-//  icon = showtime.entityDecode(icon);
-//  icon = unescape(icon);
-//  icon = decodeURIComponent(icon);
-//  poster = showtime.entityDecode(poster);
-//  poster = unescape(poster);
-//  poster = decodeURIComponent(poster);
-//  translationid = showtime.entityDecode(translationid);
-//  translationid = unescape(translationid);
-//  translationid = decodeURIComponent(translationid);
-//  season = showtime.entityDecode(season);
-//  season = unescape(season);
-//  season = decodeURIComponent(season);
-//  serie = showtime.entityDecode(serie);
-//  serie = unescape(serie);
-//  serie = decodeURIComponent(serie);
-//  translation = showtime.entityDecode(translation);
-//  translation = unescape(translation);
-//  translation = decodeURIComponent(translation);
-//  var re = /\[(.*?)\](.*?)(\?| )/g;
-//  var re = /\[([^"]+)\]([^"]+)(\?| )/g;
-//  var re = /\[(.*?)\](.*?)\.mp4/g;
-//  var re = /\[([^"]+)\]([^"]+)\.mp4/g;
-  var re = /\[(.*?)\](.*?\.mp4)/g;
-//  var re = /\[([^"]+)\]([^"]+\.mp4)/g;
-  var match = re.exec(doc);
-  while (match) {
-//    var qualityname = match[2].match(/\/(.*?)\.mp4/);
-//    var qualityname = match[2].match(/\/([^"]+)\.mp4/);
-    try {
-      var qualityname = match[1];
-//      qualityname = qualityname[1];
-    }
-    catch (err) {
-//      qualityname = coloredStr('Неопределенное', red);
-      qualityname = '';
-    }
-//    qualityname = showtime.entityDecode(qualityname);
-//    qualityname = unescape(qualityname);
-//    qualityname = decodeURIComponent(qualityname);
-    try {
-      var qualityurl = match[2];
-//      qualityurl = qualityurl.replace(/(\\\\\\\/\\\\\\\/|\\\/\\\/|\\)/g, '').trim();
-      qualityurl = qualityurl.replace(/\\\//g, '/').trim();
-      if (/http.*?:\/\//.test(qualityurl)) {
-        qualityurl = qualityurl;
-//        qualityurl = qualityurl + '.mp4';
-      }
-      else if (/\/\//.test(qualityurl)) {
-        qualityurl = HTTPS + qualityurl.replace(/(http:|https:|\/\/)/g, '').trim();
-//        qualityurl = HTTPS + qualityurl.replace(/(http:|https:|\/\/)/g, '').trim() + '.mp4';
-      }
-      else {
-        qualityurl = HTTPS + BASE_URL + qualityurl;
-//        qualityurl = HTTPS + BASE_URL + qualityurl + '.mp4';
-      }
-    }
-    catch (err) {
-      qualityurl = '';
-    }
-//    qualityurl = showtime.entityDecode(qualityurl);
-//    qualityurl = unescape(qualityurl);
-//    qualityurl = decodeURIComponent(qualityurl);
-    var logoquality;
-//    logoquality = LOGOHD;
-    if (/720/.test(qualityname)) {
-      logoquality = LOGO720;
-    }
-    else if (/1080/.test(qualityname)) {
-      logoquality = LOGO1080;
-    }
-    else if (/2160/.test(qualityname)) {
-      logoquality = LOGO4K;
-    }
-    else {
-      logoquality = LOGONONE;
-//      logoquality = LOGOHD;
-    }
-    var backdrops = [];
-    try {
-//      backdrops.push({url: icon});
-      backdrops.push({url: poster});
-//      backdrops.push({url: LOGOICON});
-//      backdrops.push({url: LOGOLOGO});
-//      backdrops.push({url: LOGO});
-    }
-    catch (err) {
-      backdrops.push({url: icon});
-//      backdrops.push({url: poster});
-//      backdrops.push({url: LOGOICON});
-//      backdrops.push({url: LOGOLOGO});
-//      backdrops.push({url: LOGO});
-//      backdrops.push({url: ''});
-    }
-    var uri;
-    uri = qualityurl;
-//    uri = escape(qualityurl);
-//    uri = encodeURIComponent(qualityurl);
-//    page.appendItem(uri, 'directory', {
-//    page.appendItem(uri, 'video', {
-    page.appendItem(uri, service.list, {
-//      title: new showtime.RichText(title),
-//      title: new RichText(title),
-//      title: new showtime.RichText(qualityname),
-      title: new RichText(qualityname),
-      icon: icon,
-//      icon: poster,
-//      icon: LOGOICON,
-//      icon: LOGOLOGO,
-//      icon: LOGONONE,
-//      icon: logoquality,
-//      icon: '',
-      backdrops: backdrops,
-//      genre: new showtime.RichText((season ? season + ' / ' : '') + (serie ? serie : '')),
-//      genre: new RichText((season ? season + ' / ' : '') + (serie ? serie : '')),
-//      genre: new showtime.RichText((season ? coloredStr(season + ' / ', orange) : '') + (serie ? coloredStr(serie, orange) : '')),
-//      genre: new RichText((season ? coloredStr(season + ' / ', orange) : '') + (serie ? coloredStr(serie, orange) : '')),
-//      genre: new showtime.RichText((season ? coloredStr('Сезон: ', gray) + season + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + serie : '')),
-//      genre: new RichText((season ? coloredStr('Сезон: ', gray) + season + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + serie : '')),
-//      genre: new showtime.RichText((season ? coloredStr('Сезон: ', gray) + coloredStr(season, orange) + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + coloredStr(serie, orange) : '')),
-      genre: new RichText((season ? coloredStr('Сезон: ', gray) + coloredStr(season, orange) + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + coloredStr(serie, orange) : '')),
-//      source: new showtime.RichText(translationid ? translationid : ''),
-//      source: new RichText(translationid ? translationid : ''),
-//      source: new showtime.RichText(translationid ? coloredStr(translationid, blue) : ''),
-//      source: new RichText(translationid ? coloredStr(translationid, blue) : ''),
-//      source: new showtime.RichText(translationid ? coloredStr('Перевод: ', gray) + translationid : ''),
-//      source: new RichText(translationid ? coloredStr('Перевод: ', gray) + translationid : ''),
-//      source: new showtime.RichText(translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : ''),
-//      source: new RichText(translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : ''),
-//      source: new showtime.RichText(translation ? translation : ''),
-//      source: new RichText(translation ? translation : ''),
-//      source: new showtime.RichText(translation ? coloredStr(translation, blue) : ''),
-//      source: new RichText(translation ? coloredStr(translation, blue) : ''),
-//      source: new showtime.RichText(translation ? coloredStr('Перевод: ', gray) + translation : ''),
-//      source: new RichText(translation ? coloredStr('Перевод: ', gray) + translation : ''),
-//      source: new showtime.RichText(translation ? coloredStr('Перевод: ', gray) + coloredStr(translation, blue) : ''),
-//      source: new RichText(translation ? coloredStr('Перевод: ', gray) + coloredStr(translation, blue) : ''),
-//      source: new showtime.RichText((translationid ? translationid : '') + (translation ? ' [' + translation + ']' : '')),
-//      source: new RichText((translationid ? translationid : '') + (translation ? ' [' + translation + ']' : '')),
-//      source: new showtime.RichText((translationid ? coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
-//      source: new RichText((translationid ? coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
-//      source: new showtime.RichText((translationid ? coloredStr('Перевод: ', gray) + translationid : '') + (translation ? ' [' + translation + ']' : '')),
-//      source: new RichText((translationid ? coloredStr('Перевод: ', gray) + translationid : '') + (translation ? ' [' + translation + ']' : '')),
-//      source: new showtime.RichText((translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
-      source: new RichText((translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
-//      tagline: new showtime.RichText(coloredStr(title, gray)),
-      tagline: new RichText(coloredStr(title, gray)),
-//      tagline: new showtime.RichText(coloredStr(qualityname, gray)),
-//      tagline: new RichText(coloredStr(qualityname, gray)),
-//      description: new showtime.RichText(coloredStr(title, gray)),
-//      description: new RichText(coloredStr(title, gray)),
-//      description: new showtime.RichText(qualityname ? coloredStr(qualityname, gray) : ''),
-//      description: new RichText(qualityname ? coloredStr(qualityname, gray) : ''),
-//      description: new showtime.RichText(qualityname ? coloredStr('Качество: ', gray) + qualityname : ''),
-//      description: new RichText(qualityname ? coloredStr('Качество: ', gray) + qualityname : ''),
-//      description: new showtime.RichText(translation ? coloredStr('Перевод: ', gray) + translation : ''),
-//      description: new RichText(translation ? coloredStr('Перевод: ', gray) + translation : ''),
-//      description: new showtime.RichText(coloredStr(title, gray) + '<br>' + (translation ? coloredStr('Перевод: ', gray) + translation : '')),
-//      description: new RichText(coloredStr(title, gray) + '<br>' + (translation ? coloredStr('Перевод: ', gray) + translation : '')),
-//      description: new showtime.RichText((qualityname ? coloredStr(qualityname, gray) + '<br>' : '') + (translation ? coloredStr('Перевод: ', gray) + translation : '')),
-//      description: new RichText((qualityname ? coloredStr(qualityname, gray) + '<br>' : '') + (translation ? coloredStr('Перевод: ', gray) + translation : '')),
-//      description: new showtime.RichText((season ? coloredStr('Сезон: ', gray) + season + ' ' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translation ? coloredStr('Перевод: ', gray) + translation : '')),
-//      description: new RichText((season ? coloredStr('Сезон: ', gray) + season + ' ' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translation ? coloredStr('Перевод: ', gray) + translation : '')),
-//      description: new showtime.RichText((season ? coloredStr('Сезон: ', gray) + season + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translationid ? coloredStr('Перевод: ', gray) + translationid + '<br>' : '') + (qualityname ? coloredStr('Качество: ', gray) + qualityname : '')),
-//      description: new RichText((season ? coloredStr('Сезон: ', gray) + season + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translationid ? coloredStr('Перевод: ', gray) + translationid + '<br>' : '') + (qualityname ? coloredStr('Качество: ', gray) + qualityname : '')),
-//      description: new showtime.RichText((season ? coloredStr('Сезон: ', gray) + season + ' ' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translation ? coloredStr('Перевод: ', gray) + translation : '') + '<br>' + (qualityname ? coloredStr('Качество: ', gray) + qualityname : '')),
-//      description: new RichText((season ? coloredStr('Сезон: ', gray) + season + ' ' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translation ? coloredStr('Перевод: ', gray) + translation : '') + '<br>' + (qualityname ? coloredStr('Качество: ', gray) + qualityname : '')),
-//      description: new showtime.RichText((season ? coloredStr('Сезон: ', gray) + season + ' ' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translationid ? coloredStr('Перевод: ', gray) + translationid : '') + (translation ? ' [' + translation + ']' : '') + '<br>' + (qualityname ? coloredStr('Качество: ', gray) + qualityname : '')),
-      description: new RichText((season ? coloredStr('Сезон: ', gray) + season + ' ' : '') + (serie ? coloredStr('Серия: ', gray) + serie + '<br>' : '') + (translationid ? coloredStr('Перевод: ', gray) + translationid : '') + (translation ? ' [' + translation + ']' : '') + '<br>' + (qualityname ? coloredStr('Качество: ', gray) + qualityname : '')),
-    });
-    page.entries++;
-    match = re.exec(doc);
-  }
+      var item = page.appendItem(doc, service.list, {
+        title: new RichText(title),
+        icon: icon,
+        backdrops: poster ? [{url: poster}] : [{url: icon}],
+        genre: new RichText((season ? coloredStr('Сезон: ', gray) + coloredStr(season, orange) + '<br>' : '') + (serie ? coloredStr('Серия: ', gray) + coloredStr(serie, orange) : '')),
+        source: new RichText((translationid ? coloredStr('Перевод: ', gray) + coloredStr(translationid, blue) : '') + (translation ? coloredStr(' [' + translation + ']', blue) : '')),
+        tagline: new RichText(coloredStr(title, gray))});
+        page.entries++;
+    return;
 };
 //function scrapertakedwn(page, doc) {
 function scrapertakedwn(page, doc, title, icon, poster, season) {
