@@ -6131,7 +6131,9 @@ new page.Route(PREFIX + ':cdnlandpage:(.*)~(.*)~(.*)', function (page, url, titl
                 var qit = epl[q] || {};
                 // Revert translator id/name derivation to earlier stable approach: only from qit
                 var tname = qit.title || qit.comment || '';
-                var tid = (qit.translator || qit.translationid || tname || '0') + '';
+                var tid = qit.translator || tname;
+                if (!tid) continue;
+                tid = tid + '';
                 if (!trIndex[tid]) trIndex[tid] = { id: tid, name: tname || ('Перевод ' + tid), seasons: {} };
                 var T = trIndex[tid];
                 if (!T.seasons[S.id || (S.num+'')]) T.seasons[S.id || (S.num+'')] = { id: (S.id || (S.num+'')), num: S.num, label: S.label, poster: S.poster, episodes: [] };
