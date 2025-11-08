@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <limits.h>
 
 #include "glw.h"
 #include "glw_texture.h"
@@ -964,6 +965,73 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
 }
 
 /**
+ * Handle mouse clicks to position cursor
+ */
+static int
+glw_text_bitmap_pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
+{
+  glw_text_bitmap_t *gtb = (glw_text_bitmap_t *)w;
+  
+  // Only handle for text input widgets, not labels
+  if(w->glw_class != &glw_text)
+    return 0;
+  
+  // Only handle left click press
+  if(gpe->type != GLW_POINTER_LEFT_PRESS)
+    return 0;
+  
+  // Need rendered text with character positions
+  image_component_t *ic = image_find_component(gtb->gtb_image, IMAGE_TEXT_INFO);
+  if(ic == NULL)
+    return 0;
+  
+  image_component_text_info_t *ti = &ic->text_info;
+  if(ti->ti_charpos == NULL)
+    return 0;
+  
+  // Convert local_x (-1 to 1) to pixel coordinates
+  // Get the widget dimensions from last layout
+  int width = gtb->gtb_saved_width;
+  if(width <= 0)
+    return 0;
+  
+  // Convert from [-1, 1] to pixel offset from left edge
+  int click_x = (int)((gpe->local_x + 1.0f) * width / 2.0f);
+  
+  // Adjust for padding
+  click_x -= gtb->gtb_padding[0];
+  
+  // Find closest character position
+  int best_pos = 0;
+  int best_dist = INT_MAX;
+  
+  for(int i = 0; i <= gtb->gtb_uc_len && i <= ti->ti_charposlen; i++) {
+    int char_x;
+    if(i < ti->ti_charposlen) {
+      char_x = ti->ti_charpos[i * 2];
+    } else if(ti->ti_charposlen > 0) {
+      // Position after last character
+      char_x = ti->ti_charpos[(ti->ti_charposlen - 1) * 2];
+    } else {
+      char_x = 0;
+    }
+    
+    int dist = abs(char_x - click_x);
+    if(dist < best_dist) {
+      best_dist = dist;
+      best_pos = i;
+    }
+  }
+  
+  // Update cursor position
+  gtb->gtb_edit_ptr = best_pos;
+  gtb->gtb_selection_start = -1; // Clear selection
+  gtb->gtb_update_cursor = 1;
+  
+  return 0;
+}
+
+/**
  *
  */
 static void
@@ -1798,6 +1866,7 @@ static glw_class_t glw_text = {
   .gc_update_text = update_text,
   .gc_set_desc = set_description,
   .gc_bubble_event = glw_text_bitmap_event,
+  .gc_pointer_event = glw_text_bitmap_pointer_event,
 
 };
 
