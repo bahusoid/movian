@@ -92,6 +92,9 @@ typedef struct glw_text_bitmap {
   int16_t gtb_saved_height;
 
   int16_t gtb_edit_ptr;
+  
+  int16_t gtb_selection_start; /* Selection start position, -1 if no selection */
+  int16_t gtb_selection_end;   /* Selection end position */
 
   int16_t gtb_padding[4];
 
@@ -657,13 +660,49 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
 
   if(event_is_action(e, ACTION_BS)) {
 
-    del_char(gtb);
-    gtb_notify(gtb);
+    // Delete selection if exists, otherwise delete single char
+    if(gtb->gtb_selection_start >= 0) {
+      int start = gtb->gtb_selection_start;
+      int end = gtb->gtb_selection_end;
+      if(start > end) {
+        int tmp = start;
+        start = end;
+        end = tmp;
+      }
+      // Delete selected text
+      int delete_count = end - start;
+      for(int i = 0; i < delete_count; i++) {
+        gtb->gtb_edit_ptr = start;
+        del_char(gtb);
+      }
+      gtb->gtb_selection_start = -1;
+      gtb_notify(gtb);
+    } else {
+      del_char(gtb);
+      gtb_notify(gtb);
+    }
     return 1;
 
   } else if(event_is_type(e, EVENT_UNICODE)) {
 
     event_int_t *eu = (event_int_t *)e;
+
+    // If there's a selection, delete it first
+    if(gtb->gtb_selection_start >= 0) {
+      int start = gtb->gtb_selection_start;
+      int end = gtb->gtb_selection_end;
+      if(start > end) {
+        int tmp = start;
+        start = end;
+        end = tmp;
+      }
+      int delete_count = end - start;
+      for(int i = 0; i < delete_count; i++) {
+        gtb->gtb_edit_ptr = start;
+        del_char(gtb);
+      }
+      gtb->gtb_selection_start = -1;
+    }
 
     if(insert_char(gtb, eu->val))
       gtb_notify(gtb);
@@ -671,20 +710,105 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
 
   } else if(event_is_type(e, EVENT_INSERT_STRING)) {
     event_payload_t *ep = (event_payload_t *)e;
+    
+    // If there's a selection, delete it first
+    if(gtb->gtb_selection_start >= 0) {
+      int start = gtb->gtb_selection_start;
+      int end = gtb->gtb_selection_end;
+      if(start > end) {
+        int tmp = start;
+        start = end;
+        end = tmp;
+      }
+      int delete_count = end - start;
+      for(int i = 0; i < delete_count; i++) {
+        gtb->gtb_edit_ptr = start;
+        del_char(gtb);
+      }
+      gtb->gtb_selection_start = -1;
+    }
+    
     insert_str(gtb, ep->payload);
     return 1;
 
   } else if(event_is_action(e, ACTION_PASTE)) {
 
     rstr_t *str = clipboard_get();
-    if(str != NULL)
+    if(str != NULL) {
+      // If there's a selection, delete it first
+      if(gtb->gtb_selection_start >= 0) {
+        int start = gtb->gtb_selection_start;
+        int end = gtb->gtb_selection_end;
+        if(start > end) {
+          int tmp = start;
+          start = end;
+          end = tmp;
+        }
+        int delete_count = end - start;
+        for(int i = 0; i < delete_count; i++) {
+          gtb->gtb_edit_ptr = start;
+          del_char(gtb);
+        }
+        gtb->gtb_selection_start = -1;
+      }
       insert_str(gtb, rstr_get(str));
+    }
     rstr_release(str);
+    return 1;
+
+  } else if(event_is_action(e, ACTION_COPY)) {
+
+    // Copy selected text or all text if no selection
+    gtb_caption_refresh(gtb);
+    
+    if(gtb->gtb_selection_start >= 0) {
+      // Copy selected text
+      int start = gtb->gtb_selection_start;
+      int end = gtb->gtb_selection_end;
+      if(start > end) {
+        int tmp = start;
+        start = end;
+        end = tmp;
+      }
+      
+      if(end > start && gtb->gtb_uc_buffer != NULL) {
+        // Convert selected unicode to UTF-8
+        int bufsize = (end - start) * 6 + 1; // Max 6 bytes per unicode char
+        char *buf = malloc(bufsize);
+        char *p = buf;
+        for(int i = start; i < end && i < gtb->gtb_uc_len; i++) {
+          p += utf8_put(p, gtb->gtb_uc_buffer[i]);
+        }
+        *p = '\0';
+        
+        if(gconf.clipboard_set) {
+          gconf.clipboard_set(buf);
+        }
+        free(buf);
+      }
+    } else if(gtb->gtb_caption != NULL) {
+      // Copy all text
+      if(gconf.clipboard_set) {
+        gconf.clipboard_set(gtb->gtb_caption);
+      }
+    }
+    return 1;
+
+  } else if(event_is_action(e, ACTION_SELECT)) {
+    
+    // Select all text
+    gtb->gtb_selection_start = 0;
+    gtb->gtb_selection_end = gtb->gtb_uc_len;
+    gtb->gtb_edit_ptr = gtb->gtb_uc_len;
+    gtb->gtb_update_cursor = 1;
     return 1;
 
   } else if(event_is_action(e, ACTION_LEFT)) {
 
+    // Check if Shift is held (would be indicated by a flag in the event)
+    // For now, just move cursor without selection
     if(gtb->gtb_edit_ptr > 0) {
+      gtb->gtb_selection_start = -1; // Clear selection
       gtb->gtb_edit_ptr--;
       gtb->gtb_update_cursor = 1;
     }
@@ -693,6 +817,7 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
   } else if(event_is_action(e, ACTION_RIGHT)) {
 
     if(gtb->gtb_edit_ptr < gtb->gtb_uc_len) {
+      gtb->gtb_selection_start = -1; // Clear selection
       gtb->gtb_edit_ptr++;
       gtb->gtb_update_cursor = 1;
     }
@@ -892,6 +1017,8 @@ glw_text_bitmap_ctor(glw_t *w)
 
   w->glw_flags2 |= GLW2_FOCUS_ON_CLICK;
   gtb->gtb_edit_ptr = 0;
+  gtb->gtb_selection_start = -1;  // No selection initially
+  gtb->gtb_selection_end = 0;
   gtb->gtb_size_scale = 1.0;
   gtb->gtb_color.r = 1.0;
   gtb->gtb_color.g = 1.0;
