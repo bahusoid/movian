@@ -27,6 +27,7 @@ typedef struct glw_list {
   int16_t saved_height;
   int16_t saved_width;
   int16_t spacing;
+  int16_t scroll_to_me_countdown;
 
   int16_t padding[4];
 
@@ -72,6 +73,7 @@ glw_list_layout_y(glw_t *w, const glw_rctx_t *rc)
   if(l->gsc.scroll_to_me != NULL) {
 
     ypos = l->gsc.scroll_threshold_pre;
+    int found = 0;
     TAILQ_FOREACH(c, &w->glw_childs, glw_parent_link) {
       if(c->glw_flags & GLW_HIDDEN)
         continue;
@@ -99,12 +101,20 @@ glw_list_layout_y(glw_t *w, const glw_rctx_t *rc)
             l->w.glw_flags |= GLW_UPDATE_METRICS;
           glw_schedule_refresh(w->glw_root, 0);
         }
+        found = 1;
+        // Set countdown to keep scroll_to_me for a few frames
+        l->scroll_to_me_countdown = 3;
       }
 
       ypos += height;
       ypos += l->spacing;
     }
-    l->gsc.scroll_to_me = NULL;
+
+    // Only clear scroll_to_me after countdown expires
+    if(found && l->scroll_to_me_countdown > 0 && --l->scroll_to_me_countdown == 0)
+    {
+      l->gsc.scroll_to_me = NULL;
+    }
   }
 
   glw_scroll_layout(&l->gsc, w, rc->rc_height);
@@ -188,7 +198,7 @@ glw_list_layout_x(glw_t *w, const glw_rctx_t *rc)
   }
 
   l->gsc.rounded_pos = l->gsc.filtered_pos;
-
+  int found = 0;
   TAILQ_FOREACH(c, &w->glw_childs, glw_parent_link) {
     if(c->glw_flags & GLW_HIDDEN)
       continue;
@@ -212,7 +222,6 @@ glw_list_layout_x(glw_t *w, const glw_rctx_t *rc)
     }
 
     if(c == l->gsc.scroll_to_me) {
-      l->gsc.scroll_to_me = NULL;
       if(xpos - l->gsc.rounded_pos < l->gsc.scroll_threshold_pre) {
 	l->gsc.target_pos = xpos - l->gsc.scroll_threshold_pre;
         if(glw_is_focused(w))
@@ -222,6 +231,9 @@ glw_list_layout_x(glw_t *w, const glw_rctx_t *rc)
         if(glw_is_focused(w))
           l->w.glw_flags |= GLW_UPDATE_METRICS;
       }
+      found = 1;
+      // Set countdown to keep scroll_to_me for a few frames
+      l->scroll_to_me_countdown = 3;
     }
 
     xpos += rc0.rc_width;
@@ -237,6 +249,12 @@ glw_list_layout_x(glw_t *w, const glw_rctx_t *rc)
 
   if(l->w.glw_flags & GLW_UPDATE_METRICS)
     glw_scroll_update_metrics(&l->gsc, w);
+
+  // Only clear scroll_to_me after countdown expires
+  if(found && l->scroll_to_me_countdown > 0 && --l->scroll_to_me_countdown == 0)
+  {
+    l->gsc.scroll_to_me = NULL;
+  }
 }
 
 
@@ -501,6 +519,7 @@ glw_list_callback(glw_t *w, void *opaque, glw_signal_t signal, void *extra)
     break;
 
   case GLW_SIGNAL_FOCUS_CHILD_INTERACTIVE:
+  case GLW_SIGNAL_FOCUS_CHILD_AUTOMATIC:
     scroll_to_me(l, extra);
     l->gsc.suggest_cnt = 0;
     w->glw_flags &= ~GLW_FLOATING_FOCUS;

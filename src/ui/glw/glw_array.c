@@ -42,6 +42,8 @@ typedef struct glw_array {
   int16_t yspacing;
 
   int16_t scroll_threshold;
+  
+  int16_t scroll_to_me_countdown;
 
   int num_visible_childs;
 
@@ -84,6 +86,7 @@ grid_layout_row(glw_array_t *a, glw_rctx_t *rc,
 
   assert(rh >= 0);
 
+  int found = 0;
   for(int i = 0; i < cols; i++) {
     glw_t *c = rowvector[i];
 
@@ -96,8 +99,6 @@ grid_layout_row(glw_array_t *a, glw_rctx_t *rc,
       const int screen_pos = ypos - a->gsc.rounded_pos;
       const int bottom_scroll_pos = height - a->gsc.scroll_threshold_post;
 
-
-      a->gsc.scroll_to_me = NULL;
       if(screen_pos < a->gsc.scroll_threshold_pre) {
         a->gsc.target_pos = ypos - a->gsc.scroll_threshold_pre;
         if(glw_is_focused(&a->w))
@@ -109,6 +110,9 @@ grid_layout_row(glw_array_t *a, glw_rctx_t *rc,
           a->w.glw_flags |= GLW_UPDATE_METRICS;
         glw_schedule_refresh(a->w.glw_root, 0);
       }
+      found = 1;
+      // Set countdown to keep scroll_to_me for a few frames
+      a->scroll_to_me_countdown = 3;
     }
 
     if(cd->pos_fy - a->gsc.rounded_pos > -height &&
@@ -118,6 +122,12 @@ grid_layout_row(glw_array_t *a, glw_rctx_t *rc,
       glw_layout0(c, rc);
     }
   }
+    // Only clear scroll_to_me after countdown expires
+    if(found && a->scroll_to_me_countdown > 0 && --a->scroll_to_me_countdown == 0)
+    {
+      a->gsc.scroll_to_me = NULL;
+    }
+
   *num_columnsp = 0;
   *req_row_heightp = 0;
   return rh;
@@ -447,6 +457,7 @@ glw_array_callback(glw_t *w, void *opaque, glw_signal_t signal, void *extra)
     break;
 
   case GLW_SIGNAL_FOCUS_CHILD_INTERACTIVE:
+  case GLW_SIGNAL_FOCUS_CHILD_AUTOMATIC:
     scroll_to_me(a, extra);
     a->gsc.suggest_cnt = 0;
     w->glw_flags &= ~GLW_FLOATING_FOCUS;
