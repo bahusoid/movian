@@ -66,6 +66,7 @@ typedef struct glw_text_bitmap {
   glw_renderer_t gtb_text_renderer;
   glw_renderer_t gtb_cursor_renderer;
   glw_renderer_t gtb_background_renderer;
+  glw_renderer_t gtb_selection_renderer;
 
 
   uint32_t *gtb_uc_buffer; /* unicode buffer */
@@ -115,6 +116,7 @@ typedef struct glw_text_bitmap {
   uint8_t gtb_need_layout : 1;
   uint8_t gtb_deferred_realize : 1;
   uint8_t gtb_caption_dirty : 1;
+  uint8_t gtb_update_selection : 1;
 
 } glw_text_bitmap_t;
 
@@ -371,6 +373,61 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
     gtb->gtb_update_cursor = 0;
   }
 
+  // Update selection renderer position
+  if(w->glw_class == &glw_text && (gtb->gtb_update_selection || gtb->gtb_update_cursor)) {
+    
+    if(gtb->gtb_selection_start >= 0 && ti != NULL && ti->ti_charpos != NULL) {
+      int start = gtb->gtb_selection_start;
+      int end = gtb->gtb_selection_end;
+      
+      // Normalize selection (swap if needed)
+      if(start > end) {
+        int tmp = start;
+        start = end;
+        end = tmp;
+      }
+      
+      if(end > start) {
+        // Initialize selection renderer if needed
+        if(unlikely(!glw_renderer_initialized(&gtb->gtb_selection_renderer))) {
+          glw_renderer_init_quad(&gtb->gtb_selection_renderer);
+        }
+        
+        int left_pos, right_pos;
+        
+        // Get pixel positions from character position array
+        if(start < ti->ti_charposlen) {
+          left_pos = ti->ti_charpos[start * 2];
+        } else {
+          left_pos = 0;
+        }
+        
+        if(end < ti->ti_charposlen) {
+          right_pos = ti->ti_charpos[end * 2];
+        } else if(ti->ti_charposlen > 0) {
+          right_pos = ti->ti_charpos[ti->ti_charposlen * 2 - 1];
+        } else {
+          right_pos = left_pos;
+        }
+        
+        left_pos  += gtb->gtb_padding[0];
+        right_pos += gtb->gtb_padding[0];
+        
+        float x1 = -1.0f + 2.0f * left_pos  / (float)rc->rc_width;
+        float x2 = -1.0f + 2.0f * right_pos / (float)rc->rc_width;
+        float y1 = -1.0f + 2.0f * gtb->gtb_padding[3] / (float)rc->rc_height;
+        float y2 =  1.0f - 2.0f * gtb->gtb_padding[1] / (float)rc->rc_height;
+        
+        glw_renderer_vtx_pos(&gtb->gtb_selection_renderer, 0, x1, y1, 0.0);
+        glw_renderer_vtx_pos(&gtb->gtb_selection_renderer, 1, x2, y1, 0.0);
+        glw_renderer_vtx_pos(&gtb->gtb_selection_renderer, 2, x2, y2, 0.0);
+        glw_renderer_vtx_pos(&gtb->gtb_selection_renderer, 3, x1, y2, 0.0);
+      }
+    }
+    
+    gtb->gtb_update_selection = 0;
+  }
+
   gtb->gtb_paint_cursor =
     gtb->gtb_flags & GTB_PERMANENT_CURSOR ||
     (w->glw_class == &glw_text && (glw_is_focused(w) || gr->gr_osk_widget == w));
@@ -428,6 +485,20 @@ glw_text_bitmap_render(glw_t *w, const glw_rctx_t *rc)
 		      &gtb->gtb_color, NULL, alpha, blur, NULL);
   }
 
+  // Draw selection highlight
+  if(w->glw_class == &glw_text && gtb->gtb_selection_start >= 0) {
+    int start = gtb->gtb_selection_start;
+    int end = gtb->gtb_selection_end;
+    if(start != end && glw_renderer_initialized(&gtb->gtb_selection_renderer)) {
+      glw_zinc(&rc0);
+      
+      // Use a semi-transparent blue for selection
+      glw_rgb_t selection_color = { .r = 0.3, .g = 0.5, .b = 0.8 };
+      glw_renderer_draw(&gtb->gtb_selection_renderer, w->glw_root, &rc0,
+                       NULL, NULL, &selection_color, NULL, alpha * 0.4, blur, NULL);
+    }
+  }
+
   if(gtb->gtb_paint_cursor) {
     glw_root_t *gr = w->glw_root;
     float a = cos((gr->gr_frames & 2047) * (360.0f / 2048.0f)) * 0.5f + 0.5f;
@@ -463,6 +534,7 @@ glw_text_bitmap_dtor(glw_t *w)
   glw_renderer_free(&gtb->gtb_text_renderer);
   glw_renderer_free(&gtb->gtb_cursor_renderer);
   glw_renderer_free(&gtb->gtb_background_renderer);
+  glw_renderer_free(&gtb->gtb_selection_renderer);
 
   switch(gtb->gtb_state) {
   case GTB_IDLE:
@@ -801,12 +873,12 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
     gtb->gtb_selection_end = gtb->gtb_uc_len;
     gtb->gtb_edit_ptr = gtb->gtb_uc_len;
     gtb->gtb_update_cursor = 1;
+    gtb->gtb_update_selection = 1;
     return 1;
 
   } else if(event_is_action(e, ACTION_LEFT)) {
 
-    // Check if Shift is held (would be indicated by a flag in the event)
-    // For now, just move cursor without selection
+    // Move cursor left without selection
     if(gtb->gtb_edit_ptr > 0) {
       gtb->gtb_selection_start = -1; // Clear selection
       gtb->gtb_edit_ptr--;
@@ -816,10 +888,43 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
 
   } else if(event_is_action(e, ACTION_RIGHT)) {
 
+    // Move cursor right without selection
     if(gtb->gtb_edit_ptr < gtb->gtb_uc_len) {
       gtb->gtb_selection_start = -1; // Clear selection
       gtb->gtb_edit_ptr++;
       gtb->gtb_update_cursor = 1;
+    }
+    return 1;
+
+  } else if(event_is_action(e, ACTION_MOVE_LEFT)) {
+
+    // Shift+Left: Extend/create selection to the left
+    if(gtb->gtb_edit_ptr > 0) {
+      if(gtb->gtb_selection_start < 0) {
+        // Start new selection
+        gtb->gtb_selection_start = gtb->gtb_edit_ptr;
+        gtb->gtb_selection_end = gtb->gtb_edit_ptr;
+      }
+      gtb->gtb_edit_ptr--;
+      gtb->gtb_selection_end = gtb->gtb_edit_ptr;
+      gtb->gtb_update_cursor = 1;
+      gtb->gtb_update_selection = 1;
+    }
+    return 1;
+
+  } else if(event_is_action(e, ACTION_MOVE_RIGHT)) {
+
+    // Shift+Right: Extend/create selection to the right
+    if(gtb->gtb_edit_ptr < gtb->gtb_uc_len) {
+      if(gtb->gtb_selection_start < 0) {
+        // Start new selection
+        gtb->gtb_selection_start = gtb->gtb_edit_ptr;
+        gtb->gtb_selection_end = gtb->gtb_edit_ptr;
+      }
+      gtb->gtb_edit_ptr++;
+      gtb->gtb_selection_end = gtb->gtb_edit_ptr;
+      gtb->gtb_update_cursor = 1;
+      gtb->gtb_update_selection = 1;
     }
     return 1;
 
