@@ -98,6 +98,15 @@ typedef struct glw_x11 {
   struct x11_screensaver_state *sss;
 
   Atom atom_deletewindow;
+  
+  // Clipboard atoms
+  Atom atom_clipboard;
+  Atom atom_utf8_string;
+  Atom atom_targets;
+  Atom atom_text;
+  Atom atom_string;
+  
+  char *clipboard_text;
 
   int wm_flags;
 #define GX11_WM_DETECTED       0x1 // A window manager is present
@@ -113,6 +122,8 @@ typedef struct glw_x11 {
 
 } glw_x11_t;
 
+// Global reference to the current X11 GLW instance for clipboard access
+static glw_x11_t *g_gx11 = NULL;
 
 /**
  *
@@ -391,6 +402,95 @@ window_close(glw_x11_t *gx11)
   XDestroyWindow(gx11->display, gx11->win);
   glXDestroyContext(gx11->display, gx11->glxctx);
   XFreeColormap(gx11->display, gx11->colormap);
+  free(gx11->clipboard_text);
+  gx11->clipboard_text = NULL;
+}
+
+
+/**
+ * X11 Clipboard get function
+ * Requests the clipboard content from the X server
+ */
+static rstr_t *
+clipboard_get_x11(void)
+{
+  if(g_gx11 == NULL || g_gx11->display == NULL)
+    return NULL;
+    
+  glw_x11_t *gx11 = g_gx11;
+  
+  // Request clipboard content
+  XConvertSelection(gx11->display, gx11->atom_clipboard,
+                    gx11->atom_utf8_string, gx11->atom_clipboard,
+                    gx11->win, CurrentTime);
+  XFlush(gx11->display);
+  
+  // Wait for SelectionNotify event (with timeout)
+  XEvent event;
+  struct timeval start, now;
+  gettimeofday(&start, NULL);
+  
+  while(1) {
+    gettimeofday(&now, NULL);
+    long elapsed_ms = (now.tv_sec - start.tv_sec) * 1000 +
+                      (now.tv_usec - start.tv_usec) / 1000;
+    
+    if(elapsed_ms > 500) // 500ms timeout
+      break;
+      
+    if(XCheckTypedWindowEvent(gx11->display, gx11->win,
+                               SelectionNotify, &event)) {
+      if(event.xselection.property == None)
+        return NULL; // Clipboard is empty or conversion failed
+        
+      Atom actual_type;
+      int actual_format;
+      unsigned long nitems, bytes_after;
+      unsigned char *prop_data = NULL;
+      
+      if(XGetWindowProperty(gx11->display, gx11->win,
+                            gx11->atom_clipboard, 0, 65536, False,
+                            AnyPropertyType, &actual_type, &actual_format,
+                            &nitems, &bytes_after, &prop_data) == Success) {
+        if(prop_data != NULL && nitems > 0) {
+          rstr_t *result = rstr_allocl((const char *)prop_data, nitems);
+          XFree(prop_data);
+          XDeleteProperty(gx11->display, gx11->win, gx11->atom_clipboard);
+          return result;
+        }
+        if(prop_data != NULL)
+          XFree(prop_data);
+      }
+      XDeleteProperty(gx11->display, gx11->win, gx11->atom_clipboard);
+      return NULL;
+    }
+    usleep(1000); // Wait 1ms before checking again
+  }
+  
+  return NULL; // Timeout
+}
+
+
+/**
+ * X11 Clipboard set function
+ * Stores text and claims clipboard ownership
+ */
+static void
+clipboard_set_x11(const char *str)
+{
+  if(g_gx11 == NULL || g_gx11->display == NULL || str == NULL)
+    return;
+    
+  glw_x11_t *gx11 = g_gx11;
+  
+  // Store the text
+  free(gx11->clipboard_text);
+  gx11->clipboard_text = strdup(str);
+  
+  // Claim clipboard ownership
+  XSetSelectionOwner(gx11->display, gx11->atom_clipboard,
+                     gx11->win, CurrentTime);
+  XFlush(gx11->display);
 }
 
 
@@ -629,6 +729,14 @@ glw_x11_init(glw_x11_t *gx11)
 
   gx11->atom_deletewindow =
     XInternAtom(gx11->display, "WM_DELETE_WINDOW", 0);
+  
+  // Initialize clipboard atoms
+  gx11->atom_clipboard = XInternAtom(gx11->display, "CLIPBOARD", 0);
+  gx11->atom_utf8_string = XInternAtom(gx11->display, "UTF8_STRING", 0);
+  gx11->atom_targets = XInternAtom(gx11->display, "TARGETS", 0);
+  gx11->atom_text = XInternAtom(gx11->display, "TEXT", 0);
+  gx11->atom_string = XA_STRING;
+  gx11->clipboard_text = NULL;
 
 #if ENABLE_VDPAU
 
@@ -867,7 +975,22 @@ gl_keypress(glw_x11_t *gx11, XEvent *event)
   }
 #endif
 
-  if(keysym == XK_F12 && state & (ControlMask | ShiftMask)) {
+  // Handle Ctrl+V for paste
+  if(state == ControlMask && (keysym == XK_v || keysym == XK_V)) {
+    e = event_create_action(ACTION_PASTE);
+  }
+  
+  // Handle Ctrl+C for copy
+  if(e == NULL && state == ControlMask && (keysym == XK_c || keysym == XK_C)) {
+    e = event_create_action(ACTION_COPY);
+  }
+  
+  // Handle Ctrl+A for select all
+  if(e == NULL && state == ControlMask && (keysym == XK_a || keysym == XK_A)) {
+    e = event_create_action(ACTION_SELECT);
+  }
+
+  if(e == NULL && keysym == XK_F12 && state & (ControlMask | ShiftMask)) {
     e = event_create(EVENT_MAKE_SCREENSHOT, sizeof(event_t));
   }
 
@@ -1102,6 +1225,49 @@ glw_x11_mainloop(glw_x11_t *gx11)
 	glw_unlock(&gx11->gr);
 	break;
 
+      case SelectionRequest:
+        {
+          // Another app is requesting our clipboard content
+          XSelectionRequestEvent *req = &event.xselectionrequest;
+          XSelectionEvent response;
+          
+          response.type = SelectionNotify;
+          response.display = req->display;
+          response.requestor = req->requestor;
+          response.selection = req->selection;
+          response.target = req->target;
+          response.time = req->time;
+          response.property = None; // Default to failure
+          
+          if(req->selection == gx11->atom_clipboard && gx11->clipboard_text != NULL) {
+            if(req->target == gx11->atom_targets) {
+              // Respond with list of supported targets
+              Atom targets[] = {
+                gx11->atom_utf8_string,
+                gx11->atom_text,
+                gx11->atom_string
+              };
+              XChangeProperty(req->display, req->requestor, req->property,
+                            XA_ATOM, 32, PropModeReplace,
+                            (unsigned char *)targets, 3);
+              response.property = req->property;
+            } else if(req->target == gx11->atom_utf8_string ||
+                      req->target == gx11->atom_text ||
+                      req->target == gx11->atom_string) {
+              // Provide the clipboard text
+              XChangeProperty(req->display, req->requestor, req->property,
+                            req->target, 8, PropModeReplace,
+                            (unsigned char *)gx11->clipboard_text,
+                            strlen(gx11->clipboard_text));
+              response.property = req->property;
+            }
+          }
+          
+          XSendEvent(req->display, req->requestor, False, 0, (XEvent *)&response);
+          XFlush(req->display);
+        }
+        break;
+
       case ButtonPress:
 	gpe.screen_x =  (2.0 * event.xmotion.x / gx11->gr.gr_width ) - 1;
 	gpe.screen_y = -(2.0 * event.xmotion.y / gx11->gr.gr_height) + 1;
@@ -1279,6 +1445,11 @@ glw_x11_thread(void *aux)
 
   if(glw_init(gr))
     return NULL;
+  
+  // Set up clipboard functions
+  g_gx11 = gx11;
+  gconf.clipboard_get = clipboard_get_x11;
+  gconf.clipboard_set = clipboard_set_x11;
 
 #ifdef CONFIG_NVCTRL
   gx11->nvidia = nvidia_init(gx11->display, gx11->screen,
@@ -1315,6 +1486,14 @@ glw_x11_thread(void *aux)
   prop_unsubscribe(evsub);
 
   glw_fini(gr);
+  
+  // Clean up clipboard functions
+  if(g_gx11 == gx11) {
+    g_gx11 = NULL;
+    gconf.clipboard_get = NULL;
+    gconf.clipboard_set = NULL;
+  }
+  
   return NULL;
 }
 
