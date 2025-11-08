@@ -742,11 +742,12 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
         start = end;
         end = tmp;
       }
-      // Delete selected text
+      
+      // Position cursor at start and delete chars one by one
+      gtb->gtb_edit_ptr = end; // Start from end position
       int delete_count = end - start;
       for(int i = 0; i < delete_count; i++) {
-        gtb->gtb_edit_ptr = start;
-        del_char(gtb);
+        del_char(gtb); // This will decrement edit_ptr each time
       }
       gtb->gtb_selection_start = -1;
       gtb_notify(gtb);
@@ -769,9 +770,11 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
         start = end;
         end = tmp;
       }
+      
+      // Position cursor at end and delete backwards
+      gtb->gtb_edit_ptr = end;
       int delete_count = end - start;
       for(int i = 0; i < delete_count; i++) {
-        gtb->gtb_edit_ptr = start;
         del_char(gtb);
       }
       gtb->gtb_selection_start = -1;
@@ -793,9 +796,11 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
         start = end;
         end = tmp;
       }
+      
+      // Position cursor at end and delete backwards
+      gtb->gtb_edit_ptr = end;
       int delete_count = end - start;
       for(int i = 0; i < delete_count; i++) {
-        gtb->gtb_edit_ptr = start;
         del_char(gtb);
       }
       gtb->gtb_selection_start = -1;
@@ -817,9 +822,11 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
           start = end;
           end = tmp;
         }
+        
+        // Position cursor at end and delete backwards
+        gtb->gtb_edit_ptr = end;
         int delete_count = end - start;
         for(int i = 0; i < delete_count; i++) {
-          gtb->gtb_edit_ptr = start;
           del_char(gtb);
         }
         gtb->gtb_selection_start = -1;
