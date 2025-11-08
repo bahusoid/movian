@@ -980,6 +980,14 @@ glw_text_bitmap_pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
   if(gpe->type != GLW_POINTER_LEFT_PRESS)
     return 0;
   
+  // If widget is not focused, put cursor at end
+  if(!glw_is_focused(w)) {
+    gtb->gtb_edit_ptr = gtb->gtb_uc_len;
+    gtb->gtb_selection_start = -1;
+    gtb->gtb_update_cursor = 1;
+    return 0;
+  }
+  
   // Need rendered text with character positions
   image_component_t *ic = image_find_component(gtb->gtb_image, IMAGE_TEXT_INFO);
   if(ic == NULL)
@@ -1001,17 +1009,19 @@ glw_text_bitmap_pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
   // Adjust for padding
   click_x -= gtb->gtb_padding[0];
   
-  // Find closest character position
+  // Find closest character boundary (left or right edge of each character)
   int best_pos = 0;
   int best_dist = INT_MAX;
   
-  for(int i = 0; i <= gtb->gtb_uc_len && i <= ti->ti_charposlen; i++) {
+  for(int i = 0; i <= gtb->gtb_uc_len; i++) {
     int char_x;
+    
     if(i < ti->ti_charposlen) {
+      // Left edge of character i
       char_x = ti->ti_charpos[i * 2];
     } else if(ti->ti_charposlen > 0) {
-      // Position after last character
-      char_x = ti->ti_charpos[(ti->ti_charposlen - 1) * 2];
+      // Position after last character (right edge of last char)
+      char_x = ti->ti_charpos[(ti->ti_charposlen - 1) * 2 + 1];
     } else {
       char_x = 0;
     }
