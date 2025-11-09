@@ -172,6 +172,7 @@ play_video(const char *url, struct media_pipe *mp,
   event_t *e;
   const char *canonical_url;
   htsmsg_t *m = NULL;
+  struct http_header_list *request_headers = NULL;
 
   video_args_t va;
 
@@ -322,10 +323,35 @@ play_video(const char *url, struct media_pipe *mp,
       va.imdb = str;
 
 
+    // Request Headers - allocate dynamically to persist through backend_play_video
+    
+    htsmsg_t *req_headers = htsmsg_get_map(m, "requestHeaders");
+    
+    if(req_headers != NULL) {
+      request_headers = malloc(sizeof(struct http_header_list));
+      LIST_INIT(request_headers);
+      
+      htsmsg_field_t *hf;
+      HTSMSG_FOREACH(hf, req_headers) {
+        const char *value = htsmsg_field_get_string(hf);
+        if(value != NULL && hf->hmf_name != NULL) {
+          http_header_add(request_headers, hf->hmf_name, value, 0);
+        }
+      }
+      va.request_headers = request_headers;
+    } else {
+      va.request_headers = NULL;
+    }
+
+
     // Sources
 
     if((sources = htsmsg_get_list(m, "sources")) == NULL) {
       snprintf(errbuf, errlen, "No sources list in JSON parameters");
+      if(request_headers) {
+        http_headers_free(request_headers);
+        free(request_headers);
+      }
       return NULL;
     }
 
@@ -346,6 +372,10 @@ play_video(const char *url, struct media_pipe *mp,
     if(LIST_FIRST(&vsources) == NULL) {
       snprintf(errbuf, errlen, "No players found for sources");
       vsource_cleanup(&vsources);
+      if(request_headers) {
+        http_headers_free(request_headers);
+        free(request_headers);
+      }
       return NULL;
     }
   
@@ -421,6 +451,13 @@ play_video(const char *url, struct media_pipe *mp,
   }
 
   vsource_cleanup(&vsources);
+  
+  // Clean up request headers
+  if(request_headers) {
+    http_headers_free(request_headers);
+    free(request_headers);
+  }
+  
   if(m)
     htsmsg_release(m);
   return e;

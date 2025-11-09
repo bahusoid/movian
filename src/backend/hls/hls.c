@@ -610,6 +610,8 @@ hls_segment_open(hls_segment_t *hs)
   // Use 8 second timeout for HLS segments - balances responsiveness with network variance
   foe.foe_open_timeout = 8000;
   foe.foe_cancellable = hd->hd_cancellable;
+  // Apply custom request headers from plugin if provided
+  foe.foe_request_headers = h->h_request_headers;
 
   int flags = FA_BUFFERED_BIG | FA_STREAMING;
 
@@ -1737,6 +1739,7 @@ hls_play(hls_t *h, media_pipe_t *mp, char *errbuf, size_t errlen,
   h->h_enqueued_something = 0;
 
   h->h_playback_priority = va->priority;
+  h->h_request_headers = va->request_headers; // Store custom headers from plugin
 
   mp->mp_video.mq_stream = 0;
   mp->mp_audio.mq_stream = 1;

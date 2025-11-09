@@ -78,6 +78,7 @@ typedef struct video_args {
   const char *parent_title;
   prop_t *origin;
   int64_t load_request_timestamp; // For start latency statistics
+  struct http_header_list *request_headers; // Custom HTTP headers for playback
 } video_args_t;
 
 

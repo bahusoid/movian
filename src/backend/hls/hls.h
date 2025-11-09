@@ -257,6 +257,8 @@ typedef struct hls {
 
   hls_error_t h_last_error;
 
+  const struct http_header_list *h_request_headers; // Custom headers from plugin
+
 } hls_t;
 
 
