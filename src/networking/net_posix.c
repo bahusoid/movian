@@ -127,6 +127,29 @@ getstreamsocket(int family, char *errbuf, size_t errbufsize)
   if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)) < 0)
     TRACE(TRACE_INFO, "TCP", "Unable to turn on TCP_NODELAY");
 
+  // Enable TCP keep-alive to prevent idle connections from being killed
+  val = 1;
+  if(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val)) < 0)
+    TRACE(TRACE_INFO, "TCP", "Unable to turn on SO_KEEPALIVE");
+
+#ifdef TCP_KEEPIDLE
+  // Start keep-alive probes after 30 seconds of idle
+  val = 30;
+  setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val));
+#endif
+
+#ifdef TCP_KEEPINTVL
+  // Send probes every 10 seconds
+  val = 10;
+  setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val));
+#endif
+
+#ifdef TCP_KEEPCNT
+  // Drop connection after 3 failed probes
+  val = 3;
+  setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val));
+#endif
+
   return fd;
 }
 
