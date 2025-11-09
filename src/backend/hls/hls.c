@@ -607,7 +607,8 @@ hls_segment_open(hls_segment_t *hs)
   hs->hs_open_time = arch_get_ts();
   hs->hs_blocked_counter = h->h_blocked;
 
-  foe.foe_open_timeout = 3000;
+  // Use 8 second timeout for HLS segments - balances responsiveness with network variance
+  foe.foe_open_timeout = 8000;
   foe.foe_cancellable = hd->hd_cancellable;
 
   int flags = FA_BUFFERED_BIG | FA_STREAMING;
@@ -615,25 +616,52 @@ hls_segment_open(hls_segment_t *hs)
   if(hs->hs_byte_offset != -1)
     flags &= ~FA_STREAMING;
   
-  fh = fa_open_ex(hs->hs_url, errbuf, sizeof(errbuf), flags, &foe);
-
-  if(fh == NULL) {
-
+  // Retry logic for gateway timeouts and transient errors
+  int max_retries = 2;
+  for(int attempt = 0; attempt <= max_retries; attempt++) {
+    fh = fa_open_ex(hs->hs_url, errbuf, sizeof(errbuf), flags, &foe);
+    
+    if(fh != NULL)
+      break;
+      
     if(cancellable_is_cancelled(hd->hd_cancellable))
       return HLS_ERROR_SEGMENT_NOT_FOUND;
-
-    usleep(500000);
+    
+    // Handle specific errors
     if(foe.foe_protocol_error == 404) {
       return HLS_ERROR_SEGMENT_NOT_FOUND;
     } else if(foe.foe_protocol_error == 403) {
       hs->hs_permanent_error = 1;
       return HLS_ERROR_SEGMENT_ACCESS_DENIED;
-    } else {
-      return HLS_ERROR_SEGMENT_BROKEN;
+    } else if(foe.foe_protocol_error == 504 && attempt < max_retries) {
+      // Gateway timeout - retry immediately
+      HLS_TRACE(h, "Got 504 Gateway Timeout, retrying (attempt %d/%d)", 
+                attempt + 2, max_retries + 1);
+      usleep(50000); // 50ms between retries
+      continue;
+    } else if(attempt < max_retries) {
+      // Other errors - retry with short delay
+      HLS_TRACE(h, "Segment open failed (error %d), retrying (attempt %d/%d)", 
+                foe.foe_protocol_error, attempt + 2, max_retries + 1);
+      usleep(100000); // 100ms between retries
+      continue;
     }
+    
+    // All retries exhausted
+    usleep(100000);
+    return HLS_ERROR_SEGMENT_BROKEN;
   }
 
-  fa_set_read_timeout(fh, 3000);
+  if(fh == NULL) {
+    // This should not happen after retry logic, but handle it anyway
+    if(cancellable_is_cancelled(hd->hd_cancellable))
+      return HLS_ERROR_SEGMENT_NOT_FOUND;
+
+    return HLS_ERROR_SEGMENT_BROKEN;
+  }
+
+  // Set read timeout to detect slow/stalled servers quickly
+  fa_set_read_timeout(fh, 8000);
 
   if(hs->hs_byte_size != -1 && hs->hs_byte_offset != -1)
     fh = fa_slice_open(fh, hs->hs_byte_offset, hs->hs_byte_size);
