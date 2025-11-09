@@ -1259,7 +1259,9 @@ http_read_response(http_file_t *hf, struct http_header_list *headers)
   hf->hf_chunked_transfer = 0;
   free(hf->hf_content_type);
   hf->hf_content_type = NULL;
-  hf->hf_max_age = 5;
+  // Use longer timeout for streaming to avoid reconnections between segments
+  // Regular HTTP requests use shorter timeout
+  hf->hf_max_age = hf->hf_streaming ? 60 : 15;
 
   int first_line = 1;
   char *line = NULL;
@@ -1455,6 +1457,30 @@ redirect(http_file_t *hf, int *redircount, char *errbuf, size_t errlen,
 			 hc->hc_hostname, hc->hc_port,
 			 hf->hf_path, hf->hf_location);
 
+  // Check if redirect is to same host:port to enable connection reuse
+  char new_hostname[HOSTNAME_MAX];
+  char new_proto[16];
+  char new_path[URL_MAX];
+  int new_port;
+  int same_host = 0;
+
+  if(hc != NULL) {
+    url_split(new_proto, sizeof(new_proto), NULL, 0,
+              new_hostname, sizeof(new_hostname), &new_port,
+              new_path, sizeof(new_path), newurl);
+    
+    int new_ssl = !strcmp(new_proto, "https") || !strcmp(new_proto, "webdavs");
+    if(new_port < 0)
+      new_port = new_ssl ? 443 : 80;
+
+    same_host = (!strcmp(hc->hc_hostname, new_hostname) &&
+                 hc->hc_port == new_port &&
+                 hc->hc_ssl == new_ssl);
+    
+    if(same_host)
+      HF_TRACE(hf, "Redirect to same host, will reuse connection");
+  }
+
   if(code == 301) {
     add_premanent_redirect(hf->hf_url, newurl);
   } else {
@@ -1473,11 +1499,9 @@ redirect(http_file_t *hf, int *redircount, char *errbuf, size_t errlen,
   if(expect_content && http_drain_content(hf))
     hf->hf_connection_mode = CONNECTION_MODE_CLOSE;
 
-  // Location changed, must detach from connection
-  // We might still be able to reuse it if hostname+port is same
-  // But that's for some other code to figure out
-  http_detach(hf, hf->hf_connection_mode == CONNECTION_MODE_PERSISTENT,
-	      "Location changed");
+  // Reuse connection if redirect is to same host:port
+  http_detach(hf, same_host && hf->hf_connection_mode == CONNECTION_MODE_PERSISTENT,
+	      same_host ? "Location changed (same host)" : "Location changed");
   return 0;
 }
 
@@ -1623,7 +1647,8 @@ http_connect(http_file_t *hf, char *errbuf, int errlen, int allow_reuse,
   if(!hf->hf_path[0])
     strcpy(hf->hf_path, "/");
 
-  const int timeout = hf->hf_connect_timeout ?: 30000;
+  // More reasonable default timeout, can be overridden per-request
+  const int timeout = hf->hf_connect_timeout ?: 10000;
 
   hf->hf_connection = http_connection_get(hostname, port, ssl, errbuf, errlen,
 					  hf->hf_debug, timeout,
@@ -1723,8 +1748,10 @@ http_open0(http_file_t *hf, int probe, char *errbuf, int errlen,
     if(redirect(hf, &redircount, errbuf, errlen, code, 1))
       return -1;
 
-    if(hf->hf_connection_mode == CONNECTION_MODE_CLOSE)
-      http_detach(hf, 0, "Redirect");
+    // Connection may have been parked if redirecting to same host
+    // Only detach if connection was closed or not parked
+    if(hf->hf_connection_mode == CONNECTION_MODE_CLOSE || hf->hf_connection == NULL)
+      http_detach(hf, 0, "Redirect - connection closed");
 
     goto reconnect;
 
@@ -1971,8 +1998,9 @@ http_read_i(http_file_t *hf, void *buf, const size_t size)
         if(redirect(hf, &redircount, NULL, 0, code, 1))
           return -1;
 
-        if(hf->hf_connection_mode == CONNECTION_MODE_CLOSE)
-          http_detach(hf, 0, "Redirect");
+        // Connection may have been parked if redirecting to same host
+        if(hf->hf_connection_mode == CONNECTION_MODE_CLOSE || hf->hf_connection == NULL)
+          http_detach(hf, 0, "Redirect - connection closed");
 
         continue;
 
