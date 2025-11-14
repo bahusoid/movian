@@ -1118,6 +1118,11 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
     sources: [{
       url: [],
     }],
+    requestHeaders: {
+      'Origin': BASE_URL,
+      'Referer': BASE_URL + '/',
+      'Accept-Encoding': 'gzip, deflate, br'
+    },
 //    subtitles: [{
 //      url: resp.subtitle.match(/(\[.*\])(.*)/)[2],
 //      language: resp.subtitle.match(/(\[.*\])(.*)/)[1],
