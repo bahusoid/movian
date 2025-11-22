@@ -1044,6 +1044,44 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   }
 
   if (!data.cdn_url) {
+    // Send async send_save request before playback
+    if (currentUser) {
+      (function sendSaveAsync() {
+        var duration = 0;
+        if (data.metadata && data.metadata.duration) {
+          duration = data.metadata.duration;
+        }
+        var saveData = {
+          post_id: data.series_id || data.id,
+          translator_id: data.translator_id,
+          season: data.season_id,
+          episode: data.episode_id,
+          current_time: 0,
+          duration: duration
+        };
+        try {
+          http.request(BASE_URL + '/ajax/send_save/?t=' + new Date().getTime(), {
+            method: 'POST',
+            headers: {
+              'Accept': '*/*',
+              'Accept-Language': 'ru,en;q=0.9,en-US;q=0.8,uk;q=0.7',
+              'Connection': 'keep-alive',
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'Origin': BASE_URL,
+              'Referer': BASE_URL + '/',
+              'User-Agent': UA,
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            postdata: saveData,
+            async: true
+          });
+          log.d({send_save: saveData});
+        } catch (e) {
+          log.e('send_save async error: ' + e);
+        }
+      })();
+    }
+
     if (data.translator_id) {
       postdata = {
         id: data.series_id || data.id,
