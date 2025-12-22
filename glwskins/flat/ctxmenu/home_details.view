@@ -86,6 +86,12 @@ widget(popup, {
       }, "skin://icons/ic_delete_48px.svg",
            select($args.deleteText, false, true));
 
+      ITEM(_("Move"), {
+        $ui.moveMode = !$ui.moveMode;
+        $clone.itemMenu = void;
+      }, "skin://icons/ic_open_with_48px.svg",
+           false);
+
       cloner($core.itemhooks, container_z, {
         hidden: !($self.itemtype == $args.type || $self.itemtype == void);
         ITEM($self.metadata.title, {

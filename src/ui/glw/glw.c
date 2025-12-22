@@ -179,6 +179,17 @@ glw_dis_screensaver_callback(void *opaque, int value)
 /**
  *
  */
+static void
+glw_move_mode_callback(void *opaque, int value)
+{
+  glw_settings.gs_move_mode = value;
+  TRACE(TRACE_DEBUG, "GLW", "Move mode %s",
+        value ? "enabled" : "disabled");
+}
+
+/**
+ *
+ */
 int
 glw_init(glw_root_t *gr)
 {
@@ -289,6 +300,14 @@ glw_init4(glw_root_t *gr,
                    PROP_TAG_COURIER, gr->gr_courier,
                    NULL);
 
+  gr->gr_move_mode_sub =
+    prop_subscribe(0,
+                   PROP_TAG_CALLBACK_INT, glw_move_mode_callback, gr,
+                   PROP_TAG_NAME("ui", "moveMode"),
+                   PROP_TAG_ROOT, gr->gr_prop_ui,
+                   PROP_TAG_COURIER, gr->gr_courier,
+                   NULL);
+
   TAILQ_INIT(&gr->gr_destroyer_queue);
 
   TAILQ_INIT(&gr->gr_view_load_requests);
@@ -331,6 +350,7 @@ glw_fini(glw_root_t *gr)
   prop_unsubscribe(gr->gr_evsub);
   prop_unsubscribe(gr->gr_scalesub);
   prop_unsubscribe(gr->gr_disable_screensaver_sub);
+  prop_unsubscribe(gr->gr_move_mode_sub);
   prop_courier_destroy(gr->gr_courier);
 
   /*
@@ -2549,6 +2569,41 @@ void
 glw_inject_event(glw_root_t *gr, event_t *e)
 {
   prop_t *p;
+
+  // Remap navigation events to move events when move mode is active
+  if(glw_settings.gs_move_mode) {
+    action_type_t remapped_action = ACTION_NONE;
+    
+    if(event_is_action(e, ACTION_UP))
+      remapped_action = ACTION_MOVE_UP;
+    else if(event_is_action(e, ACTION_DOWN))
+      remapped_action = ACTION_MOVE_DOWN;
+    else if(event_is_action(e, ACTION_LEFT))
+      remapped_action = ACTION_MOVE_LEFT;
+    else if(event_is_action(e, ACTION_RIGHT))
+      remapped_action = ACTION_MOVE_RIGHT;
+    else if(e->e_type == EVENT_ACTION_VECTOR || 
+            e->e_type == EVENT_DYNAMIC_ACTION) {
+      // Any other action exits move mode
+      if(event_is_action(e, ACTION_ACTIVATE) ||
+         event_is_action(e, ACTION_ENTER) ||
+         event_is_action(e, ACTION_OK)) {
+        // Consume activate/enter/ok to prevent opening menu
+        glw_settings.gs_move_mode = 0;
+        event_release(e);
+        return;
+      } else {
+        // Other actions exit move mode but pass through
+        glw_settings.gs_move_mode = 0;
+      }
+    }
+    
+    if(remapped_action != ACTION_NONE) {
+      event_release(e);
+      e = event_create_action(remapped_action);
+      e->e_nav = prop_ref_inc(gr->gr_prop_nav);
+    }
+  }
 
   if(gr->gr_current_focus == NULL &&
      (event_is_action(e, ACTION_NAV_BACK) ||
