@@ -59,10 +59,6 @@ const float glw_identitymtx[16] = {
   0,0,0,1};
 
 
-static void glw_osk_open_default(glw_root_t *gr, const char *title, const char *input,
-                                 glw_t *w, int password);
-
-
 /*
  *
  */
@@ -3241,7 +3237,7 @@ glw_osk_open(glw_root_t *gr, const char *title, const char *input,
 /**
  *
  */
-static void
+void
 glw_osk_open_default(glw_root_t *gr, const char *title, const char *input,
                      glw_t *w, int password)
 {

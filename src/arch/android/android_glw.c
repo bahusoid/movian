@@ -35,6 +35,10 @@
 #include "android.h"
 #include "android_glw.h"
 
+#ifdef ENABLE_GLW_SETTINGS
+#include "ui/glw/glw_settings.h"
+#endif
+
 static android_glw_root_t *permission_glw_root;
 static pthread_mutex_t permission_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t permission_cond = PTHREAD_COND_INITIALIZER;
@@ -45,6 +49,86 @@ static enum {
   PERMISSION_STATE_APPROVED,
   PERMISSION_STATE_DENIED,
 } permission_state;
+
+
+/**
+ * Clipboard functions for Android
+ */
+static void
+android_clipboard_set(const char *str)
+{
+  if(permission_glw_root == NULL || str == NULL)
+    return;
+
+  JNIEnv *env;
+  (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
+  
+  jstring jstr = (*env)->NewStringUTF(env, str);
+  
+  jclass class = (*env)->GetObjectClass(env, permission_glw_root->agr_vrp);
+  jmethodID mid = (*env)->GetMethodID(env, class, "setClipboard", 
+                                     "(Ljava/lang/String;)V");
+  (*env)->CallVoidMethod(env, permission_glw_root->agr_vrp, mid, jstr);
+  
+  (*env)->DeleteLocalRef(env, jstr);
+}
+
+
+static rstr_t *
+android_clipboard_get(void)
+{
+  if(permission_glw_root == NULL)
+    return NULL;
+
+  JNIEnv *env;
+  (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
+  
+  jclass class = (*env)->GetObjectClass(env, permission_glw_root->agr_vrp);
+  jmethodID mid = (*env)->GetMethodID(env, class, "getClipboard", 
+                                     "()Ljava/lang/String;");
+  jstring jstr = (jstring)(*env)->CallObjectMethod(env, permission_glw_root->agr_vrp, mid);
+  
+  if(jstr == NULL)
+    return NULL;
+  
+  const char *str = (*env)->GetStringUTFChars(env, jstr, 0);
+  rstr_t *rstr = rstr_alloc(str);
+  (*env)->ReleaseStringUTFChars(env, jstr, str);
+  (*env)->DeleteLocalRef(env, jstr);
+  
+  return rstr;
+}
+
+
+/**
+ * Android native keyboard callback
+ */
+static void
+android_osk_open(glw_root_t *gr, const char *title, const char *input,
+                glw_t *w, int password)
+{
+  // Always use Android native keyboard
+  // (Setting UI is disabled until crash is debugged)
+  
+  android_glw_root_t *agr = (android_glw_root_t *)gr;
+  
+  JNIEnv *env;
+  (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
+  
+  jclass class = (*env)->GetObjectClass(env, agr->agr_vrp);
+  jmethodID mid = (*env)->GetMethodID(env, class, "showAndroidKeyboard",
+                                      "(Ljava/lang/String;Ljava/lang/String;Z)V");
+  
+  jstring jtitle = title ? (*env)->NewStringUTF(env, title) : NULL;
+  jstring jinput = input ? (*env)->NewStringUTF(env, input) : NULL;
+  
+  (*env)->CallVoidMethod(env, agr->agr_vrp, mid, jtitle, jinput, 
+                        (jboolean)password);
+  
+  if(jtitle) (*env)->DeleteLocalRef(env, jtitle);
+  if(jinput) (*env)->DeleteLocalRef(env, jinput);
+}
+
 
 
 
@@ -183,6 +267,10 @@ Java_com_lonelycoder_mediaplayer_Core_glwCreate(JNIEnv *env,
   permission_glw_root = agr;
   pthread_mutex_unlock(&permission_mutex);
 
+  // Set up Android-specific callbacks
+  gconf.clipboard_set = android_clipboard_set;
+  gconf.clipboard_get = android_clipboard_get;
+  agr->gr.gr_open_osk = android_osk_open;
 
   glw_load_universe(&agr->gr);
   return (intptr_t)agr;
@@ -511,3 +599,81 @@ Java_com_lonelycoder_mediaplayer_Core_glwKeyUp(JNIEnv *env,
   return 0;
 }
 
+
+JNIEXPORT void JNICALL
+Java_com_lonelycoder_mediaplayer_Core_clipboardSet(JNIEnv *env,
+                                                   jobject obj,
+                                                   jstring text)
+{
+  // This is called from Java, so we don't have access to agr here
+  // The clipboard operations are now handled directly in Java via static methods
+  // This function is a placeholder that shouldn't be called
+}
+
+
+JNIEXPORT jstring JNICALL
+Java_com_lonelycoder_mediaplayer_Core_clipboardGet(JNIEnv *env,
+                                                   jobject obj)
+{
+  // This is called from Java, so we don't have access to agr here
+  // The clipboard operations are now handled directly in Java via static methods
+  // This function is a placeholder that shouldn't be called
+  return NULL;
+}
+
+
+JNIEXPORT void JNICALL
+Java_com_lonelycoder_mediaplayer_Core_glwTextChanged(JNIEnv *env,
+                                                     jobject obj,
+                                                     jint id,
+                                                     jstring text)
+{
+  android_glw_root_t *agr = (android_glw_root_t *)id;
+  glw_root_t *gr = &agr->gr;
+  
+  if(text == NULL)
+    return;
+  
+  const char *str = (*env)->GetStringUTFChars(env, text, 0);
+  
+  glw_lock(gr);
+  
+  // Update the text widget with the new value only if widget exists
+  if(gr->gr_osk_widget != NULL && 
+     gr->gr_osk_widget->glw_class != NULL &&
+     gr->gr_osk_widget->glw_class->gc_set_caption != NULL) {
+    gr->gr_osk_widget->glw_class->gc_set_caption(gr->gr_osk_widget, str, 0);
+    glw_osk_close(gr);
+  }
+  
+  glw_unlock(gr);
+  
+  (*env)->ReleaseStringUTFChars(env, text, str);
+}
+
+
+JNIEXPORT void JNICALL
+Java_com_lonelycoder_mediaplayer_Core_glwKeyboardCancelled(JNIEnv *env,
+                                                           jobject obj,
+                                                           jint id)
+{
+  android_glw_root_t *agr = (android_glw_root_t *)id;
+  glw_root_t *gr = &agr->gr;
+  
+  glw_lock(gr);
+  
+  // Only proceed if we have an active OSK widget
+  if(gr->gr_osk_widget != NULL) {
+    // Restore original text if available
+    if(gr->gr_osk_revert != NULL && 
+       gr->gr_osk_widget->glw_class != NULL &&
+       gr->gr_osk_widget->glw_class->gc_set_caption != NULL) {
+      gr->gr_osk_widget->glw_class->gc_set_caption(gr->gr_osk_widget, 
+                                                    gr->gr_osk_revert, 0);
+    }
+    
+    glw_osk_close(gr);
+  }
+  
+  glw_unlock(gr);
+}

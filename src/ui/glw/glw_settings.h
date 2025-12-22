@@ -30,6 +30,10 @@ typedef struct glw_settings {
   int gs_screensaver_delay;
   int gs_bing_image;
 
+#ifdef __ANDROID__
+  int gs_keyboard_mode; // 0=Internal, 1=Android, 2=Physical
+#endif
+
   struct setting *gs_setting_size;
   struct setting *gs_setting_underscan_v;
   struct setting *gs_setting_underscan_h;
@@ -42,7 +46,9 @@ typedef struct glw_settings {
   struct setting *gs_setting_bing_image;
   struct setting *gs_setting_user_images;
   struct setting *gs_setting_per_image_timeout;
-
+#ifdef __ANDROID__
+  struct setting *gs_setting_keyboard_mode;
+#endif
   struct prop *gs_settings;
 
 } glw_settings_t;

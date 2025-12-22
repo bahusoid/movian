@@ -37,12 +37,20 @@ import android.database.Cursor;
 import android.widget.FrameLayout;
 
 import android.util.Log;
+import android.app.AlertDialog;
+import android.widget.EditText;
+import android.text.InputType;
+import android.view.inputmethod.InputMethodManager;
+import android.content.ClipboardManager;
+import android.content.ClipData;
+import android.content.Context;
 
 public class GLWActivity extends Activity implements VideoRendererProvider {
 
     GLWView mGLWView;
     FrameLayout mRoot;
     SurfaceView sv;
+    private AlertDialog mKeyboardDialog;
 
     private void startGLW() {
         // remove title
@@ -309,6 +317,93 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
 
     private boolean isGooglePhotosUri(Uri uri) {
         return "com.google.android.apps.photos.content".equals(uri.getAuthority());
+    }
+
+    public void showAndroidKeyboard(final String title, final String initialText, 
+                                   final boolean isPassword) {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                if (mKeyboardDialog != null && mKeyboardDialog.isShowing()) {
+                    mKeyboardDialog.dismiss();
+                }
+
+                AlertDialog.Builder builder = new AlertDialog.Builder(GLWActivity.this);
+                if (title != null && !title.isEmpty()) {
+                    builder.setTitle(title);
+                }
+
+                final EditText input = new EditText(GLWActivity.this);
+                input.setText(initialText != null ? initialText : "");
+                input.setInputType(isPassword ? 
+                    InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD :
+                    InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT);
+                input.setSelectAllOnFocus(true);
+                input.setSingleLine(true);
+                
+                // Enable text selection and context menu for copy/paste
+                input.setTextIsSelectable(true);
+                input.setLongClickable(true);
+                
+                //TODO: DOUBLE CHECK IT'S NEEDED
+                // Ensure keyboard shortcuts work (Ctrl+C/V/X/A for physical keyboards)
+                // EditText handles these automatically, but we explicitly enable them
+                input.setFocusable(true);
+                input.setFocusableInTouchMode(true);
+
+                builder.setView(input);
+                builder.setPositiveButton("OK", new android.content.DialogInterface.OnClickListener() {
+                    public void onClick(android.content.DialogInterface dialog, int which) {
+                        if (mGLWView != null) {
+                            Core.glwTextChanged(mGLWView.getGlwId(), input.getText().toString());
+                        }
+                    }
+                });
+                builder.setNegativeButton("Cancel", new android.content.DialogInterface.OnClickListener() {
+                    public void onClick(android.content.DialogInterface dialog, int which) {
+                        if (mGLWView != null) {
+                            Core.glwKeyboardCancelled(mGLWView.getGlwId());
+                        }
+                        dialog.cancel();
+                    }
+                });
+                builder.setOnCancelListener(new android.content.DialogInterface.OnCancelListener() {
+                    public void onCancel(android.content.DialogInterface dialog) {
+                        if (mGLWView != null) {
+                            Core.glwKeyboardCancelled(mGLWView.getGlwId());
+                        }
+                    }
+                });
+
+                mKeyboardDialog = builder.create();
+                mKeyboardDialog.getWindow().setSoftInputMode(
+                    WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+                mKeyboardDialog.show();
+
+                input.requestFocus();
+                InputMethodManager imm = (InputMethodManager) 
+                    getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
+            }
+        });
+    }
+
+    public void setClipboard(String text) {
+        ClipboardManager clipboard = (ClipboardManager) 
+            getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("movian", text);
+        clipboard.setPrimaryClip(clip);
+    }
+
+    public String getClipboard() {
+        ClipboardManager clipboard = (ClipboardManager) 
+            getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard.hasPrimaryClip()) {
+            ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+            if (item != null && item.getText() != null) {
+                return item.getText().toString();
+            }
+        }
+        return null;
     }
 }
 

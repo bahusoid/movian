@@ -1657,6 +1657,9 @@ void glw_osk_close(glw_root_t *gr);
 void glw_osk_open(glw_root_t *gr, const char *title, const char *input,
                   glw_t *w, int password);
 
+void glw_osk_open_default(glw_root_t *gr, const char *title, const char *input,
+                          glw_t *w, int password);
+
 
 /**
  *

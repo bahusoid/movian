@@ -104,6 +104,10 @@ class GLWView extends GLSurfaceView {
         glwId = 0;
     }
 
+    public int getGlwId() {
+        return glwId;
+    }
+
     @Override
     public void onResume() {
         Core.glwFlush(glwId);

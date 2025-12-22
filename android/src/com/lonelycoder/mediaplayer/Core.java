@@ -72,6 +72,14 @@ public class Core {
 
     public static native void permissionResult(boolean ok);
 
+    // Clipboard operations
+    public static native void clipboardSet(String text);
+    public static native String clipboardGet();
+
+    // Android keyboard
+    public static native void glwTextChanged(int id, String text);
+    public static native void glwKeyboardCancelled(int id);
+
     // Create / Destroy subscriptions
 
     public static native int subValue(int prop, String path, ValueSubscription.Callback cb);

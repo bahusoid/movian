@@ -381,6 +381,22 @@ glw_settings_init(void)
                    SETTING_STORE("glw", "wrap"),
                    NULL);
 
+#if 0 // Temporarily disabled - causes crash, needs debugging
+#ifdef __ANDROID__
+  // Keyboard input method for Android
+  glw_settings.gs_setting_keyboard_mode =
+    setting_create(SETTING_MULTIOPT, s, SETTINGS_INITIAL_UPDATE,
+                   SETTING_TITLE(_p("Keyboard input method")),
+                   SETTING_VALUE(1), // Default to Android native keyboard
+                   SETTING_WRITE_INT(&glw_settings.gs_keyboard_mode),
+                   SETTING_STORE("glw", "keyboard_mode"),
+                   SETTING_OPTION_CSTR("0", "Internal"),
+                   SETTING_OPTION_CSTR("1", "Android"),
+                   SETTING_OPTION_CSTR("2", "Physical"),
+                   NULL);
+#endif
+#endif
+
 #ifdef __linux__
   glw_settings.gs_setting_wheel_mapping =
     setting_create(SETTING_BOOL, s, SETTINGS_INITIAL_UPDATE,
@@ -463,6 +479,11 @@ glw_settings_fini(void)
   setting_destroy(glw_settings.gs_setting_underscan_h);
   setting_destroy(glw_settings.gs_setting_size);
   setting_destroy(glw_settings.gs_setting_wrap);
+#if 0 // Disabled along with setting creation
+#ifdef __ANDROID__
+  setting_destroy(glw_settings.gs_setting_keyboard_mode);
+#endif
+#endif
 #ifdef __linux__
   setting_destroy(glw_settings.gs_setting_wheel_mapping);
 #endif
