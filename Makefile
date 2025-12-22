@@ -41,9 +41,16 @@ include ${BUILDDIR}/config.mak
 CFLAGS_std += -Wall -Wno-attributes -Werror -Wwrite-strings -Wno-deprecated-declarations \
 		-Wmissing-prototypes -Wno-multichar -Iext/dvd -std=gnu99
 
+# Clang has stricter unused-but-set-variable warnings
+ifneq ($(findstring clang,$(CC)),clang)
+# GCC-specific warnings
 GCCVERSIONGTEQ8 := $(shell expr `gcc -dumpversion | cut -f1 -d.` \>= 8)
 ifeq "$(GCCVERSIONGTEQ8)" "1"
     CFLAGS_std += -Wno-stringop-truncation 
+endif
+else
+# Clang-specific: don't error on unused-but-set-variable, bitfield, and unused functions
+CFLAGS_std += -Wno-error=unused-but-set-variable -Wno-error=single-bit-bitfield-constant-conversion -Wno-error=unused-function
 endif
 
 VMIR_CFLAGS = ${CFLAGS_std}
@@ -770,7 +777,12 @@ SRCS-${CONFIG_VMIR} += \
 	src/np/np_stats.c \
 
 
-${BUILDDIR}/ext/vmir/src/vmir.o : CFLAGS = ${VMIR_CFLAGS} ${OPTFLAGS} -DVMIR_USE_TLSF -Iext/tlsf -Wno-error=enum-int-mismatch
+# Use enum-int-mismatch warning suppression only for GCC (not available in Clang)
+ifneq ($(findstring clang,$(CC)),clang)
+VMIR_EXTRA_FLAGS = -Wno-error=enum-int-mismatch
+endif
+
+${BUILDDIR}/ext/vmir/src/vmir.o : CFLAGS = ${VMIR_CFLAGS} ${OPTFLAGS} -DVMIR_USE_TLSF -Iext/tlsf $(VMIR_EXTRA_FLAGS)
 
 ${BUILDDIR}/src/arch/linux/linux_misc.o : CFLAGS = ${CFLAGS_std} ${OPTFLAGS} -Wno-error=attributes 
 
