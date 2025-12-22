@@ -26,7 +26,7 @@ ${BUILDDIR}/src/arch/android/%.o : CFLAGS = ${OPTFLAGS} \
 MANIFEST := ${BUILDDIR}/AndroidManifest.xml
 
 AAPT      := ${ANDROID_BUILD_TOOLS}/aapt
-DX        := ${ANDROID_BUILD_TOOLS}/dx
+D8        := ${ANDROID_BUILD_TOOLS}/d8
 ZIPALIGN  := ${ANDROID_BUILD_TOOLS}/zipalign
 APKSIGNER := ${ANDROID_BUILD_TOOLS}/apksigner
 
@@ -65,11 +65,10 @@ ${R_JAVA}: ${MANIFEST} ${RESFILES}
 ${BUILDDIR}/apk/classes.dex: ${JAVA_SRCS} ${R_JAVA}
 	@mkdir -p ${BUILDDIR}/classes
 	@mkdir -p $(dir $@)
-	javac -source 1.7 -target 1.7 \
-	-bootclasspath "${JAVA_HOME}/jre/lib/rt.jar" \
+	javac -source 1.8 -target 1.8 \
 	-classpath ${ANDROID_PLATFORM_PATH}/android.jar -d ${BUILDDIR}/classes \
 	${R_JAVA} ${JAVA_SRCS}
-	${DX} --dex --output=$@ ${BUILDDIR}/classes
+	${D8} --output $(dir $@) --lib ${ANDROID_PLATFORM_PATH}/android.jar $$(find ${BUILDDIR}/classes -name '*.class')
 
 ${BUILDDIR}/${APPNAME}.unsigned.apk: ${BUILDDIR}/apk/classes.dex ${RESFILES} \
 	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libcore.so \
@@ -86,7 +85,15 @@ ${BUILDDIR}/${APPNAME}.aligned.apk: ${BUILDDIR}/${APPNAME}.unsigned.apk
 	${ZIPALIGN} -f -p 4 $< $@
 
 ${BUILDDIR}/${APPNAME}.apk: ${BUILDDIR}/${APPNAME}.aligned.apk
-	@[ -z "$$MOVIAN_KEYSTORE_PASS" ] && (cp $< $@ ; echo "Warning: Keystore password not present, producing unsigned APK") || (${APKSIGNER} sign -ks android/movian.keystore -ks-pass env:MOVIAN_KEYSTORE_PASS --out $@ $< ; echo "APK signed")
+	@if [ -n "$$MOVIAN_KEYSTORE_PASS" ]; then \
+		${APKSIGNER} sign -ks android/movian.keystore -ks-pass env:MOVIAN_KEYSTORE_PASS --out $@ $< && echo "APK signed with release key"; \
+	elif [ -f android/debug.keystore ]; then \
+		${APKSIGNER} sign -ks android/debug.keystore -ks-pass pass:android --out $@ $< && echo "APK signed with debug key"; \
+	else \
+		echo "Warning: No keystore available, creating debug keystore..."; \
+		keytool -genkey -v -keystore android/debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -storepass android -keypass android && \
+		${APKSIGNER} sign -ks android/debug.keystore -ks-pass pass:android --out $@ $< && echo "APK signed with new debug key"; \
+	fi
 
 aligned: ${BUILDDIR}/${APPNAME}.aligned.apk
 

@@ -8,16 +8,17 @@ source support/configure.inc
 
 SDK="${ANDROID_HOME}"
 
-BUILD_TOOLS=27.0.3
+BUILD_TOOLS=36.1.0
 
 
 show_help(){
   common_help
   echo "  --sdk=PREFIX          Use Android SDK from this path [$SDK]"
-  echo "  --ndk=DIR             Use Android NDK from this path [$SDK/ndk-bundle]"
+  echo "  --ndk=DIR             Use Android NDK from this path [$NDK]"
   echo "  --kind=KIND           Build for specific android configuration"
-  echo "                        api16_armv7  ARMv7 SDK version 16 (4.1)"
-  echo "                        api16_x86      x86 SDK version 16 (4.1)"
+  echo "                        api21_armv7  ARMv7 SDK version 21 (5.0)"
+  echo "                        api21_x86      x86 SDK version 21 (5.0)"
+  echo "                        api34_armv8  ARMv8 SDK version 34 (14.0) - recommended"
   exit 1
 }
 
@@ -47,32 +48,43 @@ for opt do
         --sdk=*)
             SDK="$optval"
             ;;
-        --kind=api16_armv7)
-            ANDROID_MIN_SDK_VERSION=15
-            ANDROID_TARGET_SDK_VERSION=21
-            TOOLCHAIN_NAME=arm-linux-androideabi-4.9
+        --kind=api21_armv7)
+            ANDROID_MIN_SDK_VERSION=21
+            ANDROID_TARGET_SDK_VERSION=34
             ANDROID_BUILDKIND_DESCRIMINATOR=1
-            ANDROID_ABI=armeabi
+            ANDROID_ABI=armeabi-v7a
             BUILD=android.api${ANDROID_MIN_SDK_VERSION}_armv7
-            TOOLCHAIN=${TOPDIR}/build.${BUILD}/toolchain/bin/arm-linux-androideabi-
+            TOOLCHAIN=${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/
             ARCH_CFLAGS="-march=armv7-a -mfloat-abi=softfp -mfpu=neon -funwind-tables -fPIC"
-            ARCH_LDFLAGS="-march=armv7-a -Wl,--fix-cortex-a8"
-            LIBAV_ARCH_FLAGS="--cross-prefix=${TOOLCHAIN} --enable-cross-compile --arch=armv7 --target-os=android --enable-shared --disable-static --as=${TOOLCHAIN}gcc"
-            CC=${TOOLCHAIN}clang
-            CXX=${TOOLCHAIN}clang++
+            ARCH_LDFLAGS="-march=armv7-a"
+            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=armv7 --target-os=android --enable-shared --disable-static"
+            CC=${TOOLCHAIN}armv7a-linux-androideabi21-clang
+            CXX=${TOOLCHAIN}armv7a-linux-androideabi21-clang++
             ;;
-        --kind=api16_x86)
-            ANDROID_MIN_SDK_VERSION=15
-            ANDROID_TARGET_SDK_VERSION=21
-            TOOLCHAIN_NAME=x86-linux
+        --kind=api21_x86)
+            ANDROID_MIN_SDK_VERSION=21
+            ANDROID_TARGET_SDK_VERSION=34
             ANDROID_ABI=x86
             ANDROID_BUILDKIND_DESCRIMINATOR=2
             BUILD=android.api${ANDROID_MIN_SDK_VERSION}_x86
-            TOOLCHAIN=${TOPDIR}/build.${BUILD}/toolchain/bin/i686-linux-android-
+            TOOLCHAIN=${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/
             ARCH_CFLAGS="-fPIC"
-            LIBAV_ARCH_FLAGS="--cross-prefix=${TOOLCHAIN} --enable-cross-compile --arch=x86 --target-os=android --enable-shared --disable-static --as=${TOOLCHAIN}gcc --disable-inline-asm"
-            CC="${TOOLCHAIN}clang -mstackrealign"
-            CXX="${TOOLCHAIN}clang++ -mstackrealign"
+            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=x86 --target-os=android --enable-shared --disable-static --disable-asm --disable-inline-asm"
+            CC="${TOOLCHAIN}i686-linux-android21-clang -mstackrealign"
+            CXX="${TOOLCHAIN}i686-linux-android21-clang++ -mstackrealign"
+            ;;
+        --kind=api34_armv8)
+            ANDROID_MIN_SDK_VERSION=21
+            ANDROID_TARGET_SDK_VERSION=34
+            ANDROID_BUILDKIND_DESCRIMINATOR=3
+            ANDROID_ABI=arm64-v8a
+            BUILD=android.api${ANDROID_MIN_SDK_VERSION}_armv8
+            TOOLCHAIN=${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/
+            ARCH_CFLAGS="-march=armv8-a -fPIC"
+            ARCH_LDFLAGS=""
+            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=aarch64 --target-os=android --enable-shared --disable-static"
+            CC=${TOOLCHAIN}aarch64-linux-android34-clang
+            CXX=${TOOLCHAIN}aarch64-linux-android34-clang++
             ;;
         *)
             common_opt $opt $optval
@@ -108,16 +120,18 @@ stat "${NDK}"
 echo
 
 if [ ! -f "${CC}" ]; then
-    echo "Installing toolchain..."
-
-    stat "${NDK}/build/tools/make-standalone-toolchain.sh"
-    if [ ! -f "${NDK}/build/tools/make-standalone-toolchain.sh" ]; then
-        echo "NDK not found, either set NDK environment varable or specify --ndk=/path/to/ndk"
+    echo "Verifying NDK toolchain..."
+    stat "${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/"
+    if [ ! -d "${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/" ]; then
+        echo "NDK toolchain not found, either set NDK environment variable or specify --ndk=/path/to/ndk"
+        echo "Modern NDK (r21+) required with llvm/prebuilt toolchain"
         die
     fi
-    ${NDK}/build/tools/make-standalone-toolchain.sh --platform=android-${ANDROID_MIN_SDK_VERSION} --install-dir=${TOPDIR}/build.${BUILD}/toolchain --toolchain=${TOOLCHAIN_NAME}
 fi
 
+
+# Modern NDK uses llvm- prefix for binutils tools
+TOOLCHAIN="${TOOLCHAIN}llvm-"
 
 bzip2_setup
 freetype_setup --host=arm-linux-gnueabihf
@@ -138,6 +152,7 @@ ANDROID_BUILDKIND_DESCRIMINATOR := ${ANDROID_BUILDKIND_DESCRIMINATOR}
 ANDROID_MIN_SDK_VERSION := ${ANDROID_MIN_SDK_VERSION}
 ANDROID_TARGET_SDK_VERSION := ${ANDROID_TARGET_SDK_VERSION}
 ANDROID_ABI := ${ANDROID_ABI}
+TOOLCHAIN := ${TOOLCHAIN}
 EOF
 
 finalize

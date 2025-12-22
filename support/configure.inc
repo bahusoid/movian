@@ -419,6 +419,12 @@ rtmpdump_setup() {
     fi
 
     update_ext_submodule rtmpdump
+    
+    # Apply fix for OpenSSL version check bug in dh.h
+    if [ -f ext/rtmpdump-dh-fix.patch ]; then
+        echo "Applying rtmpdump dh.h fix..."
+        (cd ext/rtmpdump && git checkout librtmp/dh.h && patch -p1 < ../rtmpdump-dh-fix.patch) || true
+    fi
 }
 
 
@@ -491,7 +497,7 @@ zlib_setup()
 bzip2_setup()
 {
     BZIP2_VER="1.0.8"
-    download_file https://fossies.org/linux/misc/bzip2-${BZIP2_VER}.tar.gz bzip2tarball
+    download_file https://sourceware.org/pub/bzip2/bzip2-${BZIP2_VER}.tar.gz bzip2tarball
 
     BZIP2_SRC_DIR=${BUILDDIR}/bzip2-${BZIP2_VER}
 

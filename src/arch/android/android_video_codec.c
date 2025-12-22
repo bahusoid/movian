@@ -23,6 +23,8 @@
 
 #include <jni.h>
 
+#include <libavutil/mem.h>
+
 #include "main.h"
 #include "video/video_decoder.h"
 #include "video/video_settings.h"
