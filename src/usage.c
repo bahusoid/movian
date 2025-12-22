@@ -57,26 +57,7 @@ static int64_t session_start_time;
 static int
 sendmsg(htsmsg_t *msg)
 {
-  //  htsmsg_print("msg", msg);
-  htsmsg_t *list = htsmsg_create_list();
-  htsmsg_add_msg(list, NULL, msg);
-
-  htsbuf_queue_t hq;
-  htsbuf_queue_init(&hq, 0);
-
-  htsbuf_append(&hq, "requests=", 9);
-
-  char *json = htsmsg_json_serialize_to_str(list, 0);
-  htsbuf_append_and_escape_url(&hq, json);
-  free(json);
-
-  int err = http_req("http://analytics1.movian.tv/i/bulk",
-                     HTTP_POSTDATA(&hq, "application/x-www-form-urlencoded"),
-                     HTTP_FLAGS(FA_NO_DEBUG),
-                     NULL);
-
-  htsmsg_release(list);
-  return err;
+  return 0;
 }
 
 
