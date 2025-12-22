@@ -1273,7 +1273,8 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
             title: 'DRM ' + list[i].q + ' | ' + data.title,
             description: '',
             icon: data.icon,
-            autofocus: isPreferred
+            autofocus: isPreferred,
+            focusable: isPreferred ? 1.5 : 1.0, 
           });
           page.entries++;
         }
@@ -1311,7 +1312,8 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
           title: 'MP4 ' + list[i].q + ' | ' + data.title,
           description: '',
           icon: data.icon,
-          autofocus: isPreferred
+          autofocus: isPreferred,
+          focusable: isPreferred ? 1.5 : 1.0, 
         });
         page.entries++;
       }

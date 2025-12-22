@@ -428,7 +428,8 @@ exports.season = function (page, data) {
     var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
       title: episodeTitle,
       icon: data.icon,
-      autofocus: (episodeIndex === focusEpisodeIndex)
+      autofocus: (episodeIndex === focusEpisodeIndex),
+      focusable: (episodeIndex === focusEpisodeIndex) ? 1.5 : 1.0,
     });
 
     if (episodeIndex === focusEpisodeIndex) {

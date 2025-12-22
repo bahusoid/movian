@@ -531,7 +531,8 @@ function display_season(page) {
         title: seasonElement.title,
         icon: data.icon,
 //        description: seasonElement.ep.length + ' эпизодов',
-        autofocus: (seasonIndex === focusSeasonIndex)
+        autofocus: (seasonIndex === focusSeasonIndex),
+        focusable: (seasonIndex === focusSeasonIndex) ? 1.5 : 1.0,
       });
 
       if (seasonIndex === focusSeasonIndex) {
