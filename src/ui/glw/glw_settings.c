@@ -395,7 +395,7 @@ glw_settings_init(void)
   glw_settings.gs_setting_keyboard_mode =
     setting_create(SETTING_MULTIOPT, s, SETTINGS_INITIAL_UPDATE,
                    SETTING_TITLE(_p("Keyboard input method")),
-                   SETTING_VALUE(1), // Default to Android native keyboard
+                   SETTING_VALUE("1"), // Default to Android native keyboard
                    SETTING_WRITE_INT(&glw_settings.gs_keyboard_mode),
                    SETTING_STORE("glw", "keyboard_mode"),
                    SETTING_OPTION_CSTR("0", "Internal"),
