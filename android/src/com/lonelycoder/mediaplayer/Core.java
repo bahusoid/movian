@@ -100,6 +100,9 @@ public class Core {
     public static void init(CoreService svc) {
 
         mService = svc;
+        
+        // Initialize audio passthrough with application context
+        AudioPassthrough.setApplicationContext(svc.getApplicationContext());
 
         int clock_24hrs = DateFormat.is24HourFormat(svc) ? 1 : 0;
 

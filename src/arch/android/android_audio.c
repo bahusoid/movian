@@ -19,15 +19,61 @@
  */
 #include <assert.h>
 #include <string.h>
+#include <jni.h>
 
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 
 #include "audio2/audio.h"
 #include "misc/minmax.h"
+#include "settings.h"
+#include "htsmsg/htsmsg_store.h"
+
+#include <libavcodec/avcodec.h>
 
 #define PCM_RING_SIZE 8
 #define PCM_RING_MASK (PCM_RING_SIZE - 1)
+
+// Passthrough codec type constants (matching AudioPassthrough.java)
+#define PT_CODEC_AC3    1
+#define PT_CODEC_EAC3   2
+#define PT_CODEC_DTS    3
+#define PT_CODEC_DTS_HD 4
+#define PT_CODEC_TRUEHD 5
+
+// Passthrough settings (user configurable per-format)
+static int passthrough_ac3_mode = 0;    // 0=Off, 1=On
+static int passthrough_eac3_mode = 0;   // 0=Off, 1=On
+static int passthrough_dts_mode = 0;    // 0=Off, 1=On
+static int passthrough_dtshd_mode = 0;  // 0=Off, 1=On
+static int passthrough_truehd_mode = 0; // 0=Off, 1=On
+
+// Device passthrough capabilities (set from Java via JNI)
+static int cap_ac3_supported = 0;
+static int cap_eac3_supported = 0;
+static int cap_dts_supported = 0;
+static int cap_dtshd_supported = 0;
+static int cap_truehd_supported = 0;
+static int cap_iec61937_supported = 0;
+static int cap_legacy_iec_supported = 0;  // Android 5.0 PCM16 IEC hack
+
+// JNI references for AudioPassthrough class
+static jclass audioPassthroughClass = NULL;
+static jmethodID probeCapabilitiesMethod = NULL;
+static jmethodID createMethod = NULL;
+static jmethodID writeMethod = NULL;
+static jmethodID writeShortsMethod = NULL;
+static jmethodID playMethod = NULL;
+static jmethodID pauseMethod = NULL;
+static jmethodID stopMethod = NULL;
+static jmethodID flushMethod = NULL;
+static jmethodID releaseMethod = NULL;
+static jmethodID getPlaybackHeadPositionMethod = NULL;
+static jmethodID getMinBufferSizeMethod = NULL;
+static jmethodID getEncodingForCodecMethod = NULL;
+
+// External JNI environment access
+extern JavaVM *JVM;
 
 
 typedef struct decoder {
@@ -71,6 +117,16 @@ typedef struct decoder {
 
   int d_paused;
 
+  // Passthrough support
+  int d_passthrough_mode;       // 0=PCM, 1=passthrough active
+  int d_passthrough_codec;      // PT_CODEC_* constant
+  int d_passthrough_use_iec;    // Using IEC61937 mode (vs raw encoding)
+  jobject d_pt_instance;        // AudioPassthrough Java object instance
+  int d_pt_sample_rate;
+  int d_pt_encoding;
+  int d_pt_buffer_size;
+  int64_t d_pt_samples_written;
+
 } decoder_t;
 
 extern float audio_master_volume;
@@ -81,6 +137,125 @@ int android_system_audio_frames_per_buffer;
 
 
 static void buffer_callback(SLAndroidSimpleBufferQueueItf bq, void *context);
+
+/**
+ * Get JNI environment for current thread
+ */
+static JNIEnv *
+get_jni_env(void)
+{
+  JNIEnv *env;
+  if ((*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*JVM)->AttachCurrentThread(JVM, &env, NULL) != JNI_OK) {
+      TRACE(TRACE_ERROR, "Android Audio", "Failed to attach thread to JVM");
+      return NULL;
+    }
+  }
+  return env;
+}
+
+/**
+ * JNI callback from Java to report passthrough capabilities
+ */
+JNIEXPORT void JNICALL
+Java_com_lonelycoder_mediaplayer_AudioPassthrough_reportCapabilities(
+    JNIEnv *env, jclass cls,
+    jboolean ac3, jboolean eac3, jboolean dts, 
+    jboolean dtsHd, jboolean trueHd, jboolean iec61937, jboolean legacyIec)
+{
+  cap_ac3_supported = ac3;
+  cap_eac3_supported = eac3;
+  cap_dts_supported = dts;
+  cap_dtshd_supported = dtsHd;
+  cap_truehd_supported = trueHd;
+  cap_iec61937_supported = iec61937;
+  cap_legacy_iec_supported = legacyIec;
+  
+  TRACE(TRACE_INFO, "Android Audio", 
+        "Passthrough capabilities - AC3:%d E-AC3:%d DTS:%d DTS-HD:%d TrueHD:%d IEC:%d Legacy:%d",
+        ac3, eac3, dts, dtsHd, trueHd, iec61937, legacyIec);
+}
+
+/**
+ * Initialize JNI references for AudioPassthrough class
+ */
+static int
+init_passthrough_jni(JNIEnv *env)
+{
+  if (audioPassthroughClass != NULL)
+    return 0;  // Already initialized
+  
+  jclass localClass = (*env)->FindClass(env, 
+      "com/lonelycoder/mediaplayer/AudioPassthrough");
+  if (localClass == NULL) {
+    TRACE(TRACE_ERROR, "Android Audio", "Failed to find AudioPassthrough class");
+    return -1;
+  }
+  
+  audioPassthroughClass = (*env)->NewGlobalRef(env, localClass);
+  (*env)->DeleteLocalRef(env, localClass);
+  
+  // Get static methods
+  probeCapabilitiesMethod = (*env)->GetStaticMethodID(env, 
+      audioPassthroughClass, "probeCapabilities", "()V");
+  getMinBufferSizeMethod = (*env)->GetStaticMethodID(env,
+      audioPassthroughClass, "getMinBufferSize", "(III)I");
+  getEncodingForCodecMethod = (*env)->GetStaticMethodID(env,
+      audioPassthroughClass, "getEncodingForCodec", "(IZ)I");
+  
+  // Get instance methods
+  createMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "create", "(Landroid/content/Context;IIII)Z");
+  writeMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "write", "([BII)I");
+  writeShortsMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "writeShorts", "([SII)I");
+  playMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "play", "()V");
+  pauseMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "pause", "()V");
+  stopMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "stop", "()V");
+  flushMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "flush", "()V");
+  releaseMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "release", "()V");
+  getPlaybackHeadPositionMethod = (*env)->GetMethodID(env, audioPassthroughClass,
+      "getPlaybackHeadPosition", "()I");
+  
+  if (!probeCapabilitiesMethod || !createMethod || !writeMethod ||
+      !playMethod || !pauseMethod || !releaseMethod) {
+    TRACE(TRACE_ERROR, "Android Audio", "Failed to get AudioPassthrough methods");
+    return -1;
+  }
+  
+  // Probe device capabilities
+  (*env)->CallStaticVoidMethod(env, audioPassthroughClass, probeCapabilitiesMethod);
+  
+  TRACE(TRACE_DEBUG, "Android Audio", "AudioPassthrough JNI initialized");
+  return 0;
+}
+
+/**
+ * Release passthrough AudioTrack
+ */
+static void
+android_passthrough_release(decoder_t *d)
+{
+  if (d->d_pt_instance == NULL)
+    return;
+  
+  JNIEnv *env = get_jni_env();
+  if (env == NULL)
+    return;
+  
+  (*env)->CallVoidMethod(env, d->d_pt_instance, releaseMethod);
+  (*env)->DeleteGlobalRef(env, d->d_pt_instance);
+  d->d_pt_instance = NULL;
+  d->d_passthrough_mode = 0;
+  
+  TRACE(TRACE_DEBUG, "Android Audio", "Passthrough AudioTrack released");
+}
 
 /**
  *
@@ -152,9 +327,14 @@ android_audio_fini(audio_decoder_t *ad)
 {
   decoder_t *d = (decoder_t *)ad;
 
+  // Release passthrough if active
+  android_passthrough_release(d);
+  
   android_stop_player(d);
-  (*d->d_mixer)->Destroy(d->d_mixer);
-  (*d->d_engine)->Destroy(d->d_engine);
+  if (d->d_mixer != NULL)
+    (*d->d_mixer)->Destroy(d->d_mixer);
+  if (d->d_engine != NULL)
+    (*d->d_engine)->Destroy(d->d_engine);
 }
 
 
@@ -443,6 +623,17 @@ static void
 android_audio_pause(audio_decoder_t *ad)
 {
   decoder_t *d = (decoder_t *)ad;
+  
+  // Handle passthrough pause
+  if (d->d_passthrough_mode && d->d_pt_instance != NULL) {
+    JNIEnv *env = get_jni_env();
+    if (env != NULL && pauseMethod != NULL) {
+      (*env)->CallVoidMethod(env, d->d_pt_instance, pauseMethod);
+    }
+    d->d_paused = 1;
+    return;
+  }
+  
   if(d->d_pif != NULL)
     (*d->d_pif)->SetPlayState(d->d_pif, SL_PLAYSTATE_PAUSED);
   d->d_paused = 1;
@@ -456,6 +647,17 @@ static void
 android_audio_play(audio_decoder_t *ad)
 {
   decoder_t *d = (decoder_t *)ad;
+  
+  // Handle passthrough play
+  if (d->d_passthrough_mode && d->d_pt_instance != NULL) {
+    JNIEnv *env = get_jni_env();
+    if (env != NULL && playMethod != NULL) {
+      (*env)->CallVoidMethod(env, d->d_pt_instance, playMethod);
+    }
+    d->d_paused = 0;
+    return;
+  }
+  
   if(d->d_pif != NULL)
     (*d->d_pif)->SetPlayState(d->d_pif, SL_PLAYSTATE_PLAYING);
   d->d_paused = 0;
@@ -469,9 +671,228 @@ static void
 android_audio_flush(audio_decoder_t *ad)
 {
   decoder_t *d = (decoder_t *)ad;
+  
+  // Handle passthrough flush
+  if (d->d_passthrough_mode && d->d_pt_instance != NULL) {
+    JNIEnv *env = get_jni_env();
+    if (env != NULL && flushMethod != NULL) {
+      (*env)->CallVoidMethod(env, d->d_pt_instance, flushMethod);
+    }
+    d->d_pt_samples_written = 0;
+    return;
+  }
+  
   d->d_read_ptr = 0;
   d->d_write_ptr = 1;
   __sync_synchronize();
+}
+
+
+/**
+ * Determine audio output mode for given codec
+ */
+static int
+android_audio_get_mode(audio_decoder_t *ad, int codec,
+                       const void *extradata, size_t extradata_size)
+{
+  decoder_t *d = (decoder_t *)ad;
+  
+  switch(codec) {
+  case AV_CODEC_ID_AC3:
+    if (passthrough_ac3_mode) {
+      if (cap_ac3_supported) {
+        d->d_passthrough_codec = PT_CODEC_AC3;
+        d->d_passthrough_use_iec = 0;
+        TRACE(TRACE_DEBUG, "Android Audio", "AC3 passthrough (raw encoding)");
+        return AUDIO_MODE_CODED;
+      }
+      if (cap_iec61937_supported || cap_legacy_iec_supported) {
+        d->d_passthrough_codec = PT_CODEC_AC3;
+        d->d_passthrough_use_iec = 1;
+        TRACE(TRACE_DEBUG, "Android Audio", "AC3 passthrough (IEC61937)");
+        return AUDIO_MODE_SPDIF;
+      }
+    }
+    break;
+    
+  case AV_CODEC_ID_EAC3:
+    if (passthrough_eac3_mode) {
+      if (cap_eac3_supported) {
+        d->d_passthrough_codec = PT_CODEC_EAC3;
+        d->d_passthrough_use_iec = 0;
+        TRACE(TRACE_DEBUG, "Android Audio", "E-AC3 passthrough (raw encoding)");
+        return AUDIO_MODE_CODED;
+      }
+      if (cap_iec61937_supported) {
+        d->d_passthrough_codec = PT_CODEC_EAC3;
+        d->d_passthrough_use_iec = 1;
+        TRACE(TRACE_DEBUG, "Android Audio", "E-AC3 passthrough (IEC61937)");
+        return AUDIO_MODE_SPDIF;
+      }
+    }
+    break;
+    
+  case AV_CODEC_ID_DTS:
+    // Check for DTS-HD MA/HRA profiles
+    // TODO: Parse extradata to detect DTS-HD variants
+    if (passthrough_dts_mode) {
+      if (cap_dts_supported) {
+        d->d_passthrough_codec = PT_CODEC_DTS;
+        d->d_passthrough_use_iec = 0;
+        TRACE(TRACE_DEBUG, "Android Audio", "DTS passthrough (raw encoding)");
+        return AUDIO_MODE_CODED;
+      }
+      if (cap_iec61937_supported || cap_legacy_iec_supported) {
+        d->d_passthrough_codec = PT_CODEC_DTS;
+        d->d_passthrough_use_iec = 1;
+        TRACE(TRACE_DEBUG, "Android Audio", "DTS passthrough (IEC61937)");
+        return AUDIO_MODE_SPDIF;
+      }
+    }
+    break;
+    
+  case AV_CODEC_ID_TRUEHD:
+    if (passthrough_truehd_mode && cap_truehd_supported) {
+      d->d_passthrough_codec = PT_CODEC_TRUEHD;
+      d->d_passthrough_use_iec = 0;
+      TRACE(TRACE_DEBUG, "Android Audio", "TrueHD passthrough");
+      return AUDIO_MODE_CODED;
+    }
+    break;
+  }
+  
+  return AUDIO_MODE_PCM;
+}
+
+
+/**
+ * Initialize passthrough AudioTrack for coded mode
+ */
+static int
+android_passthrough_init(decoder_t *d, int codec_type, int sample_rate)
+{
+  JNIEnv *env = get_jni_env();
+  if (env == NULL)
+    return -1;
+  
+  if (init_passthrough_jni(env) < 0)
+    return -1;
+  
+  // Get encoding for codec
+  jint encoding = (*env)->CallStaticIntMethod(env, audioPassthroughClass,
+      getEncodingForCodecMethod, codec_type, (jboolean)d->d_passthrough_use_iec);
+  
+  if (encoding == -1) {
+    TRACE(TRACE_ERROR, "Android Audio", "No encoding available for codec %d", codec_type);
+    return -1;
+  }
+  
+  // Determine channels based on codec
+  int channels = 2;
+  if (codec_type == PT_CODEC_DTS_HD || codec_type == PT_CODEC_TRUEHD) {
+    channels = 8;
+  }
+  
+  // Get minimum buffer size
+  jint minBuffer = (*env)->CallStaticIntMethod(env, audioPassthroughClass,
+      getMinBufferSizeMethod, encoding, sample_rate, channels);
+  
+  if (minBuffer <= 0) {
+    TRACE(TRACE_ERROR, "Android Audio", "Invalid min buffer size: %d", minBuffer);
+    return -1;
+  }
+  
+  // Use larger buffer for passthrough
+  int bufferSize = minBuffer * 4;
+  
+  // Create AudioPassthrough instance
+  jmethodID constructor = (*env)->GetMethodID(env, audioPassthroughClass, "<init>", "()V");
+  jobject localInstance = (*env)->NewObject(env, audioPassthroughClass, constructor);
+  
+  if (localInstance == NULL) {
+    TRACE(TRACE_ERROR, "Android Audio", "Failed to create AudioPassthrough instance");
+    return -1;
+  }
+  
+  // Call create method (pass NULL for context - Java will use cached app context)
+  jboolean success = (*env)->CallBooleanMethod(env, localInstance, createMethod,
+      NULL, encoding, sample_rate, channels, bufferSize);
+  
+  if (!success) {
+    TRACE(TRACE_ERROR, "Android Audio", "Failed to create passthrough AudioTrack");
+    (*env)->DeleteLocalRef(env, localInstance);
+    return -1;
+  }
+  
+  d->d_pt_instance = (*env)->NewGlobalRef(env, localInstance);
+  (*env)->DeleteLocalRef(env, localInstance);
+  
+  d->d_pt_sample_rate = sample_rate;
+  d->d_pt_encoding = encoding;
+  d->d_pt_buffer_size = bufferSize;
+  d->d_pt_samples_written = 0;
+  d->d_passthrough_mode = 1;
+  
+  // Start playback
+  (*env)->CallVoidMethod(env, d->d_pt_instance, playMethod);
+  
+  TRACE(TRACE_INFO, "Android Audio", 
+        "Passthrough AudioTrack created: encoding=%d rate=%d channels=%d buffer=%d",
+        encoding, sample_rate, channels, bufferSize);
+  
+  return 0;
+}
+
+
+/**
+ * Deliver coded (passthrough) audio data
+ */
+static int
+android_audio_deliver_coded(audio_decoder_t *ad, const void *data, size_t size,
+                            int64_t pts, int epoch)
+{
+  decoder_t *d = (decoder_t *)ad;
+  media_pipe_t *mp = ad->ad_mp;
+  
+  // Initialize passthrough if needed
+  if (!d->d_passthrough_mode || d->d_pt_instance == NULL) {
+    // Default to 48kHz for passthrough
+    if (android_passthrough_init(d, d->d_passthrough_codec, 48000) < 0) {
+      TRACE(TRACE_ERROR, "Android Audio", "Passthrough init failed, falling back to PCM");
+      return -1;
+    }
+  }
+  
+  JNIEnv *env = get_jni_env();
+  if (env == NULL)
+    return -1;
+  
+  // Create byte array and write data
+  jbyteArray byteArray = (*env)->NewByteArray(env, size);
+  (*env)->SetByteArrayRegion(env, byteArray, 0, size, (jbyte *)data);
+  
+  jint written = (*env)->CallIntMethod(env, d->d_pt_instance, writeMethod,
+      byteArray, 0, (jint)size);
+  
+  (*env)->DeleteLocalRef(env, byteArray);
+  
+  if (written < 0) {
+    TRACE(TRACE_ERROR, "Android Audio", "Passthrough write failed: %d", written);
+    return -1;
+  }
+  
+  d->d_pt_samples_written += size / 4;  // Approximate samples
+  
+  // Update audio clock
+  if (pts != PTS_UNSET) {
+    hts_mutex_lock(&mp->mp_clock_mutex);
+    mp->mp_audio_clock_epoch = epoch;
+    mp->mp_audio_clock_avtime = arch_get_avtime();
+    mp->mp_audio_clock = pts;
+    hts_mutex_unlock(&mp->mp_clock_mutex);
+  }
+  
+  return 0;
 }
 
 
@@ -488,6 +909,8 @@ static audio_class_t android_audio_class = {
   .ac_pause          = android_audio_pause,
   .ac_play           = android_audio_play,
   .ac_flush          = android_audio_flush,
+  .ac_get_mode       = android_audio_get_mode,
+  .ac_deliver_coded_locked = android_audio_deliver_coded,
 };
 
 
@@ -497,6 +920,46 @@ static audio_class_t android_audio_class = {
 audio_class_t *
 audio_driver_init(struct prop *asettings)
 {
+  JNIEnv *env = get_jni_env();
+  
+  // Initialize JNI and probe passthrough capabilities
+  if (env != NULL) {
+    init_passthrough_jni(env);
+  }
+  
+  // Create passthrough settings section
+  settings_create_separator(asettings, _p("Audio Passthrough"));
+  
+  setting_create(SETTING_BOOL, asettings, SETTINGS_INITIAL_UPDATE,
+                 SETTING_TITLE(_p("AC3 Pass-Through")),
+                 SETTING_STORE("audio2", "pt_ac3"),
+                 SETTING_WRITE_INT(&passthrough_ac3_mode),
+                 NULL);
+  
+  setting_create(SETTING_BOOL, asettings, SETTINGS_INITIAL_UPDATE,
+                 SETTING_TITLE(_p("E-AC3 Pass-Through")),
+                 SETTING_STORE("audio2", "pt_eac3"),
+                 SETTING_WRITE_INT(&passthrough_eac3_mode),
+                 NULL);
+  
+  setting_create(SETTING_BOOL, asettings, SETTINGS_INITIAL_UPDATE,
+                 SETTING_TITLE(_p("DTS Pass-Through")),
+                 SETTING_STORE("audio2", "pt_dts"),
+                 SETTING_WRITE_INT(&passthrough_dts_mode),
+                 NULL);
+  
+  setting_create(SETTING_BOOL, asettings, SETTINGS_INITIAL_UPDATE,
+                 SETTING_TITLE(_p("DTS-HD Pass-Through")),
+                 SETTING_STORE("audio2", "pt_dtshd"),
+                 SETTING_WRITE_INT(&passthrough_dtshd_mode),
+                 NULL);
+  
+  setting_create(SETTING_BOOL, asettings, SETTINGS_INITIAL_UPDATE,
+                 SETTING_TITLE(_p("TrueHD Pass-Through")),
+                 SETTING_STORE("audio2", "pt_truehd"),
+                 SETTING_WRITE_INT(&passthrough_truehd_mode),
+                 NULL);
+  
   return &android_audio_class;
 }
 
