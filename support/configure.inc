@@ -397,9 +397,34 @@ libav_setup() {
 
     mkdir -p "${LIBAV_BUILD_DIR}"
 
-    #LIBAV_COMMON_FLAGS="--disable-parsers --disable-decoders --disable-demuxers"
+    # Size optimization flags
+    LIBAV_COMMON_FLAGS="--enable-small"
 
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-encoders --disable-filters --disable-muxers --disable-devices --disable-demuxer=rtp --disable-protocol=rtp --disable-bzlib --disable-decoder=twinvq --disable-decoder=snow --disable-decoder=cavs --disable-programs --disable-avfilter --enable-decoder=png --enable-decoder=mjpeg --enable-encoder=mjpeg --enable-encoder=png --enable-muxer=spdif --enable-encoder=ac3 --enable-encoder=eac3 --enable-muxer=matroska --enable-encoder=ffvhuff --enable-encoder=pcm_s16le --enable-swresample"
+    # Disable unnecessary components to reduce size
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-encoders --disable-filters --disable-muxers --disable-devices"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-demuxer=rtp --disable-protocol=rtp"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-bzlib --disable-programs --disable-avfilter"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-doc --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages"
+    
+    # Disable some rarely used decoders to save space
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=twinvq --disable-decoder=snow --disable-decoder=cavs"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=apng --disable-decoder=cfhd --disable-decoder=cllc"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=dds --disable-decoder=dpx --disable-decoder=dxv"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=exr --disable-decoder=hap --disable-decoder=magicyuv"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=notchlc --disable-decoder=photocd --disable-decoder=pixlet"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=prores --disable-decoder=r10k --disable-decoder=r210"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=sanm --disable-decoder=screenpresso --disable-decoder=sgirle"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=sheervideo --disable-decoder=simbiosis_imx"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=speedhq --disable-decoder=truemotion1 --disable-decoder=truemotion2"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=v210 --disable-decoder=v210x --disable-decoder=v308"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=v408 --disable-decoder=v410 --disable-decoder=ylc"
+    
+    # Enable only needed encoders
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=png --enable-decoder=mjpeg"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-encoder=mjpeg --enable-encoder=png"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=spdif --enable-encoder=ac3 --enable-encoder=eac3"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=matroska --enable-encoder=ffvhuff --enable-encoder=pcm_s16le"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-swresample"
 
     (cd ${LIBAV_BUILD_DIR} && ${TOPDIR}/ext/libav/configure ${LIBAV_ARCH_FLAGS} ${LIBAV_COMMON_FLAGS} --prefix=${EXT_INSTALL_DIR} --extra-cflags="${LIBAV_CFLAGS} ${EXTRA_CFLAGS}" --extra-ldflags="${LIBAV_LDFLAGS} ${EXTRA_LDFLAGS}" --cc="${CC}") || die
 
