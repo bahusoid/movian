@@ -32,7 +32,7 @@ public class Core {
 
     static {
         System.loadLibrary("avutil");
-        System.loadLibrary("avresample");
+        System.loadLibrary("swresample");
         System.loadLibrary("avcodec");
         System.loadLibrary("avformat");
         System.loadLibrary("swscale");

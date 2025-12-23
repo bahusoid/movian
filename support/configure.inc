@@ -590,7 +590,7 @@ EXT_INSTALL_DIR=${EXT_INSTALL_DIR}
 EOF
 
     if enabled libav; then
-	echo >>${CONFIG_MAK} "LDFLAGS_cfg += -lswresample -lswscale -lavformat -lavcodec -lavutil"
+	echo >>${CONFIG_MAK} "LDFLAGS_cfg += -lswresample -lswscale -lavformat -lavcodec -lavutil -lz -lm"
     fi
 
     if enabled libcec; then

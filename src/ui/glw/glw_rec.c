@@ -85,7 +85,7 @@ struct glw_rec {
 
   LIST_ENTRY(glw_rec) global_link;
   char *filename;
-  AVOutputFormat *fmt;
+  const AVOutputFormat *fmt;
   AVFormatContext *oc;
 
   AVCodecContext *v_ctx;
@@ -274,6 +274,7 @@ rec_thread(void *aux)
 {
   glw_rec_t *gr = aux;
   video_frame_t *vf;
+  const AVCodec *c;
 
 
   gr->fmt = av_guess_format(NULL, gr->filename, NULL);
@@ -286,14 +287,17 @@ rec_thread(void *aux)
 
   gr->oc = avformat_alloc_context();
   gr->oc->oformat = gr->fmt;
-  snprintf(gr->oc->filename, sizeof(gr->oc->filename), "%s", gr->filename);
+  // FFmpeg 5+: Use url instead of deprecated filename
+  gr->oc->url = av_strdup(gr->filename);
 
   gr->v_st = avformat_new_stream(gr->oc, 0);
 
   gr->v_st->avg_frame_rate.num = gr->fps;
   gr->v_st->avg_frame_rate.den = 1;
 
-  gr->v_ctx = gr->v_st->codec;
+  // FFmpeg 5+: Allocate codec context separately instead of using stream->codec
+  c = avcodec_find_encoder(AV_CODEC_ID_FFVHUFF);
+  gr->v_ctx = avcodec_alloc_context3(c);
   gr->v_ctx->codec_type = AVMEDIA_TYPE_VIDEO;
   gr->v_ctx->codec_id = AV_CODEC_ID_FFVHUFF;
 
@@ -302,21 +306,24 @@ rec_thread(void *aux)
   gr->v_ctx->time_base.den = gr->fps;
   gr->v_ctx->time_base.num = 1;
   gr->v_ctx->pix_fmt = AV_PIX_FMT_RGB32;
-  gr->v_ctx->coder_type = 0;
+  // FFmpeg 5+: coder_type removed
 
-  AVCodec *c = avcodec_find_encoder(gr->v_ctx->codec_id);
   if(avcodec_open2(gr->v_ctx, c, NULL)) {
     TRACE(TRACE_ERROR, "REC",
 	  "Unable to record to %s -- Unable to open video codec",
 	  gr->filename);
     return NULL;
   }
+  // Copy codec parameters to stream
+  avcodec_parameters_from_context(gr->v_st->codecpar, gr->v_ctx);
 
   gr->v_ctx->thread_count = gconf.concurrency;
 
   gr->a_st = avformat_new_stream(gr->oc, 0);
 
-  gr->a_ctx = gr->a_st->codec;
+  // FFmpeg 5+: Allocate codec context separately
+  c = avcodec_find_encoder(AV_CODEC_ID_PCM_S16LE);
+  gr->a_ctx = avcodec_alloc_context3(c);
   gr->a_ctx->codec_type = AVMEDIA_TYPE_AUDIO;
   gr->a_ctx->codec_id = AV_CODEC_ID_PCM_S16LE;
 
@@ -326,13 +333,14 @@ rec_thread(void *aux)
   gr->a_ctx->time_base.den = 48000;
   gr->a_ctx->time_base.num = 1;
 
-  c = avcodec_find_encoder(gr->a_ctx->codec_id);
   if(avcodec_open2(gr->a_ctx, c, NULL)) {
     TRACE(TRACE_ERROR, "REC",
 	  "Unable to record to %s -- Unable to open audio codec",
 	  gr->filename);
     return NULL;
   }
+  // Copy codec parameters to stream
+  avcodec_parameters_from_context(gr->a_st->codecpar, gr->a_ctx);
 
   gr->v_ctx->thread_count = gconf.concurrency;
 
@@ -348,7 +356,12 @@ rec_thread(void *aux)
   }
 
   /* write the stream header, if any */
-  avformat_write_header(gr->oc, NULL);
+  if (avformat_write_header(gr->oc, NULL) < 0) {
+    TRACE(TRACE_ERROR, "REC",
+	  "Unable to record to %s -- Unable to write header",
+	  gr->filename);
+    return NULL;
+  }
 
 
   hts_mutex_lock(&glw_rec_mutex);
@@ -372,15 +385,12 @@ rec_thread(void *aux)
 
   av_write_trailer(gr->oc);
 
-  for(int i = 0; i < gr->oc->nb_streams; i++) {
-    AVStream *st = gr->oc->streams[i];
-    avcodec_close(st->codec);
-    free(st->codec);
-    free(st);
-  }
+  // FFmpeg 5+: Free codec contexts that we allocated
+  avcodec_free_context(&gr->v_ctx);
+  avcodec_free_context(&gr->a_ctx);
 
   avio_close(gr->oc->pb);
-  free(gr->oc);
+  avformat_free_context(gr->oc);
   free(gr);
   return NULL;
 }

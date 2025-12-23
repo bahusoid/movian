@@ -217,7 +217,8 @@ dvd_video_push(dvd_player_t *dp)
   mb->mb_aspect_override = dp->dp_aspect_override;
   mb->mb_disable_deinterlacer = 1;
   mb->mb_data_type = MB_VIDEO;
-  mb->mb_duration = ctx->ticks_per_frame * 1000000LL * av_q2d(ctx->time_base);
+  // FFmpeg 5+ removed ticks_per_frame; use 2 for MPEG video (1 tick per field)
+  mb->mb_duration = 2 * 1000000LL * av_q2d(ctx->time_base);
   mb->mb_pts = AV_NOPTS_VALUE;
   mb->mb_dts = AV_NOPTS_VALUE;
 

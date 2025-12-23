@@ -417,6 +417,93 @@ vdpau_codec_hw_close(struct media_codec *mc)
 
 
 /**
+ * Helper function to map FFmpeg codec to VDPAU profile
+ * Replaces the deprecated av_vdpau_get_profile()
+ * Uses AV_PROFILE_* constants (FFmpeg 5+ renamed FF_PROFILE_*)
+ */
+static int
+get_vdpau_profile(AVCodecContext *ctx, VdpDecoderProfile *profile)
+{
+  switch (ctx->codec_id) {
+  case AV_CODEC_ID_MPEG1VIDEO:
+    *profile = VDP_DECODER_PROFILE_MPEG1;
+    return 0;
+  case AV_CODEC_ID_MPEG2VIDEO:
+    switch (ctx->profile) {
+    case AV_PROFILE_MPEG2_SIMPLE:
+      *profile = VDP_DECODER_PROFILE_MPEG2_SIMPLE;
+      return 0;
+    case AV_PROFILE_MPEG2_MAIN:
+    default:
+      *profile = VDP_DECODER_PROFILE_MPEG2_MAIN;
+      return 0;
+    }
+  case AV_CODEC_ID_H264:
+    switch (ctx->profile & ~AV_PROFILE_H264_INTRA) {
+    case AV_PROFILE_H264_BASELINE:
+      *profile = VDP_DECODER_PROFILE_H264_BASELINE;
+      return 0;
+    case AV_PROFILE_H264_CONSTRAINED_BASELINE:
+    case AV_PROFILE_H264_MAIN:
+      *profile = VDP_DECODER_PROFILE_H264_MAIN;
+      return 0;
+    case AV_PROFILE_H264_HIGH:
+    default:
+      *profile = VDP_DECODER_PROFILE_H264_HIGH;
+      return 0;
+    }
+  case AV_CODEC_ID_VC1:
+    switch (ctx->profile) {
+    case AV_PROFILE_VC1_SIMPLE:
+      *profile = VDP_DECODER_PROFILE_VC1_SIMPLE;
+      return 0;
+    case AV_PROFILE_VC1_MAIN:
+      *profile = VDP_DECODER_PROFILE_VC1_MAIN;
+      return 0;
+    case AV_PROFILE_VC1_ADVANCED:
+    default:
+      *profile = VDP_DECODER_PROFILE_VC1_ADVANCED;
+      return 0;
+    }
+  case AV_CODEC_ID_WMV3:
+    switch (ctx->profile) {
+    case AV_PROFILE_VC1_SIMPLE:
+      *profile = VDP_DECODER_PROFILE_VC1_SIMPLE;
+      return 0;
+    case AV_PROFILE_VC1_MAIN:
+    default:
+      *profile = VDP_DECODER_PROFILE_VC1_MAIN;
+      return 0;
+    }
+  case AV_CODEC_ID_MPEG4:
+    switch (ctx->profile) {
+    case AV_PROFILE_MPEG4_SIMPLE:
+      *profile = VDP_DECODER_PROFILE_MPEG4_PART2_SP;
+      return 0;
+    case AV_PROFILE_MPEG4_ADVANCED_SIMPLE:
+    default:
+      *profile = VDP_DECODER_PROFILE_MPEG4_PART2_ASP;
+      return 0;
+    }
+#ifdef VDP_DECODER_PROFILE_HEVC_MAIN
+  case AV_CODEC_ID_HEVC:
+    switch (ctx->profile) {
+    case AV_PROFILE_HEVC_MAIN:
+      *profile = VDP_DECODER_PROFILE_HEVC_MAIN;
+      return 0;
+    case AV_PROFILE_HEVC_MAIN_10:
+      *profile = VDP_DECODER_PROFILE_HEVC_MAIN_10;
+      return 0;
+    default:
+      return -1;
+    }
+#endif
+  default:
+    return -1;
+  }
+}
+
+/**
  *
  */
 int
@@ -431,7 +518,8 @@ vdpau_init_libav_decode(media_codec_t *mc, AVCodecContext *ctx)
   VdpDecoderProfile vdp_profile;
   int refframes = 2;
 
-  if(av_vdpau_get_profile(ctx, &vdp_profile)) {
+  // Use our helper function instead of deprecated av_vdpau_get_profile()
+  if(get_vdpau_profile(ctx, &vdp_profile)) {
     TRACE(TRACE_DEBUG, "VDPAU", "Can't decode %s profile %d",
           ctx->codec->name, ctx->profile);
     return 1;
@@ -445,7 +533,15 @@ vdpau_init_libav_decode(media_codec_t *mc, AVCodecContext *ctx)
 
   VdpStatus r;
 
-  AVVDPAUContext *vctx = av_vdpau_alloc_context();
+  // Use av_vdpau_bind_context() instead of deprecated av_vdpau_alloc_context()
+  int ret = av_vdpau_bind_context(ctx, vd->vd_dev, vd->vd_getproc, 0);
+  if (ret < 0) {
+    TRACE(TRACE_DEBUG, "VDPAU", "Unable to bind VDPAU context: %d", ret);
+    return 1;
+  }
+
+  // Now get the hwaccel_context that was allocated by bind_context
+  AVVDPAUContext *vctx = ctx->hwaccel_context;
   vctx->decoder = VDP_INVALID_HANDLE;
   vctx->render = vd->vdp_decoder_render;
 
@@ -454,11 +550,9 @@ vdpau_init_libav_decode(media_codec_t *mc, AVCodecContext *ctx)
   if(r) {
     TRACE(TRACE_DEBUG, "VDPAU", "Unable to create decoder: %s",
           vdpau_errstr(vd, r));
-    av_freep(&vctx);
+    av_freep(&ctx->hwaccel_context);
     return 1;
   }
-
-  ctx->hwaccel_context = vctx;
 
   vdpau_codec_t *vc = calloc(1, sizeof(vdpau_codec_t));
   atomic_set(&vc->vc_refcount, 1);
