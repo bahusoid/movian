@@ -638,11 +638,29 @@ Java_com_lonelycoder_mediaplayer_Core_glwTextChanged(JNIEnv *env,
   
   glw_lock(gr);
   
-  // Update the text widget with the new value only if widget exists
-  if(gr->gr_osk_widget != NULL && 
-     gr->gr_osk_widget->glw_class != NULL &&
-     gr->gr_osk_widget->glw_class->gc_set_caption != NULL) {
-    gr->gr_osk_widget->glw_class->gc_set_caption(gr->gr_osk_widget, str, 0);
+  // Update the text widget if it exists
+  if(gr->gr_osk_widget != NULL) {
+    glw_t *w = gr->gr_osk_widget;
+    
+    if(w->glw_class != NULL && w->glw_class->gc_update_text != NULL) {
+      w->glw_class->gc_update_text(w, str);
+    }
+  }
+  
+  glw_unlock(gr);
+  
+  // Dispatch property updates so the text is applied before ACTION_SUBMIT
+  prop_courier_poll(gr->gr_courier);
+  
+  glw_lock(gr);
+  
+  // Now send submit event - the property should be updated
+  if(gr->gr_osk_widget != NULL) {
+    event_t *e = event_create_action(ACTION_SUBMIT);
+    e->e_nav = prop_ref_inc(gr->gr_prop_nav);
+    glw_event_to_widget(gr->gr_osk_widget, e);
+    event_release(e);
+    
     glw_osk_close(gr);
   }
   
@@ -662,16 +680,8 @@ Java_com_lonelycoder_mediaplayer_Core_glwKeyboardCancelled(JNIEnv *env,
   
   glw_lock(gr);
   
-  // Only proceed if we have an active OSK widget
+  // Simply close the OSK without updating text
   if(gr->gr_osk_widget != NULL) {
-    // Restore original text if available
-    if(gr->gr_osk_revert != NULL && 
-       gr->gr_osk_widget->glw_class != NULL &&
-       gr->gr_osk_widget->glw_class->gc_set_caption != NULL) {
-      gr->gr_osk_widget->glw_class->gc_set_caption(gr->gr_osk_widget, 
-                                                    gr->gr_osk_revert, 0);
-    }
-    
     glw_osk_close(gr);
   }
   
