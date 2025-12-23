@@ -60,7 +60,7 @@
 #define BUTTON(ICON, EVENT, ENABLED, WEIGHT = 0.5) {
   
   widget(icon, {
-    focusable: true;
+    focusable: select($self.metadata.autofocus, 1.5, 1.0);
     color: [0.431, 0.811, 1] + iir((isFocused() || isPressed() || isHovered()), 4);
     source: "dataroot://res/svg/" + ICON + ".svg";
     shadow: true;
@@ -108,7 +108,7 @@
     hidden: !(ENABLED);
     source: "skin://pages/listitems/highlight.png";
     alphaSelf: iir(isFocused() * 1, 8) + isHovered() * 0.1;
-    focusable: true;
+    focusable: select($self.metadata.autofocus, 1.5, 1.0);
     onEvent(activate, EVENT);
     widget(container_x, {
       ListItemOpts();
@@ -136,7 +136,7 @@
     hidden: !(ENABLED);
     source: "skin://pages/listitems/highlight.png";
     alphaSelf: iir(isFocused() * 1, 8) + isHovered() * 0.1;
-    focusable: true;
+    focusable: select($self.metadata.autofocus, 1.5, 1.0);
     onEvent(activate, EVENT);
     widget(container_x, {
       ListItemOpts();
@@ -172,7 +172,7 @@
 	ellipsize: true;
 	color: select(isFocused(), 1.0, 0.6) * 
 	  select(STATE, [0.8, 1, 0.8], [1,0.8,0.8]);
-	focusable: true;
+	focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	onEvent(activate, { (STATE) = !STATE; });
       });
       space(1);
@@ -204,7 +204,7 @@ widget(backdrop, {
     });
 
     widget(slider_x, {
-      focusable: true;
+      focusable: select($self.metadata.autofocus, 1.5, 1.0);
       min: MIN;
       max: MAX;
       step: STEP;

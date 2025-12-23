@@ -17,7 +17,7 @@ $view.pageurl = $self.url;
     height: 2em;
     ListItemBevel();
     ListItemHighlight();
-    focusable: true;
+    focusable: select($self.metadata.autofocus, 1.5, 1.0);
     onEvent(activate, EVENT);
 
     widget(container_x, {

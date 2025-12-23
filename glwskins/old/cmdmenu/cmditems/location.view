@@ -7,7 +7,7 @@ widget(backdrop, {
     spacing: 13;
     widget(dummy, {width: $ui.size;});
     widget(label, {
-      focusable: true;
+      focusable: select($self.metadata.autofocus, 1.5, 1.0);
       onEvent(activate, {
 	fireEvent(navOpen($self.url));
 	$args.close = true;

@@ -25,7 +25,7 @@ widget(expander_x, {
 
       widget(icon, {
         id: "navbardot";
-        focusable: true;
+        focusable: select($self.metadata.autofocus, 1.5, 1.0);
         align: center;
         source: "skin://icons/dot.png";
         size: 2em;

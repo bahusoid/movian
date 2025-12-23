@@ -110,7 +110,8 @@ widget(container_z, {
 
           cloner($core.services.stable, container_z, {
 
-            focusable: true;
+            focusable: select($self.metadata.autofocus, 1.5, 1.0);
+            autoRefocusable: select($self.metadata.autofocus, 1.5, 1.0);
             GridItemHighlight();
             onEvent(activate, navOpen($self.url, void, $self));
 

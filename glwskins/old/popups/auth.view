@@ -43,7 +43,7 @@ widget(container_x, {
  	  widget(text, {
 	    description: _("Username");
 	    id: "username";
-	    focusable: true;
+	    focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	    bind($self.username);
 
 	    onEvent(enter, deliverEvent($self.eventSink, "Ok"),
@@ -61,7 +61,7 @@ widget(container_x, {
 	  widget(text, {
 	    description: _("Password");
 	    id: "password";
-	    focusable: true;
+	    focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	    password: true;
 	    bind($self.password);
 	    onEvent(enter, deliverEvent($self.eventSink, "Ok"),
@@ -80,7 +80,7 @@ widget(container_x, {
 	  widget(text, {
 	    description: _("Domain");
 	    id: "domain";
-	    focusable: true;
+	    focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	    bind($self.domain);
 	    onEvent(enter, deliverEvent($self.eventSink, "Ok"),
 		    $self.domain);

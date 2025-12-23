@@ -17,7 +17,7 @@ widget(container_z, {
 
     widget(container_z, {
       ListItemHighlight();
-      focusable: true;
+      focusable: select($self.metadata.autofocus, 1.5, 1.0);
       style: "ListItemOuter";
 
       onEvent(activate, {
@@ -85,7 +85,7 @@ widget(container_z, {
           id: "options";
           navWrap: true;
           cloner($self.options, container_z, {
-            focusable: true;
+            focusable: select($self.metadata.autofocus, 1.5, 1.0);
             ListItemHighlight();
             style: "MultioptItem";
 

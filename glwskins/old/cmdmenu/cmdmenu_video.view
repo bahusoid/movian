@@ -68,7 +68,7 @@ widget(deck, {
 
     cloner($self.media.metadata.audiostreams, backdrop, {
       onEvent(activate, selectAudioTrack($self.url));
-      focusable: true;
+      focusable: select($self.metadata.autofocus, 1.5, 1.0);
       source: "skin://pages/listitems/highlight.png";
       alphaSelf: iir(isFocused() * 1, 8) + isHovered() * 0.1;
 
@@ -113,7 +113,7 @@ widget(deck, {
     cloner(propSorter($self.media.metadata.subtitlestreams,
 		      sort, "node.score", true, false), backdrop, {
       onEvent(activate, selectSubtitleTrack($self.url));
-      focusable: true;
+      focusable: select($self.metadata.autofocus, 1.5, 1.0);
       source: "skin://pages/listitems/highlight.png";
       alphaSelf: iir(isFocused() * 1, 8) + isHovered() * 0.1;
 
@@ -247,7 +247,7 @@ widget(deck, {
 	  cloner($core.media.current.seekindex.positions, container_z, {
 	    width: $ui.size * 14.2222;
 	    
-	    focusable: true;
+	    focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	    onEvent(activate, {
 	      $core.media.current.currenttime = $self.timestamp;
 	    });
@@ -310,7 +310,7 @@ widget(deck, {
 
       source: "skin://pages/listitems/highlight.png";
       alphaSelf: iir(isFocused() * 1, 8) + isHovered() * 0.1;
-      focusable: true;
+      focusable: select($self.metadata.autofocus, 1.5, 1.0);
       onEvent(activate, {
 	$core.media.current.currenttime = $self.timestamp;
       });

@@ -3,8 +3,8 @@
 widget(backdrop, {
   
   source: "highlight.png";
-  autoRefocusable: true;
-  focusable: true;
+  autoRefocusable: select($self.metadata.autofocus, 1.5, 1.0);
+  focusable: select($self.metadata.autofocus, 1.5, 1.0);
   focusOnClick: true;
   onEvent(activate, navOpen($self.url, void, void, $parent.model, void, $parent.url));
   

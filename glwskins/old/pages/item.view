@@ -54,7 +54,7 @@ widget(container_y, {
 	cloner($self.model.actions, container_z, {
 	  hidden: !$self.enabled;
 	  widget(label, {
-	    focusable: true;
+	    focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	    caption: $self.metadata.title;
 	    TextStyleItem();
 	    color: select(isFocused(), 1, 0.5);

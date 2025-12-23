@@ -32,7 +32,7 @@ widget(popup, {
           style: "textInput";
 	  description: _("Username");
 	  id: "input";
-	  focusable: true;
+	  focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	  bind($self.input);
 	  onEvent(enter, deliverEvent($self.eventSink, "Ok"),
 		  $self.username);

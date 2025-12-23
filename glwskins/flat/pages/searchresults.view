@@ -42,7 +42,7 @@ widget(container_z, {
           GridItemBevel();
           GridItemHighlight();
 
-          focusable: true;
+          focusable: select($self.metadata.autofocus, 1.5, 1.0);
           onEvent(activate, navOpen($self.url));
 
           widget(container_y, {

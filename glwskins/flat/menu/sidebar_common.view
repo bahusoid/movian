@@ -122,6 +122,10 @@ SIDEBAR_ACTION(_("Settings"),
                navOpen("settings:"),
                false);
 
+SIDEBAR_ACTION(_("Dev Settings"),
+               "skin://icons/ic_settings_48px.svg",
+               navOpen("settings:dev"),
+               false);
 SIDEBAR_ACTION(fmt(_("Exit %s"), $core.app.name),
                "skin://icons/ic_exit_to_app_48px.svg",
                deliverEvent($core.eventSink, "Quit"),

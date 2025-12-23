@@ -10,7 +10,7 @@
       border: 4;
       padding: [10, -1];
       widget(label, {
-	focusable: true;
+	focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	caption: TITLE;
 	shadow: true;
 	outline: true;

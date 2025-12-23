@@ -1,7 +1,7 @@
 #import "skin://common.view"
 
 widget(container_x, {
-  focusable: true;
+  focusable: select($self.metadata.autofocus, 1.5, 1.0);
   height: $ui.size * 6;
   spacing: 3;
 

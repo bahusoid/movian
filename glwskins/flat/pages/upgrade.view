@@ -8,7 +8,7 @@
       GridItemHighlight();
       widget(label, {
         padding: [1em, 0.5em];
-	focusable: true;
+	focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	caption: TITLE;
 	onEvent(activate, deliverEvent($core.upgrade.eventSink, EVENT));
         style: "NavSelectedText";

@@ -52,7 +52,7 @@ widget(container_z, {
           padding: [1em, 0, 0, 0];
           font: "skin://fonts/RobotoCondensed-Regular.ttf";
           id: "textInput";
-          focusable: true;
+          focusable: select($self.metadata.autofocus, 1.5, 1.0);
           $view.isNavFocused = isNavFocused();
           bind($self.value);
         });

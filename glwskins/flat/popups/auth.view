@@ -65,7 +65,7 @@ widget(popup, {
                 style: "textInput";
 	        description: _("Username");
 	        id: "username";
-	        focusable: true;
+	        focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	        bind($self.username);
 
 	        onEvent(enter, deliverEvent($self.eventSink, "Ok"),
@@ -94,7 +94,7 @@ widget(popup, {
                 style: "textInput";
 	        description: _("Password");
 	        id: "password";
-	        focusable: true;
+	        focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	        password: true;
 	        bind($self.password);
 
@@ -123,7 +123,7 @@ widget(popup, {
                 style: "textInput";
 	        description: _("Domain");
 	        id: "domain";
-	        focusable: true;
+	        focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	        bind($self.domain);
 
 	        onEvent(enter, deliverEvent($self.eventSink, "Ok"),
@@ -137,7 +137,7 @@ widget(popup, {
 	    hidden: !$self.canRemember;
             tableMode: true;
 
-            focusable: true;
+            focusable: select($self.metadata.autofocus, 1.5, 1.0);
             onEvent(activate, {
               toggle($self.rememberMe);
             });

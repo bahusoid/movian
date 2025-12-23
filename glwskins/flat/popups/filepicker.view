@@ -81,7 +81,7 @@ popup({
                   spacing: 1;
                   zbox({
                     filterConstraintX: true;
-                    focusable: true;
+                    focusable: select($self.metadata.autofocus, 1.5, 1.0);
                     ListItemHighlight();
                     onEvent(activate,
                             navOpen($self.url));
@@ -106,7 +106,7 @@ popup({
                     hidden: !($view.dirmode &&
                               $ui.showTopIcons &&
                               $self.dir);
-                    focusable: true;
+                    focusable: select($self.metadata.autofocus, 1.5, 1.0);
                     ListItemHighlight();
                     onEvent(activate,
                             navOpen($self.url, void, void, void, "descend"));

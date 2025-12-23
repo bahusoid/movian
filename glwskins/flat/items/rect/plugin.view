@@ -3,7 +3,7 @@
 vbox({
 
   onEvent(activate, eventWithProp(pluginInfo, $self));
-  focusable: true;
+  focusable: select($self.metadata.autofocus, 1.5, 1.0);
 
   zbox({
 

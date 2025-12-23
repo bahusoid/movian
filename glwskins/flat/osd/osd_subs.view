@@ -28,7 +28,7 @@ widget(container_y, {
         ListItemHighlight();
         ListItemBevel();
 
-        focusable: true;
+        focusable: select($self.metadata.autofocus, 1.5, 1.0);
         onEvent(activate, deliverEvent($parent.control,
                                        selectSubtitleTrack($self.url)));
 

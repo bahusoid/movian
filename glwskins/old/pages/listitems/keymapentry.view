@@ -39,7 +39,7 @@ widget(backdrop, {
 	padding: [8, -4];
 	alphaSelf: iir(isFocused() || isHovered(), 4) + 0.1;
 	borderOnly: true;
-	focusable: true;
+	focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	focusOnClick: true;
 
 	onEvent(activate, {
@@ -63,7 +63,7 @@ widget(backdrop, {
 
 	widget(label,  {
 	  filterConstraintX: true;
-	  focusable: true;
+	  focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	  sizeScale: 0.8;
 	  shadow: true;
 	  outline: true;
@@ -95,7 +95,7 @@ widget(backdrop, {
 	padding: [8, -4];
 	alphaSelf: iir(isFocused() || isHovered(), 4) + 0.1;
 	borderOnly: true;
-	focusable: true;
+	focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	focusOnClick: true;
 
 	onEvent(activate, {
@@ -118,7 +118,7 @@ widget(backdrop, {
 
 	widget(label,  {
 	  filterConstraintX: true;
-	  focusable: true;
+	  focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	  sizeScale: 0.8;
 	  shadow: true;
 	  outline: true;

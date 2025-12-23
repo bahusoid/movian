@@ -7,7 +7,7 @@ $view.itemBookmark <- lookup($core.bookmarks.queries, $args.url);
   widget(container_z, {
     hidden: HIDDEN;
     ListItemHighlight();
-    focusable: true;
+    focusable: select($self.metadata.autofocus, 1.5, 1.0);
 
     onEvent(activate, EVENT);
 

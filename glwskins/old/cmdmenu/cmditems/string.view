@@ -38,7 +38,7 @@ widget(backdrop, {
 	
 	widget(text, {
 	  filterConstraintX: true;
-	  focusable: true;
+	  focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	  sizeScale: 0.8;
 	  shadow: true;
 	  outline: true;

@@ -77,7 +77,7 @@ widget(container_z, {
       keepLastActive: true;
       keepNextActive: true;
 
-      focusable: true;
+      focusable: select($self.metadata.autofocus, 1.5, 1.0);
       time: 0.3;
       effect: blend;
 

@@ -231,7 +231,7 @@ widget(list_y, {
 	cloner($core.media.current.seekindex.positions, container_z, {
 	  width: $ui.size * 14.2222;
 
-	  focusable: true;
+	  focusable: select($self.metadata.autofocus, 1.5, 1.0);
 	  onEvent(activate, {
 	    $core.media.current.currenttime = $self.timestamp;
 	  });

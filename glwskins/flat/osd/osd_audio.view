@@ -23,7 +23,7 @@ widget(container_y, {
 
       cloner($self.media.audio.sorted, container_z, {
         height: 1.5em;
-        focusable: true;
+        focusable: select($self.metadata.autofocus, 1.5, 1.0);
         ListItemHighlight();
         ListItemBevel();
         onEvent(activate, deliverEvent($parent.control,

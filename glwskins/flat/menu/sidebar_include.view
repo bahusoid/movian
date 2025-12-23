@@ -43,7 +43,7 @@
     height: 2em;
     ListItemBevel();
     ListItemHighlight();
-    focusable: true;
+    focusable: select($self.metadata.autofocus, 1.5, 1.0);
     onEvent(activate, EVENT);
 
     widget(container_x, {
@@ -114,7 +114,7 @@
 
             widget(slider_x, {
               alwaysGrabKnob: true;
-              focusable: true;
+              focusable: select($self.metadata.autofocus, 1.5, 1.0);
               min: MIN;
               max: MAX;
               step: STEP;

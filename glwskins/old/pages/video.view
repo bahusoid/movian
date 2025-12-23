@@ -44,7 +44,7 @@ widget(container_z, {
 	origin: $self.origin;
 	primary: true;
 	source: $self.source;
-	focusable: true;
+	focusable: select($self.metadata.autofocus, 1.5, 1.0);
 
         onEvent(left,  deliverEvent($self.media.eventSink, "SeekReverse"));
         onEvent(right, deliverEvent($self.media.eventSink, "SeekForward"));
