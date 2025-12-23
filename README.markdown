@@ -11,10 +11,10 @@ For more information and latest versions, please visit:
 
 ## How to build for Linux
 
-First you need to satisfy some dependencies (for Ubuntu 16.04.3 LTS)
+First you need to satisfy some dependencies (for Ubuntu 24.04.3 LTS)
 
-	sudo apt-get install libfreetype6-dev libfontconfig1-dev libxext-dev libgl1-mesa-dev libasound2-dev libasound2-dev libgtk2.0-dev libxss-dev libxxf86vm-dev libxv-dev libvdpau-dev yasm libpulse-dev libssl-dev curl libwebkitgtk-dev libsqlite3-dev libavahi-client-dev
-
+`	sudo apt-get install libfreetype6-dev libfontconfig1-dev libxext-dev libgl1-mesa-dev libasound2-dev libasound2-dev libgtk2.0-dev libxss-dev libxxf86vm-dev libxv-dev libvdpau-dev yasm libpulse-dev libssl-dev curl libwebkit2gtk-4.1-dev libsqlite3-dev libavahi-client-dev
+`
 Then you need to configure:
 
 	./configure
@@ -89,3 +89,5 @@ To update Movian on rpi with compiled one, enable Binreplace in settings:dev and
 
 	curl --data-binary @build.rpi/showtime.sqfs http://rpi_ip_address:42000/api/replace
 
+VS Code:
+code --install-extension ms-vscode.cpptools
