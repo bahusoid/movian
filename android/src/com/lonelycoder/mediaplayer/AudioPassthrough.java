@@ -152,30 +152,42 @@ public class AudioPassthrough {
     
     /**
      * Probe device passthrough capabilities and report to native code
+     * 
+     * Detection strategy:
+     * - Android 7+ (API 24+): Check for native IEC61937 encoding support
+     * - Android 5-6 (API 21-23): Use legacy PCM16 IEC hack if no raw encodings available
+     * - Raw encodings (ENCODING_AC3, etc.): Preferred when available (API 21+)
      */
     public static void probeCapabilities() {
+        // Check raw encoding support (best quality, when available)
         boolean ac3 = isEncodingSupported(ENCODING_AC3, 48000);
         boolean eac3 = isEncodingSupported(ENCODING_E_AC3, 48000);
         boolean dts = isEncodingSupported(ENCODING_DTS, 48000);
         boolean dtsHd = is71EncodingSupported(ENCODING_DTS_HD, 48000);
         boolean trueHd = is71EncodingSupported(ENCODING_DOLBY_TRUEHD, 192000);
+        
+        // Check native IEC61937 support (Android 7+/API 24+)
         boolean iec = isEncodingSupported(ENCODING_IEC61937, 48000);
         
-        // Legacy fallback: IEC61937 via PCM16 (Android 5.0 hack)
-        // Only use if native IEC61937 and raw encodings not supported
+        // Legacy IEC fallback for Android 5-6 (API 21-23)
+        // This uses PCM16 encoding with IEC61937-wrapped data
+        // Only enable on older Android versions where native IEC isn't available
         boolean legacyIec = false;
-        if (!iec && !ac3 && !dts) {
+        if (Build.VERSION.SDK_INT >= 21 && Build.VERSION.SDK_INT < 24) {
+            // On Android 5-6, native IEC61937 doesn't exist
+            // We can use PCM16 to pass through IEC61937 data if device supports it
             int minBuf = AudioTrack.getMinBufferSize(
                 48000, 
                 AudioFormat.CHANNEL_OUT_STEREO,
                 AudioFormat.ENCODING_PCM_16BIT
             );
             legacyIec = (minBuf > 0);
+            Log.i(TAG, "Legacy IEC mode available (Android " + Build.VERSION.SDK_INT + ")");
         }
         
         Log.i(TAG, String.format(
-            "Passthrough capabilities - AC3:%b E-AC3:%b DTS:%b DTS-HD:%b TrueHD:%b IEC:%b Legacy:%b",
-            ac3, eac3, dts, dtsHd, trueHd, iec, legacyIec));
+            "Passthrough capabilities - AC3:%b E-AC3:%b DTS:%b DTS-HD:%b TrueHD:%b IEC:%b Legacy:%b (API %d)",
+            ac3, eac3, dts, dtsHd, trueHd, iec, legacyIec, Build.VERSION.SDK_INT));
         
         reportCapabilities(ac3, eac3, dts, dtsHd, trueHd, iec, legacyIec);
     }
@@ -220,6 +232,12 @@ public class AudioPassthrough {
     
     /**
      * Create AudioTrack for passthrough playback
+     * 
+     * Uses optimal API based on Android version:
+     * - Android 8+ (API 26+): AudioTrack.Builder (recommended)
+     * - Android 5-7 (API 21-25): Legacy AudioTrack constructor with AudioAttributes
+     * - Legacy IEC mode (API 21-23): PCM16 with volume hack
+     * 
      * @param context Application context (can be null - will use cached context)
      */
     public boolean create(Context context, int encoding, int sampleRate, 
@@ -227,6 +245,7 @@ public class AudioPassthrough {
         mContext = (context != null) ? context : sAppContext;
         mEncoding = encoding;
         mSampleRate = sampleRate;
+        mIsLegacyIEC = false;
         
         try {
             int channelMask;
@@ -238,72 +257,134 @@ public class AudioPassthrough {
                 channelMask = AudioFormat.CHANNEL_OUT_STEREO;
             }
             
-            // Legacy IEC hack for Android 5.0
+            // Legacy IEC hack for Android 5-6 (API 21-23)
             // When using PCM16 for IEC passthrough, we need to set volume to 100%
-            if (encoding == AudioFormat.ENCODING_PCM_16BIT && ENCODING_IEC61937 == -1) {
+            // to avoid audio mangling by Android's audio processing
+            if (encoding == AudioFormat.ENCODING_PCM_16BIT && 
+                Build.VERSION.SDK_INT >= 21 && Build.VERSION.SDK_INT < 24) {
                 mIsLegacyIEC = true;
-                Log.i(TAG, "Using legacy IEC passthrough mode");
+                Log.i(TAG, "Using legacy IEC passthrough mode (Android " + Build.VERSION.SDK_INT + ")");
                 setSystemVolume(1.0f);
             }
             
             Log.i(TAG, String.format(
-                "Creating AudioTrack: encoding=%d sampleRate=%d channels=%d buffer=%d",
-                encoding, sampleRate, channels, bufferSize));
+                "Creating AudioTrack: encoding=%d sampleRate=%d channels=%d buffer=%d channelMask=0x%x API=%d",
+                encoding, sampleRate, channels, bufferSize, channelMask, Build.VERSION.SDK_INT));
             
-            if (Build.VERSION.SDK_INT >= 21) {
-                AudioAttributes.Builder attrBuilder = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC);
-                
-                AudioFormat.Builder fmtBuilder = new AudioFormat.Builder()
-                    .setChannelMask(channelMask)
-                    .setEncoding(encoding)
-                    .setSampleRate(sampleRate);
-                
-                mAudioTrack = new AudioTrack(
-                    attrBuilder.build(),
-                    fmtBuilder.build(),
-                    bufferSize,
-                    AudioTrack.MODE_STREAM,
-                    AudioManager.AUDIO_SESSION_ID_GENERATE
-                );
+            // Use AudioTrack.Builder for Android 8+ (API 26+) - optimal modern API
+            if (Build.VERSION.SDK_INT >= 26) {
+                mAudioTrack = createAudioTrackModern(encoding, sampleRate, channelMask, bufferSize);
+            } else if (Build.VERSION.SDK_INT >= 21) {
+                // Android 5-7: Use AudioTrack constructor with AudioAttributes
+                mAudioTrack = createAudioTrackLegacy(encoding, sampleRate, channelMask, bufferSize);
             } else {
-                mAudioTrack = new AudioTrack(
-                    AudioManager.STREAM_MUSIC,
-                    sampleRate,
-                    channelMask,
-                    encoding,
-                    bufferSize,
-                    AudioTrack.MODE_STREAM
-                );
+                // Android < 5: Not supported for passthrough
+                Log.e(TAG, "Android version too old for passthrough (API " + Build.VERSION.SDK_INT + ")");
+                return false;
             }
             
-            if (mAudioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
+            if (mAudioTrack == null || mAudioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
                 Log.e(TAG, "AudioTrack failed to initialize");
-                mAudioTrack.release();
-                mAudioTrack = null;
+                if (mAudioTrack != null) {
+                    mAudioTrack.release();
+                    mAudioTrack = null;
+                }
                 restoreSystemVolumeIfNeeded();
                 return false;
             }
+            
+            // Pause initially to allow buffer filling before playback
+            mAudioTrack.pause();
+            mAudioTrack.flush();
             
             Log.i(TAG, "AudioTrack created successfully");
             return true;
             
         } catch (Exception e) {
             Log.e(TAG, "Failed to create AudioTrack: " + e.getMessage());
+            e.printStackTrace();
             restoreSystemVolumeIfNeeded();
             return false;
         }
     }
     
     /**
+     * Create AudioTrack using modern Builder API (Android 8+/API 26+)
+     * This is the recommended approach for modern Android
+     */
+    private AudioTrack createAudioTrackModern(int encoding, int sampleRate, 
+                                               int channelMask, int bufferSize) {
+        try {
+            AudioAttributes attributes = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build();
+            
+            AudioFormat format = new AudioFormat.Builder()
+                .setChannelMask(channelMask)
+                .setEncoding(encoding)
+                .setSampleRate(sampleRate)
+                .build();
+            
+            return new AudioTrack.Builder()
+                .setAudioAttributes(attributes)
+                .setAudioFormat(format)
+                .setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setSessionId(AudioManager.AUDIO_SESSION_ID_GENERATE)
+                .build();
+                
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to create AudioTrack with Builder: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Create AudioTrack using legacy API (Android 5-7/API 21-25)
+     * Uses AudioAttributes but not AudioTrack.Builder
+     */
+    private AudioTrack createAudioTrackLegacy(int encoding, int sampleRate,
+                                               int channelMask, int bufferSize) {
+        try {
+            AudioAttributes.Builder attrBuilder = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC);
+            
+            AudioFormat.Builder fmtBuilder = new AudioFormat.Builder()
+                .setChannelMask(channelMask)
+                .setEncoding(encoding)
+                .setSampleRate(sampleRate);
+            
+            return new AudioTrack(
+                attrBuilder.build(),
+                fmtBuilder.build(),
+                bufferSize,
+                AudioTrack.MODE_STREAM,
+                AudioManager.AUDIO_SESSION_ID_GENERATE
+            );
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to create AudioTrack with legacy API: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
      * Write byte data to AudioTrack
+     * Uses WRITE_BLOCKING mode for API 23+ for better synchronization
      */
     public int write(byte[] data, int offset, int size) {
         if (mAudioTrack == null) return -1;
         
         try {
-            int written = mAudioTrack.write(data, offset, size);
+            int written;
+            if (Build.VERSION.SDK_INT >= 23) {
+                // Use blocking write with write mode parameter (API 23+)
+                written = mAudioTrack.write(data, offset, size, AudioTrack.WRITE_BLOCKING);
+            } else {
+                // Legacy write without mode parameter
+                written = mAudioTrack.write(data, offset, size);
+            }
             if (written < 0) {
                 Log.e(TAG, "AudioTrack write error: " + written);
             }
@@ -316,12 +397,20 @@ public class AudioPassthrough {
     
     /**
      * Write short data to AudioTrack (for IEC61937 mode)
+     * Uses WRITE_BLOCKING mode for API 23+ for better synchronization
      */
     public int writeShorts(short[] data, int offset, int size) {
         if (mAudioTrack == null) return -1;
         
         try {
-            int written = mAudioTrack.write(data, offset, size);
+            int written;
+            if (Build.VERSION.SDK_INT >= 23) {
+                // Use blocking write with write mode parameter (API 23+)
+                written = mAudioTrack.write(data, offset, size, AudioTrack.WRITE_BLOCKING);
+            } else {
+                // Legacy write without mode parameter
+                written = mAudioTrack.write(data, offset, size);
+            }
             if (written < 0) {
                 Log.e(TAG, "AudioTrack write error: " + written);
             }

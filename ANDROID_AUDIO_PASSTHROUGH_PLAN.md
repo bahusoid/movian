@@ -3,201 +3,55 @@
 ## Overview
 This document provides a detailed implementation plan for adding audio passthrough support (AC3, DTS, DTS-HD, E-AC3, TrueHD) to Movian on Android, with support for legacy Android 5.0 (API 21) devices.
 
+## Implementation Status: DONE ✓
+
+The passthrough implementation is complete with the following files:
+- **Java**: `android/src/com/lonelycoder/mediaplayer/AudioPassthrough.java`
+- **C/JNI**: `src/arch/android/android_audio.c`
+
+## Android API Levels and AudioTrack Methods
+
+### API Level Summary for Passthrough:
+
+| API Level | Android Version | AudioTrack Creation Method | Encodings Available |
+|-----------|-----------------|---------------------------|---------------------|
+| 21-22 | Android 5.0-5.1 | AudioTrack + AudioAttributes | AC3, E-AC3, DTS, DTS-HD |
+| 23-25 | Android 6.0-7.1 | AudioTrack + AudioAttributes | + TrueHD, WRITE_BLOCKING |
+| 24+ | Android 7.0+ | AudioTrack + AudioAttributes | + ENCODING_IEC61937 |
+| 26+ | Android 8.0+ | AudioTrack.Builder (optimal) | All encodings |
+
+### Key Implementation Details:
+
+1. **Android 8+ (API 26+)**: Uses `AudioTrack.Builder` - the optimal modern API
+2. **Android 5-7 (API 21-25)**: Uses legacy `AudioTrack` constructor with `AudioAttributes`
+3. **Android 5-6 (API 21-23)**: Legacy IEC hack using `ENCODING_PCM_16BIT` with volume=100%
+
+### Legacy Android 5-6 IEC Passthrough ("Shitty" Mode)
+From Kodi's implementation (commit `cc271e294509506fbe5e582144ec08ebbf9649b8`):
+- Android 5-6 devices don't have `ENCODING_IEC61937` constant
+- **Workaround**: Use `ENCODING_PCM_16BIT` with IEC61937-packed audio data
+- **Critical**: Must set system volume to 100% during passthrough and restore after
+- Only works for AC3/DTS basic passthrough (not DTS-HD/TrueHD)
+
 ## Current State Analysis
 
 ### Existing Movian Audio Implementation
 - **File**: [src/arch/android/android_audio.c](src/arch/android/android_audio.c)
-- Uses **OpenSL ES** (`SLES/OpenSLES.h`) for audio output
-- Only supports **PCM stereo output** (16-bit, 44.1kHz/48kHz)
-- No passthrough support currently implemented
+- Uses **OpenSL ES** (`SLES/OpenSLES.h`) for PCM audio output
+- Now includes **AudioTrack API via JNI** for passthrough
 - Audio class structure defined in [src/audio2/audio.h](src/audio2/audio.h)
 
 ### Reference Implementation (Kodi)
 - Uses **Android AudioTrack API via JNI** for passthrough
 - Supports two modes:
   1. **RAW Mode**: Uses `ENCODING_AC3`, `ENCODING_DTS`, `ENCODING_DTS_HD`, `ENCODING_E_AC3` encodings
-  2. **IEC61937 Mode**: Uses `ENCODING_IEC61937` with IEC-packed data (Android 7.0+, backported to some 5.x/6.x devices)
-
-### Android 5.0 Legacy Support (Critical)
-From the commit `cc271e294509506fbe5e582144ec08ebbf9649b8`:
-- Android 5.0 devices don't have `ENCODING_IEC61937` constant
-- **Workaround**: Use `ENCODING_PCM_16BIT` with IEC61937-packed audio data
-- **Important**: Must set system volume to 100% during passthrough and restore after
-- Need to acquire/release audio focus during passthrough
+  2. **IEC61937 Mode**: Uses `ENCODING_IEC61937` with IEC-packed data (Android 7.0+)
 
 ---
 
-## Implementation Plan
+## Architecture
 
-### Phase 1: Add Java JNI Bridge for AudioTrack
-
-#### 1.1 Create AudioPassthrough.java
-**File**: `android/src/com/lonelycoder/mediaplayer/AudioPassthrough.java`
-
-```java
-package com.lonelycoder.mediaplayer;
-
-import android.media.AudioFormat;
-import android.media.AudioManager;
-import android.media.AudioTrack;
-import android.media.AudioAttributes;
-import android.os.Build;
-import android.content.Context;
-import android.util.Log;
-
-public class AudioPassthrough {
-    private static final String TAG = "MovianAudioPT";
-    
-    private AudioTrack mAudioTrack;
-    private float mSavedVolume = -1;
-    private Context mContext;
-    private boolean mIsLegacyIEC = false;
-    
-    // Encoding constants (may be -1 if not supported)
-    public static int ENCODING_AC3 = -1;
-    public static int ENCODING_E_AC3 = -1;
-    public static int ENCODING_DTS = -1;
-    public static int ENCODING_DTS_HD = -1;
-    public static int ENCODING_DOLBY_TRUEHD = -1;
-    public static int ENCODING_IEC61937 = -1;
-    
-    static {
-        // Initialize encoding constants based on Android version
-        initEncodingConstants();
-    }
-    
-    private static void initEncodingConstants() {
-        if (Build.VERSION.SDK_INT >= 21) {
-            try {
-                ENCODING_AC3 = AudioFormat.ENCODING_AC3;
-            } catch (Exception e) { ENCODING_AC3 = -1; }
-            
-            try {
-                ENCODING_E_AC3 = AudioFormat.ENCODING_E_AC3;
-            } catch (Exception e) { ENCODING_E_AC3 = -1; }
-            
-            try {
-                ENCODING_DTS = AudioFormat.ENCODING_DTS;
-            } catch (Exception e) { ENCODING_DTS = -1; }
-            
-            try {
-                ENCODING_DTS_HD = AudioFormat.ENCODING_DTS_HD;
-            } catch (Exception e) { ENCODING_DTS_HD = -1; }
-        }
-        
-        if (Build.VERSION.SDK_INT >= 23) {
-            try {
-                ENCODING_DOLBY_TRUEHD = AudioFormat.ENCODING_DOLBY_TRUEHD;
-            } catch (Exception e) { ENCODING_DOLBY_TRUEHD = -1; }
-        }
-        
-        if (Build.VERSION.SDK_INT >= 24) {
-            try {
-                ENCODING_IEC61937 = AudioFormat.ENCODING_IEC61937;
-            } catch (Exception e) { ENCODING_IEC61937 = -1; }
-        }
-    }
-    
-    // Check if specific encoding is supported
-    public static boolean isEncodingSupported(int encoding, int sampleRate) {
-        if (encoding == -1) return false;
-        
-        int minBufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_STEREO,
-            encoding
-        );
-        return minBufferSize > 0;
-    }
-    
-    // Check passthrough capabilities
-    public static native void reportCapabilities(
-        boolean ac3Supported,
-        boolean eac3Supported,
-        boolean dtsSupported,
-        boolean dtsHdSupported,
-        boolean trueHdSupported,
-        boolean iec61937Supported
-    );
-    
-    public static void probeCapabilities() {
-        boolean ac3 = isEncodingSupported(ENCODING_AC3, 48000);
-        boolean eac3 = isEncodingSupported(ENCODING_E_AC3, 48000);
-        boolean dts = isEncodingSupported(ENCODING_DTS, 48000);
-        boolean dtsHd = isEncodingSupported(ENCODING_DTS_HD, 48000);
-        boolean trueHd = isEncodingSupported(ENCODING_DOLBY_TRUEHD, 192000);
-        boolean iec = isEncodingSupported(ENCODING_IEC61937, 48000);
-        
-        // Legacy fallback: IEC61937 via PCM16
-        if (!iec && !ac3 && !dts) {
-            // Try IEC passthrough using PCM16 encoding (Android 5.0 hack)
-            int minBuf = AudioTrack.getMinBufferSize(48000, 
-                AudioFormat.CHANNEL_OUT_STEREO,
-                AudioFormat.ENCODING_PCM_16BIT);
-            if (minBuf > 0) {
-                iec = true; // Will use PCM16 with IEC packing
-            }
-        }
-        
-        Log.d(TAG, "Passthrough capabilities - AC3:" + ac3 + 
-              " E-AC3:" + eac3 + " DTS:" + dts + 
-              " DTS-HD:" + dtsHd + " TrueHD:" + trueHd + " IEC:" + iec);
-        
-        reportCapabilities(ac3, eac3, dts, dtsHd, trueHd, iec);
-    }
-    
-    // Create AudioTrack for passthrough
-    public boolean create(Context context, int encoding, int sampleRate, int channels, int bufferSize) {
-        mContext = context;
-        
-        try {
-            int channelMask = (channels > 2) ? 
-                AudioFormat.CHANNEL_OUT_7POINT1_SURROUND : 
-                AudioFormat.CHANNEL_OUT_STEREO;
-            
-            // Legacy IEC hack for Android 5.0
-            if (encoding == AudioFormat.ENCODING_PCM_16BIT && ENCODING_IEC61937 == -1) {
-                mIsLegacyIEC = true;
-                // Set system volume to 100% for IEC passthrough
-                setSystemVolume(1.0f);
-            }
-            
-            if (Build.VERSION.SDK_INT >= 21) {
-                AudioAttributes.Builder attrBuilder = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC);
-                
-                AudioFormat.Builder fmtBuilder = new AudioFormat.Builder()
-                    .setChannelMask(channelMask)
-                    .setEncoding(encoding)
-                    .setSampleRate(sampleRate);
-                
-                mAudioTrack = new AudioTrack(
-                    attrBuilder.build(),
-                    fmtBuilder.build(),
-                    bufferSize,
-                    AudioTrack.MODE_STREAM,
-                    AudioManager.AUDIO_SESSION_ID_GENERATE
-                );
-            } else {
-                mAudioTrack = new AudioTrack(
-                    AudioManager.STREAM_MUSIC,
-                    sampleRate,
-                    channelMask,
-                    encoding,
-                    bufferSize,
-                    AudioTrack.MODE_STREAM
-                );
-            }
-            
-            if (mAudioTrack.getState() != AudioTrack.STATE_INITIALIZED) {
-                Log.e(TAG, "AudioTrack failed to initialize");
-                mAudioTrack.release();
-                mAudioTrack = null;
-                return false;
-            }
-            
-            return true;
+### Dual Audio Path Design:
         } catch (Exception e) {
             Log.e(TAG, "Failed to create AudioTrack: " + e.getMessage());
             return false;
