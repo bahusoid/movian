@@ -253,18 +253,18 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
 
         mp->mp_framerate = fctx->streams[si]->avg_frame_rate;
 
-      } else if(fctx->streams[si]->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
+      } else if(fctx->streams[si]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
 
 	mb = media_buf_from_avpkt_unlocked(mp, &pkt);
 	mb->mb_data_type = MB_AUDIO;
 	mq = &mp->mp_audio;
 
-      } else if(fctx->streams[si]->codec->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+      } else if(fctx->streams[si]->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE) {
 
-	int duration = pkt.convergence_duration ?: pkt.duration;
+	int duration = pkt.duration;  // convergence_duration removed in modern FFmpeg
 
 	mb = media_buf_from_avpkt_unlocked(mp, &pkt);
-	mb->mb_codecid = fctx->streams[si]->codec->codec_id;
+	mb->mb_codecid = fctx->streams[si]->codecpar->codec_id;
 	mb->mb_font_context = freetype_context;
 	mb->mb_data_type = MB_SUBTITLE;
 	mq = &mp->mp_video;
@@ -274,7 +274,7 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
       } else {
 	/* Check event queue ? */
       bad:
-	av_free_packet(&pkt);
+	av_packet_unref(&pkt);
 	continue;
       }
 
@@ -309,7 +309,7 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
       }
 
       mb->mb_keyframe = !!(pkt.flags & AV_PKT_FLAG_KEY);
-      av_free_packet(&pkt);
+      av_packet_unref(&pkt);
     }
 
     /*
@@ -762,18 +762,19 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
     char str[256];
     media_codec_params_t mcp = {0};
     AVStream *st = fctx->streams[i];
-    AVCodecContext *ctx = st->codec;
+    AVCodecParameters *codecpar = st->codecpar;
     AVDictionaryEntry *fn, *mt;
 
-    avcodec_string(str, sizeof(str), ctx, 0);
+    const AVCodec *c = avcodec_find_decoder(codecpar->codec_id);
+    snprintf(str, sizeof(str), "%s", c ? c->name : "Unknown codec");
     TRACE(TRACE_DEBUG, "Video", " Stream #%d: %s", i, str);
 
-    switch(ctx->codec_type) {
+    switch(codecpar->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
-      mcp.width = ctx->width;
-      mcp.height = ctx->height;
-      mcp.profile = ctx->profile;
-      mcp.level = ctx->level;
+      mcp.width = codecpar->width;
+      mcp.height = codecpar->height;
+      mcp.profile = codecpar->profile;
+      mcp.level = codecpar->level;
       mcp.sar_num = st->sample_aspect_ratio.num;
       mcp.sar_den = st->sample_aspect_ratio.den;
 
@@ -781,16 +782,14 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
       mcp.frame_rate_den = st->avg_frame_rate.den;
 
       if(!mcp.frame_rate_num  || !mcp.frame_rate_num) {
-	mcp.frame_rate_num = ctx->time_base.den;
-	mcp.frame_rate_den = ctx->time_base.num;
+	mcp.frame_rate_num = st->r_frame_rate.num;
+	mcp.frame_rate_den = st->r_frame_rate.den;
       }
       break;
 
     case AVMEDIA_TYPE_AUDIO:
       if(va.flags & BACKEND_VIDEO_NO_AUDIO)
 	continue;
-      if(ctx->codec_id == AV_CODEC_ID_DTS)
-	ctx->channels = 0;
       break;
 
     case AVMEDIA_TYPE_ATTACHMENT:
@@ -803,7 +802,7 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
 #if ENABLE_LIBAV_ATTACHMENT_POINTER
             st->attached_size
 #else
-            st->codec->extradata_size
+            codecpar->extradata_size
 #endif
             );
 
@@ -812,12 +811,12 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
 	attachment_load(&alist, url, st->attached_offset, st->attached_size,
 			freetype_context, fn ? fn->value : "<unknown>");
 #else
-      if(st->codec->extradata_size) {
-        buf_t *b = buf_create_and_adopt(st->codec->extradata_size,
-                                        st->codec->extradata,
+      if(codecpar->extradata_size) {
+        buf_t *b = buf_create_and_adopt(codecpar->extradata_size,
+                                        codecpar->extradata,
                                         (void *)&av_free);
-        st->codec->extradata = NULL;
-        st->codec->extradata_size = 0;
+        codecpar->extradata = NULL;
+        codecpar->extradata_size = 0;
 	attachment_load_buf(&alist, b, freetype_context,
                             fn ? fn->value : "<unknown>");
         buf_release(b);
@@ -831,17 +830,17 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
     }
 
 
-    if(ctx->codec_type == AVMEDIA_TYPE_VIDEO && mp->mp_video.mq_stream != -1)
+    if(codecpar->codec_type == AVMEDIA_TYPE_VIDEO && mp->mp_video.mq_stream != -1)
       continue;
 
-    mcp.extradata      = ctx->extradata;
-    mcp.extradata_size = ctx->extradata_size;
+    mcp.extradata      = codecpar->extradata;
+    mcp.extradata_size = codecpar->extradata_size;
 
-    cwvec[i] = media_codec_create(ctx->codec_id, 0, fw, ctx, &mcp, mp);
+    cwvec[i] = media_codec_create(codecpar->codec_id, 0, fw, NULL, &mcp, mp);
 
     if(cwvec[i] != NULL) {
       TRACE(TRACE_DEBUG, "Video", " Stream #%d: Codec created", i);
-      switch(ctx->codec_type) {
+      switch(codecpar->codec_type) {
       case AVMEDIA_TYPE_VIDEO:
 	if(mp->mp_video.mq_stream == -1) {
 	  mp->mp_video.mq_stream = i;

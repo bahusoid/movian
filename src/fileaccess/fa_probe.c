@@ -57,7 +57,7 @@
 static const char *
 codecname(enum AVCodecID id)
 {
-  AVCodec *c;
+  const AVCodec *c;
 
   switch(id) {
   case AV_CODEC_ID_AC3:
@@ -447,12 +447,12 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
 
   for(i = 0; i < fctx->nb_streams; i++) {
     AVStream *stream = fctx->streams[i];
-    AVCodecContext *avctx = stream->codec;
+    AVCodecParameters *avpar = stream->codecpar;
 
-    if(avctx->codec_type == AVMEDIA_TYPE_AUDIO)
+    if(avpar->codec_type == AVMEDIA_TYPE_AUDIO)
       has_audio = 1;
 
-    if(avctx->codec_type == AVMEDIA_TYPE_VIDEO &&
+    if(avpar->codec_type == AVMEDIA_TYPE_VIDEO &&
        !(stream->disposition & AV_DISPOSITION_ATTACHED_PIC))
       has_video = 1;
   }
@@ -480,16 +480,16 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
 
     for(i = 0; i < fctx->nb_streams; i++) {
       AVStream *stream = fctx->streams[i];
-      AVCodecContext *avctx = stream->codec;
-      AVCodec *codec = avcodec_find_decoder(avctx->codec_id);
+      AVCodecParameters *avpar = stream->codecpar;
+      const AVCodec *codec = avcodec_find_decoder(avpar->codec_id);
       AVDictionaryEntry *lang, *title;
       int tn;
       char str[256];
 
-      avcodec_string(str, sizeof(str), avctx, 0);
+      snprintf(str, sizeof(str), "%s", codec ? codec->name : "Unknown codec");
       TRACE(TRACE_DEBUG, "Probe", " Stream #%d: %s", i, str);
 
-      switch(avctx->codec_type) {
+      switch(avpar->codec_type) {
       case AVMEDIA_TYPE_VIDEO:
 	has_video = !!codec;
 	tn = ++vtrack;
@@ -507,9 +507,9 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
       }
 
       if(codec == NULL) {
-	snprintf(tmp1, sizeof(tmp1), "%s", codecname(avctx->codec_id));
+	snprintf(tmp1, sizeof(tmp1), "%s", codecname(avpar->codec_id));
       } else {
-	metadata_from_libav(tmp1, sizeof(tmp1), codec, avctx);
+	metadata_from_libav(tmp1, sizeof(tmp1), codec, NULL);
       }
 
       lang = av_dict_get(stream->metadata, "language", NULL,
@@ -518,13 +518,13 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
       title = av_dict_get(stream->metadata, "title", NULL,
                           AV_DICT_IGNORE_SUFFIX);
 
-      metadata_add_stream(md, codecname(avctx->codec_id),
-			  avctx->codec_type, i,
+      metadata_add_stream(md, codecname(avpar->codec_id),
+			  avpar->codec_type, i,
 			  title ? title->value : NULL,
 			  tmp1,
 			  lang ? lang->value : NULL,
 			  stream->disposition,
-			  tn, avctx->channels);
+			  tn, avpar->ch_layout.nb_channels);
     }
 
     md->md_contenttype = CONTENT_FILE;

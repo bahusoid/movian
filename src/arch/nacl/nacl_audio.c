@@ -216,7 +216,7 @@ nacl_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
 
   uint8_t *data[8] = {0};
   data[0] = (uint8_t *)(d->samples + off);
-  avresample_read(ad->ad_avr, data, samples);
+  swr_convert(ad->ad_avr, data, samples, NULL, 0);
   d->wrptr++;
 
   if(pts != AV_NOPTS_VALUE) {

@@ -323,7 +323,7 @@ mac_audio_deliver(audio_decoder_t *ad, int samples,
 
   uint8_t *data[8] = {0};
   data[0] = (uint8_t *)b->mAudioData;
-  avresample_read(ad->ad_avr, data, samples);
+  swr_convert(ad->ad_avr, data, samples, NULL, 0);
   b->mAudioDataByteSize = bytes;
 
   AudioTimeStamp ats;

@@ -21,7 +21,7 @@
 #include <assert.h>
 #include <libavformat/avformat.h>
 #include <libavutil/mathematics.h>
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 #include <libavutil/opt.h>
 #include <libavutil/mem.h>
 
@@ -58,7 +58,7 @@ typedef struct audio_source {
   int as_format;
   int64_t as_channel_layout;
   int as_sample_rate;
-  AVAudioResampleContext *as_avr;
+  struct SwrContext *as_avr;
   struct audio_buf_queue as_queue;
 
 
@@ -194,9 +194,11 @@ emit_audio(glw_rec_t *gr, int64_t pts)
       frame.data[0] = (void *)data;
       frame.nb_samples = SAMPLES_PER_FRAME;
 
-      int got_packet;
-      int r = avcodec_encode_audio2(gr->a_ctx, &pkt, &frame, &got_packet);
-      if(r < 0 || !got_packet)
+      int ret = avcodec_send_frame(gr->a_ctx, &frame);
+      if(ret < 0 && ret != AVERROR(EAGAIN))
+        abort();
+      ret = avcodec_receive_packet(gr->a_ctx, &pkt);
+      if(ret < 0)
         abort();
 
 
@@ -205,7 +207,7 @@ emit_audio(glw_rec_t *gr, int64_t pts)
       pkt.duration = av_rescale_q(1, (AVRational){SAMPLES_PER_FRAME, 48000},
                                   gr->v_st->time_base);
       av_interleaved_write_frame(gr->oc, &pkt);
-      av_free_packet(&pkt);
+      av_packet_unref(&pkt);
     }
 
     gr->samples_written += SAMPLES_PER_FRAME;
@@ -240,25 +242,25 @@ encode_vframe(glw_rec_t *gr, struct pixmap *pm)
   pkt.data = NULL;    // packet data will be allocated by the encoder
   pkt.size = 0;
 
-  int got_packet;
-  r = avcodec_encode_video2(gr->v_ctx, &pkt, &frame, &got_packet);
-  if(r < 0 || !got_packet)
+  r = avcodec_send_frame(gr->v_ctx, &frame);
+  if(r < 0 && r != AVERROR(EAGAIN))
+    return;
+  r = avcodec_receive_packet(gr->v_ctx, &pkt);
+  if(r < 0)
     return;
 
-  int64_t pts = gr->v_ctx->coded_frame->pts;
-  if(pts == AV_NOPTS_VALUE)
-    pts = frame.pts;
+  int64_t pts = frame.pts;
 
   pkt.dts = pkt.pts = av_rescale_q(pts,
                                    AV_TIME_BASE_Q, gr->v_st->time_base);
 
-  if(gr->v_ctx->coded_frame->key_frame)
+  if(pkt.flags & AV_PKT_FLAG_KEY)
     pkt.flags |= AV_PKT_FLAG_KEY;
 
   pkt.stream_index = gr->v_st->index;
   pkt.duration = av_rescale_q(1, (AVRational){1, gr->fps}, gr->v_st->time_base);
   av_interleaved_write_frame(gr->oc, &pkt);
-  av_free_packet(&pkt);
+  av_packet_unref(&pkt);
 
   emit_audio(gr, pts);
 }
@@ -320,7 +322,7 @@ rec_thread(void *aux)
 
   gr->a_ctx->sample_rate = 48000;
   gr->a_ctx->sample_fmt = AV_SAMPLE_FMT_S16;
-  gr->a_ctx->channel_layout = AV_CH_LAYOUT_STEREO;
+  av_channel_layout_from_mask(&gr->a_ctx->ch_layout, AV_CH_LAYOUT_STEREO);
   gr->a_ctx->time_base.den = 48000;
   gr->a_ctx->time_base.num = 1;
 
@@ -464,14 +466,14 @@ glw_rec_audio_send(struct audio_decoder *ad, AVFrame *frame, int64_t pts)
       LIST_INSERT_HEAD(&gr->asources, as, as_link);
       as->as_id = ad->ad_id;
       as->as_start_drop = 24000;
-      as->as_avr = avresample_alloc_context();
+      as->as_avr = swr_alloc();
     }
 
     if(as->as_format != ad->ad_in_sample_format ||
        as->as_channel_layout != ad->ad_in_channel_layout ||
        as->as_sample_rate != ad->ad_in_sample_rate) {
 
-      avresample_close(as->as_avr);
+      swr_close(as->as_avr);
 
       as->as_format = ad->ad_in_sample_format;
       as->as_channel_layout = ad->ad_in_channel_layout;
@@ -492,35 +494,36 @@ glw_rec_audio_send(struct audio_decoder *ad, AVFrame *frame, int64_t pts)
                      AV_CH_LAYOUT_STEREO, 0);
 
       char buf1[128];
-
-      av_get_channel_layout_string(buf1, sizeof(buf1),
-                                   -1, as->as_channel_layout);
+      AVChannelLayout ch_layout;
+      av_channel_layout_from_mask(&ch_layout, as->as_channel_layout);
+      av_channel_layout_describe(&ch_layout, buf1, sizeof(buf1));
+      av_channel_layout_uninit(&ch_layout);
 
       TRACE(TRACE_DEBUG, "REC",
             "Converting from [%s %dHz %s]",
             buf1, as->as_sample_rate,
             av_get_sample_fmt_name(as->as_format));
 
-      if(avresample_open(as->as_avr)) {
+      if(swr_init(as->as_avr)) {
         TRACE(TRACE_ERROR, "REC", "Unable to open resampler");
-        avresample_free(&as->as_avr);
+        swr_free(&as->as_avr);
       }
     }
 
     if(as->as_avr == NULL)
       continue;
 
-    avresample_convert(as->as_avr, NULL, 0, 0,
-                       frame->data, frame->linesize[0],
+    swr_convert(as->as_avr, NULL, 0,
+                       (const uint8_t **)frame->data,
                        frame->nb_samples);
 
-    int avail = avresample_available(as->as_avr);
+    int avail = swr_get_out_samples(as->as_avr, 0);
 
     if(avail == 0)
       continue;
 
     if(as->as_start_drop > 0) {
-      avresample_read(as->as_avr, NULL, avail);
+      swr_convert(as->as_avr, NULL, avail, NULL, 0);
       printf("Dropped %d\n", avail);
       as->as_start_drop -= avail;
     } else {
@@ -530,7 +533,7 @@ glw_rec_audio_send(struct audio_decoder *ad, AVFrame *frame, int64_t pts)
       void *buf = malloc(bytes);
       uint8_t *data[8] = {0};
       data[0] = (uint8_t *)buf;
-      avresample_read(as->as_avr, data, avail);
+      swr_convert(as->as_avr, data, avail, NULL, 0);
       audio_buf_t *ab = calloc(1, sizeof(audio_buf_t));
       ab->ab_buf = buf;
       ab->ab_samples = avail;

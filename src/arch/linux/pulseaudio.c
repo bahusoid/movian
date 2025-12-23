@@ -454,7 +454,7 @@ pulseaudio_audio_deliver(audio_decoder_t *ad, int samples,
     uint8_t *data[8] = {0};
     data[0] = (uint8_t *)buf;
     assert(rsamples <= samples);
-    avresample_read(ad->ad_avr, data, rsamples);
+    swr_convert(ad->ad_avr, data, rsamples, NULL, 0);
 
     float *x = (float *)buf;
     int i = 0;

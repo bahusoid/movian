@@ -54,12 +54,10 @@ for opt do
             ANDROID_BUILDKIND_DESCRIMINATOR=1
             ANDROID_ABI=armeabi-v7a
             BUILD=android.api${ANDROID_MIN_SDK_VERSION}_armv7
-            TOOLCHAIN=${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/
+            ANDROID_KIND=armv7
             ARCH_CFLAGS="-march=armv7-a -mfloat-abi=softfp -mfpu=neon -funwind-tables -fPIC"
             ARCH_LDFLAGS="-march=armv7-a"
             LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=armv7 --target-os=android --enable-shared --disable-static"
-            CC=${TOOLCHAIN}armv7a-linux-androideabi21-clang
-            CXX=${TOOLCHAIN}armv7a-linux-androideabi21-clang++
             ;;
         --kind=api21_x86)
             ANDROID_MIN_SDK_VERSION=21
@@ -67,11 +65,9 @@ for opt do
             ANDROID_ABI=x86
             ANDROID_BUILDKIND_DESCRIMINATOR=2
             BUILD=android.api${ANDROID_MIN_SDK_VERSION}_x86
-            TOOLCHAIN=${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/
+            ANDROID_KIND=x86
             ARCH_CFLAGS="-fPIC"
             LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=x86 --target-os=android --enable-shared --disable-static --disable-asm --disable-inline-asm"
-            CC="${TOOLCHAIN}i686-linux-android21-clang -mstackrealign"
-            CXX="${TOOLCHAIN}i686-linux-android21-clang++ -mstackrealign"
             ;;
         --kind=api34_armv8)
             ANDROID_MIN_SDK_VERSION=21
@@ -79,12 +75,10 @@ for opt do
             ANDROID_BUILDKIND_DESCRIMINATOR=3
             ANDROID_ABI=arm64-v8a
             BUILD=android.api${ANDROID_MIN_SDK_VERSION}_armv8
-            TOOLCHAIN=${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/
+            ANDROID_KIND=armv8
             ARCH_CFLAGS="-march=armv8-a -fPIC"
             ARCH_LDFLAGS=""
             LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=aarch64 --target-os=android --enable-shared --disable-static"
-            CC=${TOOLCHAIN}aarch64-linux-android34-clang
-            CXX=${TOOLCHAIN}aarch64-linux-android34-clang++
             ;;
         *)
             common_opt $opt $optval
@@ -112,6 +106,23 @@ if [ -z "${NDK}" ]; then
     NDK=${SDK}/ndk-bundle
 fi
 
+# Set up toolchain after NDK is determined
+TOOLCHAIN=${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/
+
+case "${ANDROID_KIND}" in
+    armv7)
+        CC=${TOOLCHAIN}armv7a-linux-androideabi21-clang
+        CXX=${TOOLCHAIN}armv7a-linux-androideabi21-clang++
+        ;;
+    x86)
+        CC="${TOOLCHAIN}i686-linux-android21-clang -mstackrealign"
+        CXX="${TOOLCHAIN}i686-linux-android21-clang++ -mstackrealign"
+        ;;
+    armv8)
+        CC=${TOOLCHAIN}aarch64-linux-android34-clang
+        CXX=${TOOLCHAIN}aarch64-linux-android34-clang++
+        ;;
+esac
 
 setup_env "$@"
 

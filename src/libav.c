@@ -155,7 +155,7 @@ libav_deliver_frame(video_decoder_t *vd,
                             "VOUT");
 
   vd->vd_interlaced |=
-    frame->interlaced_frame && !mbm->mbm_disable_deinterlacer;
+    (frame->flags & AV_FRAME_FLAG_INTERLACED) && !mbm->mbm_disable_deinterlacer;
 
   fi.fi_width = frame->width;
   fi.fi_height = frame->height;
@@ -166,7 +166,7 @@ libav_deliver_frame(video_decoder_t *vd,
   fi.fi_drive_clock = mbm->mbm_drive_clock;
 
   fi.fi_interlaced = !!vd->vd_interlaced;
-  fi.fi_tff = !!frame->top_field_first;
+  fi.fi_tff = !!(frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST);
   fi.fi_prescaled = 0;
 
   fi.fi_color_space = 
@@ -223,14 +223,18 @@ libav_deliver_frame(video_decoder_t *vd,
   if(vd->vd_convert_width  != frame->width  ||
      vd->vd_convert_height != frame->height ||
      vd->vd_convert_pixfmt != frame->format) {
-    avpicture_free(&vd->vd_convert);
+    if(vd->vd_convert != NULL)
+      av_frame_free(&vd->vd_convert);
 
     vd->vd_convert_width  = frame->width;
     vd->vd_convert_height = frame->height;
     vd->vd_convert_pixfmt = frame->format;
 
-    avpicture_alloc(&vd->vd_convert, AV_PIX_FMT_YUV420P, frame->width,
-                    frame->height);
+    vd->vd_convert = av_frame_alloc();
+    vd->vd_convert->format = AV_PIX_FMT_YUV420P;
+    vd->vd_convert->width = frame->width;
+    vd->vd_convert->height = frame->height;
+    av_frame_get_buffer(vd->vd_convert, 0);
 
     TRACE(TRACE_DEBUG, "Video", "Converting from %s to %s",
 	  av_get_pix_fmt_name(frame->format),
@@ -238,15 +242,15 @@ libav_deliver_frame(video_decoder_t *vd,
   }
 
   sws_scale(vd->vd_sws, (void *)frame->data, frame->linesize, 0,
-            frame->height, vd->vd_convert.data, vd->vd_convert.linesize);
+            frame->height, vd->vd_convert->data, vd->vd_convert->linesize);
 
-  fi.fi_data[0] = vd->vd_convert.data[0];
-  fi.fi_data[1] = vd->vd_convert.data[1];
-  fi.fi_data[2] = vd->vd_convert.data[2];
+  fi.fi_data[0] = vd->vd_convert->data[0];
+  fi.fi_data[1] = vd->vd_convert->data[1];
+  fi.fi_data[2] = vd->vd_convert->data[2];
 
-  fi.fi_pitch[0] = vd->vd_convert.linesize[0];
-  fi.fi_pitch[1] = vd->vd_convert.linesize[1];
-  fi.fi_pitch[2] = vd->vd_convert.linesize[2];
+  fi.fi_pitch[0] = vd->vd_convert->linesize[0];
+  fi.fi_pitch[1] = vd->vd_convert->linesize[1];
+  fi.fi_pitch[2] = vd->vd_convert->linesize[2];
 
   fi.fi_type = 'LAVC';
   fi.fi_pix_fmt = AV_PIX_FMT_YUV420P;
@@ -262,21 +266,16 @@ libav_deliver_frame(video_decoder_t *vd,
 static void
 libav_video_flush(media_codec_t *mc, video_decoder_t *vd)
 {
-  int got_pic = 0;
   AVCodecContext *ctx = mc->ctx;
   AVFrame *frame = vd->vd_frame;
-  AVPacket avpkt;
 
-  av_init_packet(&avpkt);
-  avpkt.data = NULL;
-  avpkt.size = 0;
-
-  while(1) {
-    avcodec_decode_video2(ctx, vd->vd_frame, &got_pic, &avpkt);
-    if(!got_pic)
-      break;
+  // Send NULL to flush the decoder
+  avcodec_send_packet(ctx, NULL);
+  
+  // Drain all remaining frames
+  while(avcodec_receive_frame(ctx, frame) == 0) {
     av_frame_unref(frame);
-  };
+  }
   avcodec_flush_buffers(ctx);
 }
 
@@ -288,33 +287,30 @@ static void
 libav_video_eof(media_codec_t *mc, video_decoder_t *vd,
                 struct media_queue *mq)
 {
-  int got_pic = 0;
   media_pipe_t *mp = vd->vd_mp;
   AVCodecContext *ctx = mc->ctx;
   AVFrame *frame = vd->vd_frame;
-  AVPacket avpkt;
   int t;
 
-  av_init_packet(&avpkt);
-  avpkt.data = NULL;
-  avpkt.size = 0;
+  // Send NULL to flush the decoder
+  avcodec_send_packet(ctx, NULL);
 
   while(1) {
-
     avgtime_start(&vd->vd_decode_time);
 
-    avcodec_decode_video2(ctx, vd->vd_frame, &got_pic, &avpkt);
+    int ret = avcodec_receive_frame(ctx, frame);
 
     t = avgtime_stop(&vd->vd_decode_time, mq->mq_prop_decode_avg,
                      mq->mq_prop_decode_peak);
 
-    if(!got_pic)
+    if(ret != 0)
       break;
-    const media_buf_meta_t *mbm = &vd->vd_reorder[frame->reordered_opaque];
-    if(!mbm->mbm_skip)
+    // Use frame->opaque to get the media buffer metadata
+    const media_buf_meta_t *mbm = (const media_buf_meta_t *)frame->opaque;
+    if(mbm != NULL && !mbm->mbm_skip)
       libav_deliver_frame(vd, mp, mq, ctx, frame, mbm, t, mc);
     av_frame_unref(frame);
-  };
+  }
   avcodec_flush_buffers(ctx);
 }
 
@@ -327,7 +323,6 @@ static void
 libav_decode_video(struct media_codec *mc, struct video_decoder *vd,
                    struct media_queue *mq, struct media_buf *mb, int reqsize)
 {
-  int got_pic = 0;
   media_pipe_t *mp = vd->vd_mp;
   AVCodecContext *ctx = mc->ctx;
   AVFrame *frame = vd->vd_frame;
@@ -336,8 +331,9 @@ libav_decode_video(struct media_codec *mc, struct video_decoder *vd,
   if(mb->mb_flush)
     libav_video_eof(mc, vd, mq);
 
+  // Store metadata in reorder buffer and set packet opaque to point to it
   copy_mbm_from_mb(&vd->vd_reorder[vd->vd_reorder_ptr], mb);
-  ctx->reordered_opaque = vd->vd_reorder_ptr;
+  mb->mb_pkt.opaque = &vd->vd_reorder[vd->vd_reorder_ptr];
   vd->vd_reorder_ptr = (vd->vd_reorder_ptr + 1) & VIDEO_DECODER_REORDER_MASK;
 
   /*
@@ -346,20 +342,28 @@ libav_decode_video(struct media_codec *mc, struct video_decoder *vd,
   ctx->skip_frame = mb->mb_skip == 1 ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
   avgtime_start(&vd->vd_decode_time);
 
-  avcodec_decode_video2(ctx, frame, &got_pic, &mb->mb_pkt);
-
-  t = avgtime_stop(&vd->vd_decode_time, mq->mq_prop_decode_avg,
-		   mq->mq_prop_decode_peak);
-
-  mp_set_mq_meta(mq, ctx->codec, ctx);
-
-  if(got_pic == 0)
+  int ret = avcodec_send_packet(ctx, &mb->mb_pkt);
+  if(ret < 0 && ret != AVERROR(EAGAIN))
     return;
 
-  const media_buf_meta_t *mbm = &vd->vd_reorder[frame->reordered_opaque];
-  if(!mbm->mbm_skip)
-    libav_deliver_frame(vd, mp, mq, ctx, frame, mbm, t, mc);
-  av_frame_unref(frame);
+  while(1) {
+    ret = avcodec_receive_frame(ctx, frame);
+    if(ret != 0)
+      break;
+
+    t = avgtime_stop(&vd->vd_decode_time, mq->mq_prop_decode_avg,
+                     mq->mq_prop_decode_peak);
+
+    mp_set_mq_meta(mq, ctx->codec, ctx);
+
+    const media_buf_meta_t *mbm = (const media_buf_meta_t *)frame->opaque;
+    if(mbm == NULL)
+      mbm = &vd->vd_reorder[0]; // Fallback
+    if(!mbm->mbm_skip)
+      libav_deliver_frame(vd, mp, mq, ctx, frame, mbm, t, mc);
+    av_frame_unref(frame);
+    avgtime_start(&vd->vd_decode_time);
+  }
 }
 
 
@@ -408,8 +412,8 @@ media_codec_create_lavc(media_codec_t *cw, const media_codec_params_t *mcp,
     return -1;
 
   cw->ctx = avcodec_alloc_context3(codec);
-  if(cw->fmt_ctx != NULL)
-    avcodec_copy_context(cw->ctx, cw->fmt_ctx);
+  // Note: fmt_ctx is now used to pass codec parameters, not for copying context
+  // Parameters should be set via mcp instead
 
   // cw->ctx->debug = FF_DEBUG_PICT_INFO | FF_DEBUG_BUGS;
 
@@ -433,7 +437,8 @@ media_codec_create_lavc(media_codec_t *cw, const media_codec_params_t *mcp,
       cw->ctx->thread_count = gconf.concurrency;
 
     cw->ctx->opaque = cw;
-    cw->ctx->refcounted_frames = 1;
+    // refcounted_frames removed in FFmpeg 5+ (always enabled now)
+    cw->ctx->flags |= AV_CODEC_FLAG_COPY_OPAQUE; // Enable opaque copying for metadata
     cw->ctx->get_format = &libav_get_format;
     cw->ctx->get_buffer2 = &get_buffer2_wrapper;
 
@@ -510,7 +515,7 @@ metadata_from_libav(char *dst, size_t dstlen,
     off += snprintf(dst + off, dstlen - off,
                     "%s%s", off ? " " : "", profile);
 
-  if(codec->id == AV_CODEC_ID_H264 && avctx->level != FF_LEVEL_UNKNOWN)
+  if(codec->id == AV_CODEC_ID_H264 && avctx->level > 0)
     off += snprintf(dst + off, dstlen - off,
                     " (Level %d.%d)",
                     avctx->level / 10, avctx->level % 10);
@@ -518,8 +523,7 @@ metadata_from_libav(char *dst, size_t dstlen,
   if(avctx->codec_type == AVMEDIA_TYPE_AUDIO) {
     char buf[64];
 
-    av_get_channel_layout_string(buf, sizeof(buf), avctx->channels,
-                                 avctx->channel_layout);
+    av_channel_layout_describe(&avctx->ch_layout, buf, sizeof(buf));
 
     off += snprintf(dst + off, dstlen - off, ", %d Hz, %s",
 		    avctx->sample_rate, buf);
@@ -541,18 +545,19 @@ void
 mp_set_mq_meta(media_queue_t *mq, const AVCodec *codec,
 	       const AVCodecContext *avctx)
 {
+  int nb_channels = avctx->ch_layout.nb_channels;
+  
   if(mq->mq_meta_codec_id       == codec->id &&
      mq->mq_meta_profile        == avctx->profile &&
-     mq->mq_meta_channels       == avctx->channels &&
-     mq->mq_meta_channel_layout == avctx->channel_layout &&
+     mq->mq_meta_channels       == nb_channels &&
      mq->mq_meta_width          == avctx->width &&
      mq->mq_meta_height         == avctx->height)
     return;
 
   mq->mq_meta_codec_id       = codec->id;
   mq->mq_meta_profile        = avctx->profile;
-  mq->mq_meta_channels       = avctx->channels;
-  mq->mq_meta_channel_layout = avctx->channel_layout;
+  mq->mq_meta_channels       = nb_channels;
+  mq->mq_meta_channel_layout = 0; // Deprecated, keep for ABI compatibility
   mq->mq_meta_width          = avctx->width;
   mq->mq_meta_height         = avctx->height;
 

@@ -19,7 +19,7 @@
  */
 #pragma once
 #include <libavutil/samplefmt.h>
-#include <libavresample/avresample.h>
+#include <libswresample/swresample.h>
 
 #include "arch/threads.h"
 #include "media/media.h"
@@ -95,7 +95,7 @@ typedef struct audio_decoder {
   int ad_stereo_downmix; /* We can only output stereo so ask for downmix
 			    as early as codec initialization */
 
-  AVAudioResampleContext *ad_avr;
+  struct SwrContext *ad_avr;
 
   void *ad_mux_buffer;
   

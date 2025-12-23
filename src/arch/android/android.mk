@@ -46,7 +46,7 @@ ${BUILDDIR}/apk/lib/${ANDROID_ABI}/libcore.so: ${LIB}.so
 ${BUILDDIR}/inst/lib/libavcodec.so:    $(BUILDDIR)/stamps/libav.stamp
 ${BUILDDIR}/inst/lib/libavdevice.so:   $(BUILDDIR)/stamps/libav.stamp
 ${BUILDDIR}/inst/lib/libavformat.so:   $(BUILDDIR)/stamps/libav.stamp
-${BUILDDIR}/inst/lib/libavresample.so: $(BUILDDIR)/stamps/libav.stamp
+${BUILDDIR}/inst/lib/libswresample.so: $(BUILDDIR)/stamps/libav.stamp
 ${BUILDDIR}/inst/lib/libavutil.so:     $(BUILDDIR)/stamps/libav.stamp
 ${BUILDDIR}/inst/lib/libswscale.so:    $(BUILDDIR)/stamps/libav.stamp
 
@@ -75,7 +75,7 @@ ${BUILDDIR}/${APPNAME}.unsigned.apk: ${BUILDDIR}/apk/classes.dex ${RESFILES} \
 	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavcodec.so \
 	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavdevice.so \
 	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavformat.so \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavresample.so \
+	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libswresample.so \
 	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavutil.so \
 	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libswscale.so
 	${AAPT} package -f -M ${MANIFEST} -S android/res \

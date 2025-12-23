@@ -554,18 +554,17 @@ rescale(int64_t ts)
 static void
 probe_duration(ts_es_t *te, uint8_t *data, int size)
 {
-  int got_frame = 0;
-  AVPacket pkt = {
-    .data = data,
-    .size = size
-  };
+  AVPacket *pkt = av_packet_alloc();
+  pkt->data = data;
+  pkt->size = size;
 
 
   media_codec_t *mc = te->te_codec;
 
-  AVCodec *codec = avcodec_find_decoder(mc->codec_id);
+  const AVCodec *codec = avcodec_find_decoder(mc->codec_id);
   if(codec == NULL) {
     te->te_probe_frame = 0;
+    av_packet_free(&pkt);
     return;
   }
 
@@ -574,24 +573,27 @@ probe_duration(ts_es_t *te, uint8_t *data, int size)
   if(avcodec_open2(ctx, codec, NULL) < 0) {
     av_freep(&ctx);
     te->te_probe_frame = 0;
+    av_packet_free(&pkt);
     return;
   }
 
   AVFrame *frame = av_frame_alloc();
 
-  avcodec_decode_audio4(ctx, frame, &got_frame, &pkt);
-
-  if(got_frame) {
-    te->te_probe_frame = 0;
-    te->te_samples_per_frame = frame->nb_samples;
-    te->te_sample_rate = frame->sample_rate;
-    te->te_samples = 0;
+  int ret = avcodec_send_packet(ctx, pkt);
+  if(ret >= 0 || ret == AVERROR(EAGAIN)) {
+    ret = avcodec_receive_frame(ctx, frame);
+    if(ret >= 0) {
+      te->te_probe_frame = 0;
+      te->te_samples_per_frame = frame->nb_samples;
+      te->te_sample_rate = frame->sample_rate;
+      te->te_samples = 0;
+    }
   }
 
-  avcodec_close(ctx);
-  av_freep(&ctx);
+  avcodec_free_context(&ctx);
 
   av_frame_free(&frame);
+  av_packet_free(&pkt);
 }
 
 

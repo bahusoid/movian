@@ -39,9 +39,14 @@
 #include <libavutil/common.h>
 #include <libavutil/pixdesc.h>
 
+// AVPicture was removed in FFmpeg, define a compatible struct
+typedef struct {
+  uint8_t *data[4];
+  int linesize[4];
+} PictureData;
 
 
-static pixmap_t *pixmap_rescale_swscale(const AVPicture *pict, int src_pix_fmt,
+static pixmap_t *pixmap_rescale_swscale(const PictureData *pict, int src_pix_fmt,
                                         int src_w, int src_h,
                                         int dst_w, int dst_h,
                                         int with_alpha, int margin);
@@ -50,7 +55,7 @@ static pixmap_t *pixmap_rescale_swscale(const AVPicture *pict, int src_pix_fmt,
  *
  */
 static pixmap_t *
-fulhack(const AVPicture *pict, int src_w, int src_h,
+fulhack(const PictureData *pict, int src_w, int src_h,
         int dst_w, int dst_h, int with_alpha, int margin)
 {
   pixmap_t *pm = pixmap_create(src_w, src_h, PIXMAP_RGB24, 0);
@@ -67,7 +72,7 @@ fulhack(const AVPicture *pict, int src_w, int src_h,
     }
   }
 
-  AVPicture pict2 = {};
+  PictureData pict2 = {};
   pict2.data[0] = pm_pixel(pm, 0, 0);
   pict2.linesize[0] = pm->pm_linesize;
   pixmap_t *pm2 = pixmap_rescale_swscale(&pict2, AV_PIX_FMT_RGB24,
@@ -82,12 +87,12 @@ fulhack(const AVPicture *pict, int src_w, int src_h,
  * Rescaling with libswscale
  */
 static pixmap_t *
-pixmap_rescale_swscale(const AVPicture *pict, int src_pix_fmt, 
+pixmap_rescale_swscale(const PictureData *pict, int src_pix_fmt, 
 		       int src_w, int src_h,
 		       int dst_w, int dst_h,
 		       int with_alpha, int margin)
 {
-  AVPicture pic;
+  PictureData pic;
   int dst_pix_fmt;
   struct SwsContext *sws;
   const uint8_t *ptr[4];
@@ -200,7 +205,7 @@ swizzle_xwzy(uint32_t *dst, const uint32_t *src, int len)
 }
 
 static pixmap_t *
-pixmap_32bit_swizzle(AVPicture *pict, int pix_fmt, int w, int h, int m)
+pixmap_32bit_swizzle(PictureData *pict, int pix_fmt, int w, int h, int m)
 {
 #if defined(__BIG_ENDIAN__)
   void (*fn)(uint32_t *dst, const uint32_t *src, int len);
@@ -235,7 +240,7 @@ pixmap_32bit_swizzle(AVPicture *pict, int pix_fmt, int w, int h, int m)
  *
  */
 static pixmap_t *
-pixmap_from_avpic(AVPicture *pict, int pix_fmt,
+pixmap_from_avpic(PictureData *pict, int pix_fmt,
 		  int src_w, int src_h,
 		  int req_w0, int req_h0,
 		  const image_meta_t *im)
@@ -396,9 +401,9 @@ image_decode_libav(image_coded_type_t type,
                    char *errbuf, size_t errlen)
 {
   AVCodecContext *ctx;
-  AVCodec *codec;
+  const AVCodec *codec;
   AVFrame *frame;
-  int got_pic, w, h;
+  int w, h;
   jpeg_meminfo_t mi;
   jpeginfo_t ji = {0};
 
@@ -437,24 +442,26 @@ image_decode_libav(image_coded_type_t type,
   ctx = avcodec_alloc_context3(codec);
 
   if(avcodec_open2(ctx, codec, NULL) < 0) {
-    av_free(ctx);
+    avcodec_free_context(&ctx);
     snprintf(errbuf, errlen, "Unable to open codec");
     return NULL;
   }
   
   frame = av_frame_alloc();
 
-  AVPacket avpkt;
-  av_init_packet(&avpkt);
-  avpkt.data = (void *)buf_data(buf);
-  avpkt.size = buf_size(buf);
-  int r = avcodec_decode_video2(ctx, frame, &got_pic, &avpkt);
+  AVPacket *avpkt = av_packet_alloc();
+  avpkt->data = (void *)buf_data(buf);
+  avpkt->size = buf_size(buf);
+  int r = avcodec_send_packet(ctx, avpkt);
+  if(r >= 0) {
+    r = avcodec_receive_frame(ctx, frame);
+  }
+  av_packet_free(&avpkt);
 
   if(r < 0 || ctx->width == 0 || ctx->height == 0) {
     snprintf(errbuf, errlen, "Unable to decode image of size (%d x %d)",
              ctx->width, ctx->height);
-    avcodec_close(ctx);
-    av_free(ctx);
+    avcodec_free_context(&ctx);
     av_frame_free(&frame);
     return NULL;
   }
@@ -472,7 +479,12 @@ image_decode_libav(image_coded_type_t type,
 
   pixmap_t *pm;
 
-  pm = pixmap_from_avpic((AVPicture *)frame, 
+  PictureData pict;
+  for(int i = 0; i < 4; i++) {
+    pict.data[i] = frame->data[i];
+    pict.linesize[i] = frame->linesize[i];
+  }
+  pm = pixmap_from_avpic(&pict,
 			 ctx->pix_fmt, ctx->width, ctx->height, w, h, im);
 
   if(pm != NULL) {
@@ -482,7 +494,6 @@ image_decode_libav(image_coded_type_t type,
   }
   av_frame_free(&frame);
 
-  avcodec_close(ctx);
-  av_free(ctx);
+  avcodec_free_context(&ctx);
   return pm;
 }

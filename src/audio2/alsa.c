@@ -158,7 +158,7 @@ alsa_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
   uint8_t *planes[8] = {0};
   planes[0] = d->tmp;
 
-  c = avresample_read(ad->ad_avr, planes, c);
+  c = swr_convert(ad->ad_avr, planes, c, NULL, 0);
   snd_pcm_status_t *status;
   int err;
   snd_pcm_status_alloca(&status);

@@ -126,7 +126,7 @@ fa_libav_open_format(AVIOContext *avio, const char *url,
 		     char *errbuf, size_t errlen, const char *mimetype,
                      int strategy)
 {
-  AVInputFormat *fmt = NULL;
+  const AVInputFormat *fmt = NULL;
   AVFormatContext *fctx;
   int err;
 
@@ -136,7 +136,8 @@ fa_libav_open_format(AVIOContext *avio, const char *url,
 
     for(i = 0; i < sizeof(mimetype2fmt) / sizeof(mimetype2fmt[0]); i++) {
       if(!strcasecmp(mimetype, mimetype2fmt[i].mimetype)) {
-	fmt = av_find_input_format(mimetype2fmt[i].fmt);
+	const AVInputFormat *tmpfmt = av_find_input_format(mimetype2fmt[i].fmt);
+	if(tmpfmt) fmt = tmpfmt;
 	break;
       }
     }

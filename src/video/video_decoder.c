@@ -539,6 +539,6 @@ void
 video_decoder_destroy(video_decoder_t *vd)
 {
   sws_freeContext(vd->vd_sws);
-  avpicture_free(&vd->vd_convert);
+  av_frame_free(&vd->vd_convert);
   free(vd);
 }

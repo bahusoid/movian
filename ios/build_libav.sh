@@ -74,7 +74,7 @@ done
 
 mkdir -p "${BUILT_PRODUCTS_DIR}/lib"
 
-for F in avcodec avformat avresample avutil swscale; do
+for F in avcodec avformat swresample avutil swscale; do
     lipo -create \
          "${OBJECT_FILE_DIR}"/libav-*/lib${F}/lib${F}.a \
          -output \

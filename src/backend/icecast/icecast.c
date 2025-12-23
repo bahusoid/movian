@@ -379,13 +379,16 @@ open_stream(icecast_play_context_t *ipc)
   ipc->ipc_mc = NULL;
 
   for(int i = 0; i < fctx->nb_streams; i++) {
-    AVCodecContext *ctx = fctx->streams[i]->codec;
+    AVCodecParameters *codecpar = fctx->streams[i]->codecpar;
 
-    if(ctx->codec_type != AVMEDIA_TYPE_AUDIO)
+    if(codecpar->codec_type != AVMEDIA_TYPE_AUDIO)
       continue;
 
-    ipc->ipc_mc = media_codec_create(ctx->codec_id, 0, ipc->ipc_mf, ctx, NULL,
-                                     ipc->ipc_mp);
+    media_codec_params_t mcp = {0};
+    mcp.extradata = codecpar->extradata;
+    mcp.extradata_size = codecpar->extradata_size;
+    ipc->ipc_mc = media_codec_create(codecpar->codec_id, 0, ipc->ipc_mf, NULL,
+                                     &mcp, ipc->ipc_mp);
     ipc->ipc_mp->mp_audio.mq_stream = i;
     break;
   }
@@ -522,7 +525,7 @@ stream_radio(icecast_play_context_t *ipc, char *errbuf, size_t errlen)
       si = pkt.stream_index;
 
       if(si != mp->mp_audio.mq_stream) {
-	av_free_packet(&pkt);
+	av_packet_unref(&pkt);
 	continue;
       }
 
@@ -547,7 +550,7 @@ stream_radio(icecast_play_context_t *ipc, char *errbuf, size_t errlen)
 	mb->mb_drive_clock = 1;
       }
 
-      av_free_packet(&pkt);
+      av_packet_unref(&pkt);
     }
 
     /*

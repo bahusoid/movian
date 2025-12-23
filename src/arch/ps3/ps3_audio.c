@@ -247,7 +247,7 @@ ps3_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
     bi = (current_block + 1) & 7;
 
   while(bi != current_block &&
-	avresample_available(ad->ad_avr) >= AUDIO_BLOCK_SAMPLES) {
+	swr_get_out_samples(ad->ad_avr, 0) >= AUDIO_BLOCK_SAMPLES) {
 
     float *dst = buf + d->channels * AUDIO_BLOCK_SAMPLES * bi;
     uint8_t *planes[8] = {0};
@@ -260,7 +260,7 @@ ps3_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
     switch(ad->ad_out_channel_layout) {
     case AV_CH_LAYOUT_STEREO:
       planes[0] = (uint8_t *)dst;
-      avresample_read(ad->ad_avr, planes, AUDIO_BLOCK_SAMPLES);
+      swr_convert(ad->ad_avr, planes, AUDIO_BLOCK_SAMPLES, NULL, 0);
 
       for(i = 0; i < AUDIO_BLOCK_SAMPLES / 2; i++) {
 	vec_st(vec_madd(vec_ld(0, dst), m, z), 0, dst);
@@ -270,7 +270,7 @@ ps3_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
 
     case AV_CH_LAYOUT_7POINT1:
       planes[0] = (uint8_t *)dst;
-      avresample_read(ad->ad_avr, planes, AUDIO_BLOCK_SAMPLES);
+      swr_convert(ad->ad_avr, planes, AUDIO_BLOCK_SAMPLES, NULL, 0);
 
       // Swap Side-channels with Rear-channels as the channel
       // order differs between PS3 and libav

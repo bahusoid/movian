@@ -391,7 +391,7 @@ update_ext_submodule() {
 
 libav_setup() {
     update_ext_submodule libav
-    echo "Configuring libav..."
+    echo "Configuring FFmpeg..."
 
     LIBAV_BUILD_DIR=${BUILDDIR}/libav/build
 
@@ -399,7 +399,7 @@ libav_setup() {
 
     #LIBAV_COMMON_FLAGS="--disable-parsers --disable-decoders --disable-demuxers"
 
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-encoders --disable-filters --disable-muxers --disable-devices --disable-demuxer=rtp --disable-protocol=rtp --disable-bzlib --disable-decoder=twinvq --disable-decoder=snow --disable-decoder=cavs --disable-programs --disable-avfilter --enable-decoder=png --enable-decoder=mjpeg --enable-encoder=mjpeg --enable-encoder=png --enable-muxer=spdif --enable-encoder=ac3 --enable-encoder=eac3 --enable-muxer=matroska --enable-encoder=ffvhuff --enable-encoder=pcm_s16le"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-encoders --disable-filters --disable-muxers --disable-devices --disable-demuxer=rtp --disable-protocol=rtp --disable-bzlib --disable-decoder=twinvq --disable-decoder=snow --disable-decoder=cavs --disable-programs --disable-avfilter --enable-decoder=png --enable-decoder=mjpeg --enable-encoder=mjpeg --enable-encoder=png --enable-muxer=spdif --enable-encoder=ac3 --enable-encoder=eac3 --enable-muxer=matroska --enable-encoder=ffvhuff --enable-encoder=pcm_s16le --enable-swresample"
 
     (cd ${LIBAV_BUILD_DIR} && ${TOPDIR}/ext/libav/configure ${LIBAV_ARCH_FLAGS} ${LIBAV_COMMON_FLAGS} --prefix=${EXT_INSTALL_DIR} --extra-cflags="${LIBAV_CFLAGS} ${EXTRA_CFLAGS}" --extra-ldflags="${LIBAV_LDFLAGS} ${EXTRA_LDFLAGS}" --cc="${CC}") || die
 
@@ -565,7 +565,7 @@ EXT_INSTALL_DIR=${EXT_INSTALL_DIR}
 EOF
 
     if enabled libav; then
-	echo >>${CONFIG_MAK} "LDFLAGS_cfg += -lavresample -lswscale -lavformat -lavcodec -lavutil"
+	echo >>${CONFIG_MAK} "LDFLAGS_cfg += -lswresample -lswscale -lavformat -lavcodec -lavutil"
     fi
 
     if enabled libcec; then

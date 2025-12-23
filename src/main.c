@@ -66,6 +66,7 @@
 #include <libavformat/version.h>
 #include <libavcodec/version.h>
 #include <libavutil/avutil.h>
+#include <libavutil/cpu.h>
 #endif
 
 #include "fileaccess/fileaccess.h"
@@ -79,30 +80,6 @@ static LIST_HEAD(, inithelper) inithelpers;
 gconf_t gconf;
 
 #if ENABLE_LIBAV
-static int
-fflockmgr(void **_mtx, enum AVLockOp op)
-{
-  hts_mutex_t **mtx = (hts_mutex_t **)_mtx;
-
-  switch(op) {
-  case AV_LOCK_CREATE:
-    *mtx = malloc(sizeof(hts_mutex_t));
-    hts_mutex_init(*mtx);
-    break;
-  case AV_LOCK_OBTAIN:
-    hts_mutex_lock(*mtx);
-    break;
-  case AV_LOCK_RELEASE:
-    hts_mutex_unlock(*mtx);
-    break;
-  case AV_LOCK_DESTROY:
-    hts_mutex_destroy(*mtx);
-    free(*mtx);
-    break;
-  }
-  return 0;
-}
-
 
 /**
  *
@@ -450,9 +427,8 @@ main_init(void)
 
 #if ENABLE_LIBAV
   /* Initialize libavcodec & libavformat */
-  av_lockmgr_register(fflockmgr);
   av_log_set_callback(fflog);
-  av_register_all();
+  // av_register_all() and av_lockmgr_register() removed in FFmpeg 5+
 
   TRACE(TRACE_INFO, "libav", LIBAVFORMAT_IDENT", "LIBAVCODEC_IDENT", "LIBAVUTIL_IDENT" cpuflags:0x%x", av_get_cpu_flags());
 #endif

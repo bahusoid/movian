@@ -2193,7 +2193,7 @@
 				"$(BUILT_PRODUCTS_DIR)/lib/libavcodec.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libavdevice.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libavformat.a",
-				"$(BUILT_PRODUCTS_DIR)/lib/libavresample.a",
+				"$(BUILT_PRODUCTS_DIR)/lib/libswresample.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libavutil.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libswscale.a",
 			);
@@ -2212,7 +2212,7 @@
 				"$(BUILT_PRODUCTS_DIR)/lib/libavcodec.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libavdevice.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libavformat.a",
-				"$(BUILT_PRODUCTS_DIR)/lib/libavresample.a",
+				"$(BUILT_PRODUCTS_DIR)/lib/libswresample.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libavutil.a",
 				"$(BUILT_PRODUCTS_DIR)/lib/libswscale.a",
 			);
@@ -3063,7 +3063,7 @@
 					"${BUILT_PRODUCTS_DIR}/lib/libavformat.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavcodec.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavutil.a",
-					"${BUILT_PRODUCTS_DIR}/lib/libavresample.a",
+					"${BUILT_PRODUCTS_DIR}/lib/libswresample.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libswscale.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = tv.Movian;
@@ -3109,7 +3109,7 @@
 					"${BUILT_PRODUCTS_DIR}/lib/libavformat.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavcodec.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavutil.a",
-					"${BUILT_PRODUCTS_DIR}/lib/libavresample.a",
+					"${BUILT_PRODUCTS_DIR}/lib/libswresample.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libswscale.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = tv.Movian;
@@ -3145,7 +3145,7 @@
 					"${BUILT_PRODUCTS_DIR}/lib/libavformat.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavcodec.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavutil.a",
-					"${BUILT_PRODUCTS_DIR}/lib/libavresample.a",
+					"${BUILT_PRODUCTS_DIR}/lib/libswresample.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libswscale.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.lonelycoder.Movian-tvOS";
@@ -3183,7 +3183,7 @@
 					"${BUILT_PRODUCTS_DIR}/lib/libavformat.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavcodec.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libavutil.a",
-					"${BUILT_PRODUCTS_DIR}/lib/libavresample.a",
+					"${BUILT_PRODUCTS_DIR}/lib/libswresample.a",
 					"${BUILT_PRODUCTS_DIR}/lib/libswscale.a",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.lonelycoder.Movian-tvOS";

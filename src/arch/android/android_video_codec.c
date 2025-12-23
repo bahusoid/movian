@@ -24,6 +24,7 @@
 #include <jni.h>
 
 #include <libavutil/mem.h>
+#include <libavcodec/bsf.h>
 
 #include "main.h"
 #include "video/video_decoder.h"
@@ -109,7 +110,7 @@ typedef struct android_video_codec {
 
   h264_parser_t avc_h264_parser;
 
-  AVBitStreamFilterContext *avc_bsf;
+  AVBSFContext *avc_bsf;
 
   prop_t *avc_codec_info;
 
@@ -479,13 +480,28 @@ android_codec_decode(struct media_codec *mc, struct video_decoder *vd,
   int size = mb->mb_size;
 
   if(avc->avc_bsf) {
-    int rval = av_bitstream_filter_filter(avc->avc_bsf, mc->fmt_ctx, NULL,
-                                          &converted, &size, data, size,
-                                          mb->mb_keyframe);
-    if(rval < 0)
+    AVPacket *pkt_in = av_packet_alloc();
+    AVPacket *pkt_out = av_packet_alloc();
+    pkt_in->data = data;
+    pkt_in->size = size;
+    int rval = av_bsf_send_packet(avc->avc_bsf, pkt_in);
+    if(rval < 0) {
+      av_packet_free(&pkt_in);
+      av_packet_free(&pkt_out);
       return;
-    if(rval == 1)
-      data = converted;
+    }
+    rval = av_bsf_receive_packet(avc->avc_bsf, pkt_out);
+    if(rval < 0) {
+      av_packet_free(&pkt_in);
+      av_packet_free(&pkt_out);
+      return;
+    }
+    converted = av_malloc(pkt_out->size);
+    memcpy(converted, pkt_out->data, pkt_out->size);
+    data = converted;
+    size = pkt_out->size;
+    av_packet_free(&pkt_in);
+    av_packet_free(&pkt_out);
   }
 
   int64_t pts = store_metadata(vd, mb, avc, mc, data, size);
@@ -605,13 +621,28 @@ android_codec_decode_locked(struct media_codec *mc, struct video_decoder *vd,
   int size = mb->mb_size;
 
   if(avc->avc_bsf) {
-    int rval = av_bitstream_filter_filter(avc->avc_bsf, mc->fmt_ctx, NULL,
-                                          &converted, &size, data, size,
-                                          mb->mb_keyframe);
-    if(rval < 0)
+    AVPacket *pkt_in = av_packet_alloc();
+    AVPacket *pkt_out = av_packet_alloc();
+    pkt_in->data = data;
+    pkt_in->size = size;
+    int rval = av_bsf_send_packet(avc->avc_bsf, pkt_in);
+    if(rval < 0) {
+      av_packet_free(&pkt_in);
+      av_packet_free(&pkt_out);
       return 1;
-    if(rval == 1)
-      data = converted;
+    }
+    rval = av_bsf_receive_packet(avc->avc_bsf, pkt_out);
+    if(rval < 0) {
+      av_packet_free(&pkt_in);
+      av_packet_free(&pkt_out);
+      return 1;
+    }
+    converted = av_malloc(pkt_out->size);
+    memcpy(converted, pkt_out->data, pkt_out->size);
+    data = converted;
+    size = pkt_out->size;
+    av_packet_free(&pkt_in);
+    av_packet_free(&pkt_out);
   }
 
   int64_t pts = store_metadata(vd, mb, avc, mc, data, size);
@@ -684,7 +715,7 @@ android_codec_close(struct media_codec *mc)
 
   h264_parser_fini(&avc->avc_h264_parser);
   if(avc->avc_bsf)
-    av_bitstream_filter_close(avc->avc_bsf);
+    av_bsf_free(&avc->avc_bsf);
   free(avc);
 }
 
@@ -780,12 +811,19 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
 
     if(mc->fmt_ctx) {
       switch(mc->codec_id) {
-      case AV_CODEC_ID_H264:
-        avc->avc_bsf = av_bitstream_filter_init("h264_mp4toannexb");
+      case AV_CODEC_ID_H264: {
+        const AVBitStreamFilter *bsf = av_bsf_get_by_name("h264_mp4toannexb");
+        if(bsf) av_bsf_alloc(bsf, &avc->avc_bsf);
         break;
-      case AV_CODEC_ID_HEVC:
-        avc->avc_bsf = av_bitstream_filter_init("hevc_mp4toannexb");
+      }
+      case AV_CODEC_ID_HEVC: {
+        const AVBitStreamFilter *bsf = av_bsf_get_by_name("hevc_mp4toannexb");
+        if(bsf) av_bsf_alloc(bsf, &avc->avc_bsf);
         break;
+      }
+      }
+      if(avc->avc_bsf) {
+        av_bsf_init(avc->avc_bsf);
       }
     }
   } else {

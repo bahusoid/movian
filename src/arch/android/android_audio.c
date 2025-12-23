@@ -579,7 +579,7 @@ android_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
     (*d->d_vif)->SetVolumeLevel(d->d_vif, mb);
   }
 
-  while(avresample_available(ad->ad_avr) >= ad->ad_tile_size) {
+  while(swr_get_out_samples(ad->ad_avr, 0) >= ad->ad_tile_size) {
 
     __sync_synchronize();
 
@@ -588,7 +588,7 @@ android_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
 
     uint8_t *data[8] = {0};
     data[0] = d->d_pcmbuf + d->d_write_ptr * d->d_pcmbuf_size;
-    avresample_read(ad->ad_avr, data, ad->ad_tile_size);
+    swr_convert(ad->ad_avr, data, ad->ad_tile_size, NULL, 0);
 
     if(pts != PTS_UNSET) {
       d->d_timestamp[d->d_write_ptr] = pts;

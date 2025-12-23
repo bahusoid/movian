@@ -124,7 +124,6 @@ be_file_playaudio(const char *url, media_pipe_t *mp,
                   void *opaque)
 {
   AVFormatContext *fctx;
-  AVCodecContext *ctx;
   AVPacket pkt;
   media_format_t *fw;
   int i, r, si;
@@ -208,12 +207,15 @@ be_file_playaudio(const char *url, media_pipe_t *mp,
 
   cw = NULL;
   for(i = 0; i < fctx->nb_streams; i++) {
-    ctx = fctx->streams[i]->codec;
+    AVCodecParameters *codecpar = fctx->streams[i]->codecpar;
 
-    if(ctx->codec_type != AVMEDIA_TYPE_AUDIO)
+    if(codecpar->codec_type != AVMEDIA_TYPE_AUDIO)
       continue;
 
-    cw = media_codec_create(ctx->codec_id, 0, fw, ctx, NULL, mp);
+    media_codec_params_t mcp = {0};
+    mcp.extradata = codecpar->extradata;
+    mcp.extradata_size = codecpar->extradata_size;
+    cw = media_codec_create(codecpar->codec_id, 0, fw, NULL, &mcp, mp);
     mp->mp_audio.mq_stream = i;
     break;
   }
@@ -271,7 +273,7 @@ be_file_playaudio(const char *url, media_pipe_t *mp,
       si = pkt.stream_index;
 
       if(si != mp->mp_audio.mq_stream) {
-	av_free_packet(&pkt);
+	av_packet_unref(&pkt);
 	continue;
       }
 
@@ -291,7 +293,7 @@ be_file_playaudio(const char *url, media_pipe_t *mp,
 	mb->mb_drive_clock = 1;
       }
 
-      av_free_packet(&pkt);
+      av_packet_unref(&pkt);
     }
 
     /*
