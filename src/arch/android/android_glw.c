@@ -107,9 +107,31 @@ static void
 android_osk_open(glw_root_t *gr, const char *title, const char *input,
                 glw_t *w, int password)
 {
-  // Always use Android native keyboard
-  // (Setting UI is disabled until crash is debugged)
+#ifdef ENABLE_GLW_SETTINGS
+  // Check keyboard mode: 0=Internal, 1=Android, 2=Physical
+  if(glw_settings.gs_keyboard_mode == 0) {
+    // Use internal OSK
+    glw_osk_open_default(gr, title, input, w, password);
+    return;
+  } else if(glw_settings.gs_keyboard_mode == 2) {
+    // Physical keyboard mode
+    // Check if this is a re-activation (Enter pressed) vs first activation (click)
+    // If revert text matches input and we already had input, it's a submit
+    if(gr->gr_osk_revert != NULL && input != NULL && 
+       strcmp(gr->gr_osk_revert, input) == 0 && input[0] != '\0') {
+      // User pressed Enter to submit
+      event_t *e = event_create_action(ACTION_SUBMIT);
+      e->e_nav = prop_ref_inc(gr->gr_prop_nav);
+      glw_event_to_widget(w, e);
+      event_release(e);
+      return;
+    }
+    // First activation - just return, user will type with physical keyboard
+    return;
+  }
+#endif
   
+  // Use Android native keyboard
   android_glw_root_t *agr = (android_glw_root_t *)gr;
   
   JNIEnv *env;

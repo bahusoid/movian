@@ -381,7 +381,15 @@ glw_settings_init(void)
                    SETTING_STORE("glw", "wrap"),
                    NULL);
 
-#if 0 // Temporarily disabled - causes crash, needs debugging
+#ifdef __linux__
+  glw_settings.gs_setting_wheel_mapping =
+    setting_create(SETTING_BOOL, s, SETTINGS_INITIAL_UPDATE,
+                   SETTING_TITLE(_p("Emulate Up/Down buttons with mouse wheel")),
+                   SETTING_STORE("glw", "map_mouse_wheel_to_keys"),
+                   SETTING_WRITE_BOOL(&glw_settings.gs_map_mouse_wheel_to_keys),
+                   NULL);
+#endif
+
 #ifdef __ANDROID__
   // Keyboard input method for Android
   glw_settings.gs_setting_keyboard_mode =
@@ -393,16 +401,6 @@ glw_settings_init(void)
                    SETTING_OPTION_CSTR("0", "Internal"),
                    SETTING_OPTION_CSTR("1", "Android"),
                    SETTING_OPTION_CSTR("2", "Physical"),
-                   NULL);
-#endif
-#endif
-
-#ifdef __linux__
-  glw_settings.gs_setting_wheel_mapping =
-    setting_create(SETTING_BOOL, s, SETTINGS_INITIAL_UPDATE,
-                   SETTING_TITLE(_p("Emulate Up/Down buttons with mouse wheel")),
-                   SETTING_STORE("glw", "map_mouse_wheel_to_keys"),
-                   SETTING_WRITE_BOOL(&glw_settings.gs_map_mouse_wheel_to_keys),
                    NULL);
 #endif
 
