@@ -142,7 +142,15 @@ fi
 
 
 # Modern NDK uses llvm- prefix for binutils tools
-TOOLCHAIN="${TOOLCHAIN}llvm-"
+LLVM_TOOLCHAIN="${TOOLCHAIN}llvm-"
+TOOLCHAIN="${LLVM_TOOLCHAIN}"
+
+# Set cross-compilation tools for FFmpeg
+LIBAV_STRIP="${LLVM_TOOLCHAIN}strip"
+LIBAV_NM="${LLVM_TOOLCHAIN}nm"
+LIBAV_AR="${LLVM_TOOLCHAIN}ar"
+LIBAV_RANLIB="${LLVM_TOOLCHAIN}ranlib"
+export LIBAV_STRIP LIBAV_NM LIBAV_AR LIBAV_RANLIB
 
 bzip2_setup
 freetype_setup --host=arm-linux-gnueabihf

@@ -426,7 +426,22 @@ libav_setup() {
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=matroska --enable-encoder=ffvhuff --enable-encoder=pcm_s16le"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-swresample"
 
-    (cd ${LIBAV_BUILD_DIR} && ${TOPDIR}/ext/libav/configure ${LIBAV_ARCH_FLAGS} ${LIBAV_COMMON_FLAGS} --prefix=${EXT_INSTALL_DIR} --extra-cflags="${LIBAV_CFLAGS} ${EXTRA_CFLAGS}" --extra-ldflags="${LIBAV_LDFLAGS} ${EXTRA_LDFLAGS}" --cc="${CC}") || die
+    # Add cross-compile tools if specified
+    LIBAV_TOOLS_FLAGS=""
+    if [ -n "${LIBAV_STRIP}" ]; then
+        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --strip=${LIBAV_STRIP}"
+    fi
+    if [ -n "${LIBAV_NM}" ]; then
+        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --nm=${LIBAV_NM}"
+    fi
+    if [ -n "${LIBAV_AR}" ]; then
+        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --ar=${LIBAV_AR}"
+    fi
+    if [ -n "${LIBAV_RANLIB}" ]; then
+        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --ranlib=${LIBAV_RANLIB}"
+    fi
+
+    (cd ${LIBAV_BUILD_DIR} && ${TOPDIR}/ext/libav/configure ${LIBAV_ARCH_FLAGS} ${LIBAV_COMMON_FLAGS} ${LIBAV_TOOLS_FLAGS} --prefix=${EXT_INSTALL_DIR} --extra-cflags="${LIBAV_CFLAGS} ${EXTRA_CFLAGS}" --extra-ldflags="${LIBAV_LDFLAGS} ${EXTRA_LDFLAGS}" --cc="${CC}") || die
 
     echo >>${CONFIG_MAK} "LIBAV_BUILD_DIR=${LIBAV_BUILD_DIR}"
     echo >>${CONFIG_MAK} "LIBAV_INSTALL_DIR=${LIBAV_INSTALL_DIR}"
@@ -591,6 +606,10 @@ EOF
 
     if enabled libav; then
 	echo >>${CONFIG_MAK} "LDFLAGS_cfg += -lswresample -lswscale -lavformat -lavcodec -lavutil -lz -lm"
+	# Linux needs lzma and drm for FFmpeg's TIFF decoder and other features
+	if [ "$PLATFORM" = "linux" ]; then
+	    echo >>${CONFIG_MAK} "LDFLAGS_cfg += -llzma -ldrm"
+	fi
     fi
 
     if enabled libcec; then
