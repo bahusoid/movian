@@ -812,11 +812,8 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
 			freetype_context, fn ? fn->value : "<unknown>");
 #else
       if(codecpar->extradata_size) {
-        buf_t *b = buf_create_and_adopt(codecpar->extradata_size,
-                                        codecpar->extradata,
-                                        (void *)&av_free);
-        codecpar->extradata = NULL;
-        codecpar->extradata_size = 0;
+        buf_t *b = buf_create_and_copy(codecpar->extradata_size,
+                                        codecpar->extradata);
 	attachment_load_buf(&alist, b, freetype_context,
                             fn ? fn->value : "<unknown>");
         buf_release(b);

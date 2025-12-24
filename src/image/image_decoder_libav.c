@@ -429,6 +429,9 @@ image_decode_libav(image_coded_type_t type,
   case IMAGE_BMP:
     codec = avcodec_find_decoder(AV_CODEC_ID_BMP);
     break;
+  case IMAGE_WEBP:
+    codec = avcodec_find_decoder(AV_CODEC_ID_WEBP);
+    break;
   default:
     codec = NULL;
     break;

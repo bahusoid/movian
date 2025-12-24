@@ -50,6 +50,8 @@ static const uint8_t gif87sig[6] = {'G', 'I', 'F', '8', '7', 'a'};
 
 static const uint8_t svgsig1[5] = {'<', '?', 'x', 'm', 'l'};
 static const uint8_t svgsig2[4] = {'<', 's', 'v', 'g'};
+static const uint8_t webpsig[4] = {'R', 'I', 'F', 'F'};
+static const uint8_t webpmagic[4] = {'W', 'E', 'B', 'P'};
 
 #if ENABLE_LIBAV
 static hts_mutex_t image_from_video_mutex[2];
@@ -121,6 +123,9 @@ fa_imageloader_buf(buf_t *buf, char *errbuf, size_t errlen)
   } else if(!memcmp(svgsig1, p, sizeof(svgsig1)) ||
 	    !memcmp(svgsig2, p, sizeof(svgsig2))) {
     fmt = IMAGE_SVG;
+  } else if(!memcmp(webpsig, p, sizeof(webpsig)) &&
+	    buf->b_size >= 12 && !memcmp(webpmagic, p + 8, sizeof(webpmagic))) {
+    fmt = IMAGE_WEBP;
   } else {
   bad:
     snprintf(errbuf, errlen, "Unknown format");
@@ -282,6 +287,9 @@ fa_imageloader(const char *url, const struct image_meta *im,
   } else if(!memcmp(svgsig1, p, sizeof(svgsig1)) ||
 	    !memcmp(svgsig2, p, sizeof(svgsig2))) {
     fmt = IMAGE_SVG;
+  } else if(!memcmp(webpsig, p, sizeof(webpsig)) &&
+            !memcmp(webpmagic, p + 8, sizeof(webpmagic))) {
+    fmt = IMAGE_WEBP;
   } else {
     snprintf(errbuf, errlen, "Unknown format");
     fa_close(fh);
@@ -414,8 +422,7 @@ write_thumb(const AVCodecContext *src, const AVFrame *sframe,
   if(ret >= 0) {
     ret = avcodec_receive_packet(ctx, out);
     if(ret >= 0) {
-      buf_t *b = buf_create_and_adopt(out->size, out->data, &av_free);
-      out->data = NULL;  // Ownership transferred
+      buf_t *b = buf_create_and_copy(out->size, out->data);
       blobcache_put(cacheid, "videothumb", b, INT32_MAX, NULL, mtime, 0);
       buf_release(b);
     }
@@ -535,11 +542,8 @@ fa_image_from_video2(const char *url, const image_meta_t *im,
           return thumb_from_attachment(url, offset, size, errbuf, errlen,
                                        cacheid, mtime);
 #else
-          buf_t *b = buf_create_and_adopt(par->extradata_size,
-                                          par->extradata,
-                                          (void *)&av_free);
-          par->extradata = NULL;
-          par->extradata_size = 0;
+          buf_t *b = buf_create_and_copy(par->extradata_size,
+                                          par->extradata);
           fa_libav_close_format(fctx, 0);
           return thumb_from_buf(b, errbuf, errlen, cacheid, mtime);
 #endif
