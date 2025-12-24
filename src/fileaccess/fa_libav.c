@@ -33,7 +33,12 @@ static int
 fa_libav_read(void *opaque, uint8_t *buf, int size)
 {
   fa_handle_t *fh = opaque;
-  return fa_read(fh, buf, size);
+
+  int read = fa_read(fh, buf, size);
+  if(read == 0 && size > 0)
+    return AVERROR_EOF;
+
+  return read;
 }
 
 
