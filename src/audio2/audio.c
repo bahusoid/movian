@@ -807,19 +807,23 @@ audio_decode_thread(void *aux)
 	ad->ad_discontinuity = 1;
 
 	if(ad->ad_avr != NULL) {
-	  // Drain any buffered samples on seek/flush by reading them to a temp buffer
-	  int remaining;
-	  uint8_t *tmp_buf[1];
-	  while((remaining = swr_get_out_samples(ad->ad_avr, 0)) > 0) {
-	    tmp_buf[0] = av_malloc(remaining * 8); // 8 bytes per sample max (stereo float)
-	    if(tmp_buf[0]) {
-	      swr_convert(ad->ad_avr, tmp_buf, remaining, NULL, 0);
-	      av_free(tmp_buf[0]);
-	    } else {
+	  int64_t delay = swr_get_delay(ad->ad_avr, ad->ad_in_sample_rate);
+	  int64_t to_drop = av_rescale_rnd(delay,
+	                                   ad->ad_out_sample_rate,
+	                                   ad->ad_in_sample_rate,
+	                                   AV_ROUND_UP);
+	  while(to_drop > 0) {
+	    int dropped = swr_drop_output(ad->ad_avr, (int)to_drop);
+	    if(dropped < 0) {
+	      TRACE(TRACE_ERROR, "Audio", "swr_drop_output failed: %d", dropped);
 	      break;
 	    }
+	    if(dropped == 0)
+	      break;
+	    to_drop -= dropped;
 	  }
 	}
+
 	break;
 
       case MB_CTRL_EXIT:
