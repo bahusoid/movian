@@ -495,7 +495,7 @@ metadata_from_libav(char *dst, size_t dstlen,
 		    const AVCodec *codec, const AVCodecContext *avctx)
 {
   const char *name = codec->name;
-  const char *profile = av_get_profile_name(codec, avctx->profile);
+  const char *profile = avctx ? av_get_profile_name(codec, avctx->profile) : NULL;
 
   if(codec->id == AV_CODEC_ID_DTS && profile != NULL)
     name = NULL;
@@ -514,6 +514,9 @@ metadata_from_libav(char *dst, size_t dstlen,
   if(profile != NULL)
     off += snprintf(dst + off, dstlen - off,
                     "%s%s", off ? " " : "", profile);
+
+  if(avctx == NULL)
+    return;
 
   if(codec->id == AV_CODEC_ID_H264 && avctx->level > 0)
     off += snprintf(dst + off, dstlen - off,
