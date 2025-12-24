@@ -155,6 +155,9 @@ alsa_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
   c = MIN(d->max_frames_per_write, c);
   c = MIN(samples, c);
 
+  if(ad->ad_avr == NULL)
+    return -1;
+
   uint8_t *planes[8] = {0};
   planes[0] = d->tmp;
 

@@ -321,6 +321,9 @@ mac_audio_deliver(audio_decoder_t *ad, int samples,
   if(b == NULL)
     return -1;
 
+  if(ad->ad_avr == NULL)
+    return -1;
+
   uint8_t *data[8] = {0};
   data[0] = (uint8_t *)b->mAudioData;
   swr_convert(ad->ad_avr, data, samples, NULL, 0);

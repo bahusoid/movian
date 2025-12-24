@@ -454,6 +454,15 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
 
       ctx = mc->ctx = avcodec_alloc_context3(codec);
 
+      // Copy extradata from format context if available (needed for AAC, etc.)
+      if(mc->fmt_ctx && mc->fmt_ctx->extradata_size > 0) {
+        ctx->extradata = av_mallocz(mc->fmt_ctx->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+        if(ctx->extradata) {
+          memcpy(ctx->extradata, mc->fmt_ctx->extradata, mc->fmt_ctx->extradata_size);
+          ctx->extradata_size = mc->fmt_ctx->extradata_size;
+        }
+      }
+
       if(ad->ad_stereo_downmix) {
         AVChannelLayout stereo_layout = AV_CHANNEL_LAYOUT_STEREO;
         av_channel_layout_copy(&ctx->ch_layout, &stereo_layout);
@@ -466,16 +475,27 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
     }
 
     r = avcodec_send_packet(ctx, &mb->mb_pkt);
-    if(r < 0 && r != AVERROR(EAGAIN))
+    if(r < 0 && r != AVERROR(EAGAIN)) {
+      char errbuf[128];
+      av_strerror(r, errbuf, sizeof(errbuf));
+      TRACE(TRACE_ERROR, "Audio", "avcodec_send_packet failed: %s", errbuf);
       return 0;
+    }
+    
+    // Packet is fully consumed by send_packet in FFmpeg's API
+    mb->mb_size = 0;
+    
+    // With FFmpeg's send/receive API, the packet is consumed by send_packet.
+    // We should try to receive all available frames before returning.
     r = avcodec_receive_frame(ctx, frame);
     if(r < 0) {
       got_frame = 0;
-      if(r == AVERROR(EAGAIN))
-        return mb->mb_size > 0;
+      // EAGAIN means decoder needs more input - packet was consumed, return success
+      // Other errors also mean we should move on
       return 0;
     }
     got_frame = 1;
+
     update_abitrate(mp, mq, mb->mb_size, ad);
 
     if(frame->sample_rate == 0) {
@@ -542,8 +562,16 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
     return mb->mb_size > 0;
 
 
-  int64_t frame_ch_layout;
-  av_channel_layout_copy((AVChannelLayout *)&frame_ch_layout, &frame->ch_layout) ? 0 : (frame_ch_layout = frame->ch_layout.u.mask);
+  // Get channel layout mask from frame for comparison
+  int64_t frame_ch_layout = frame->ch_layout.u.mask;
+  if(frame_ch_layout == 0 && frame->ch_layout.nb_channels > 0) {
+    // If no mask, generate a default layout for the channel count
+    AVChannelLayout temp_layout = {0};
+    av_channel_layout_default(&temp_layout, frame->ch_layout.nb_channels);
+    frame_ch_layout = temp_layout.u.mask;
+    av_channel_layout_uninit(&temp_layout);
+  }
+
   if(frame->sample_rate    != ad->ad_in_sample_rate ||
      frame->format         != ad->ad_in_sample_format ||
      frame_ch_layout != ad->ad_in_channel_layout ||
@@ -552,39 +580,31 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
     ad->ad_want_reconfig = 0;
     ad->ad_in_sample_rate    = frame->sample_rate;
     ad->ad_in_sample_format  = frame->format;
-    ad->ad_in_channel_layout = frame->ch_layout.u.mask;
+    ad->ad_in_channel_layout = frame_ch_layout;
 
     ac->ac_reconfig(ad);
 
-    if(ad->ad_avr == NULL)
-      ad->ad_avr = swr_alloc();
-    else
-      swr_close(ad->ad_avr);
+    if(ad->ad_avr != NULL) {
+      swr_free(&ad->ad_avr);
+    }
 
-    av_opt_set_int(ad->ad_avr, "in_sample_fmt",
-                   ad->ad_in_sample_format, 0);
-    av_opt_set_int(ad->ad_avr, "in_sample_rate",
-                   ad->ad_in_sample_rate, 0);
-    av_opt_set_int(ad->ad_avr, "in_channel_layout",
-                   ad->ad_in_channel_layout, 0);
+    AVChannelLayout in_chlayout, out_chlayout;
+    av_channel_layout_from_mask(&in_chlayout, ad->ad_in_channel_layout);
+    av_channel_layout_from_mask(&out_chlayout, ad->ad_out_channel_layout);
 
-    av_opt_set_int(ad->ad_avr, "out_sample_fmt",
-                   ad->ad_out_sample_format, 0);
-    av_opt_set_int(ad->ad_avr, "out_sample_rate",
-                   ad->ad_out_sample_rate, 0);
-    av_opt_set_int(ad->ad_avr, "out_channel_layout",
-                   ad->ad_out_channel_layout, 0);
+    int alloc_ret = swr_alloc_set_opts2(&ad->ad_avr,
+                        &out_chlayout, ad->ad_out_sample_format, ad->ad_out_sample_rate,
+                        &in_chlayout, ad->ad_in_sample_format, ad->ad_in_sample_rate,
+                        0, NULL);
 
     char buf1[128];
     char buf2[128];
 
-    AVChannelLayout in_ch_layout, out_ch_layout;
-    av_channel_layout_from_mask(&in_ch_layout, ad->ad_in_channel_layout);
-    av_channel_layout_from_mask(&out_ch_layout, ad->ad_out_channel_layout);
-    av_channel_layout_describe(&in_ch_layout, buf1, sizeof(buf1));
-    av_channel_layout_describe(&out_ch_layout, buf2, sizeof(buf2));
-    av_channel_layout_uninit(&in_ch_layout);
-    av_channel_layout_uninit(&out_ch_layout);
+    av_channel_layout_describe(&in_chlayout, buf1, sizeof(buf1));
+    av_channel_layout_describe(&out_chlayout, buf2, sizeof(buf2));
+
+    av_channel_layout_uninit(&in_chlayout);
+    av_channel_layout_uninit(&out_chlayout);
 
     TRACE(TRACE_DEBUG, "Audio",
           "Converting from [%s %dHz %s] to [%s %dHz %s]",
@@ -593,9 +613,20 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
           buf2, ad->ad_out_sample_rate,
           av_get_sample_fmt_name(ad->ad_out_sample_format));
 
-    if(swr_init(ad->ad_avr)) {
-      TRACE(TRACE_ERROR, "Audio", "Unable to open resampler");
-      swr_free(&ad->ad_avr);
+    if(alloc_ret < 0) {
+      TRACE(TRACE_ERROR, "Audio", "swr_alloc_set_opts2 failed: %d", alloc_ret);
+    } else if(ad->ad_avr == NULL) {
+      TRACE(TRACE_ERROR, "Audio", "swr_alloc_set_opts2 returned NULL context");
+    } else {
+      int init_ret = swr_init(ad->ad_avr);
+      if(init_ret < 0) {
+        char errbuf[128];
+        av_strerror(init_ret, errbuf, sizeof(errbuf));
+        TRACE(TRACE_ERROR, "Audio", "swr_init failed: %s", errbuf);
+        swr_free(&ad->ad_avr);
+      } else {
+        TRACE(TRACE_DEBUG, "Audio", "Resampler initialized successfully");
+      }
     }
 
     prop_set(mp->mp_prop_ctrl, "canAdjustVolume", PROP_SET_INT, 1);
@@ -609,9 +640,10 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
 
   if(ad->ad_avr != NULL) {
     swr_convert(ad->ad_avr, NULL, 0,
-                       (const uint8_t **)frame->data,
-                       frame->nb_samples);
+                (const uint8_t **)frame->data,
+                frame->nb_samples);
   } else {
+    TRACE(TRACE_DEBUG, "Audio", "No resampler - sleeping");
     usleep(ad->ad_estimated_duration);
   }
 #if CONFIG_GLW_REC
@@ -775,9 +807,17 @@ audio_decode_thread(void *aux)
 	ad->ad_discontinuity = 1;
 
 	if(ad->ad_avr != NULL) {
-	  int remaining = swr_get_out_samples(ad->ad_avr, 0);
-	  if(remaining > 0) {
-	    swr_convert(ad->ad_avr, NULL, remaining, NULL, 0);
+	  // Drain any buffered samples on seek/flush by reading them to a temp buffer
+	  int remaining;
+	  uint8_t *tmp_buf[1];
+	  while((remaining = swr_get_out_samples(ad->ad_avr, 0)) > 0) {
+	    tmp_buf[0] = av_malloc(remaining * 8); // 8 bytes per sample max (stereo float)
+	    if(tmp_buf[0]) {
+	      swr_convert(ad->ad_avr, tmp_buf, remaining, NULL, 0);
+	      av_free(tmp_buf[0]);
+	    } else {
+	      break;
+	    }
 	  }
 	}
 	break;

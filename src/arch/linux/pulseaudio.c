@@ -450,6 +450,11 @@ pulseaudio_audio_deliver(audio_decoder_t *ad, int samples,
   if(ad->ad_spdif_muxer != NULL) {
     memcpy(buf, ad->ad_spdif_frame, ad->ad_spdif_frame_size);
   } else {
+    if(ad->ad_avr == NULL) {
+      pa_stream_cancel_write(d->s);
+      pa_threaded_mainloop_unlock(mainloop);
+      return -1;
+    }
     int rsamples = bytes / d->framesize;
     uint8_t *data[8] = {0};
     data[0] = (uint8_t *)buf;

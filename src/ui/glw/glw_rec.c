@@ -476,32 +476,31 @@ glw_rec_audio_send(struct audio_decoder *ad, AVFrame *frame, int64_t pts)
       LIST_INSERT_HEAD(&gr->asources, as, as_link);
       as->as_id = ad->ad_id;
       as->as_start_drop = 24000;
-      as->as_avr = swr_alloc();
+      as->as_avr = NULL;
     }
 
     if(as->as_format != ad->ad_in_sample_format ||
        as->as_channel_layout != ad->ad_in_channel_layout ||
        as->as_sample_rate != ad->ad_in_sample_rate) {
 
-      swr_close(as->as_avr);
+      if(as->as_avr != NULL)
+        swr_free(&as->as_avr);
 
       as->as_format = ad->ad_in_sample_format;
       as->as_channel_layout = ad->ad_in_channel_layout;
       as->as_sample_rate = ad->ad_in_sample_rate;
 
-      av_opt_set_int(as->as_avr, "in_sample_fmt",
-                     as->as_format, 0);
-      av_opt_set_int(as->as_avr, "in_sample_rate",
-                     as->as_sample_rate, 0);
-      av_opt_set_int(as->as_avr, "in_channel_layout",
-                     as->as_channel_layout, 0);
+      AVChannelLayout in_chlayout, out_chlayout;
+      av_channel_layout_from_mask(&in_chlayout, as->as_channel_layout);
+      av_channel_layout_default(&out_chlayout, 2);  // stereo
 
-      av_opt_set_int(as->as_avr, "out_sample_fmt",
-                     AV_SAMPLE_FMT_S16, 0);
-      av_opt_set_int(as->as_avr, "out_sample_rate",
-                     48000, 0);
-      av_opt_set_int(as->as_avr, "out_channel_layout",
-                     AV_CH_LAYOUT_STEREO, 0);
+      swr_alloc_set_opts2(&as->as_avr,
+                          &out_chlayout, AV_SAMPLE_FMT_S16, 48000,
+                          &in_chlayout, as->as_format, as->as_sample_rate,
+                          0, NULL);
+
+      av_channel_layout_uninit(&in_chlayout);
+      av_channel_layout_uninit(&out_chlayout);
 
       char buf1[128];
       AVChannelLayout ch_layout;
