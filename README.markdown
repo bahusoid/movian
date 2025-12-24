@@ -3,18 +3,16 @@ Movian mediaplayer
 
 (c) 2006 - 2018 Lonelycoder AB
 
-[![Build status](https://doozer.io/badge/andoma/movian/buildstatus/master)](https://doozer.io/user/andoma/movian)
-
-For more information and latest versions, please visit:
-
-[https://movian.tv/](https://movian.tv/)
 
 ## How to build for Linux
 
 First you need to satisfy some dependencies (for Ubuntu 24.04.3 LTS)
 
-`	sudo apt-get install libfreetype6-dev libfontconfig1-dev libxext-dev libgl1-mesa-dev libasound2-dev libasound2-dev libgtk2.0-dev libxss-dev libxxf86vm-dev libxv-dev libvdpau-dev yasm libpulse-dev libssl-dev curl libwebkit2gtk-4.1-dev libsqlite3-dev libavahi-client-dev
+`	sudo apt-get install libfreetype6-dev libfontconfig1-dev libxext-dev libgl1-mesa-dev libasound2-dev libasound2-dev libgtk2.0-dev libxss-dev libxxf86vm-dev libxv-dev libvdpau-dev yasm nasm libpulse-dev libssl-dev curl libwebkit2gtk-4.1-dev libsqlite3-dev libavahi-client-dev
 `
+
+Note: `nasm` is required for building FFmpeg 7.x (in addition to `yasm`).
+
 Then you need to configure:
 
 	./configure
@@ -33,11 +31,17 @@ Thus, to start it, just type:
 
 	./build.linux/movian
 
+To debug movian or plugins
+	./build.linux/movian -d -p plugin_examples/plugin1 -p plugin_examples/plugin2
+-d - for debug logs
+-p - for loading plugins from folder
+
+
 Settings are stored in `~/.hts/showtime`
 
 If you want to build with extra debugging options for development these options might be of interest:
 
-	--cc=gcc-5 --extra-cflags=-fno-omit-frame-pointer --optlevel=g --sanitize=address --enable-bughunt
+	--cc=gcc-5 --extra-cflags=-fno-omit-frame-pointer --optlevel=0 --sanitize=address --enable-bughunt
 
 
 ## How to build for Mac OS X
@@ -59,6 +63,11 @@ Or if you build for release
 If configured successfully run:
 
 	$ make
+
+or if you have multiple configurations
+	$ make BUILD=build.linux
+	$ make BUILD=android.api21_x86
+	$ make BUILD=android.api21_armv7
 
 Run Movian binary from build directory
 
