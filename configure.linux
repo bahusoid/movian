@@ -596,7 +596,7 @@ echo >>${CONFIG_MAK} "bindir=\${DESTDIR}$bindir"
 echo >>${CONFIG_MAK} "mandir=\${DESTDIR}$mandir"
 echo >>${CONFIG_MAK} "datadir=\${DESTDIR}$datadir"
 echo >>${CONFIG_MAK} "libdir=\${DESTDIR}$libdir"
-echo >>${CONFIG_MAK} LDFLAGS_cfg += -lpthread -lrt -ldl -llzma -ldrm
+echo >>${CONFIG_MAK} LDFLAGS_cfg += -lpthread -lrt -ldl
 eval datadirpath=${datadir}
 echo >>${CONFIG_H} "#define SHOWTIME_DATADIR \"${datadirpath}\""
 
