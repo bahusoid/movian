@@ -74,6 +74,9 @@ glw_scroll_handle_pointer_event(glw_scroll_control_t *gs,
   glw_root_t *gr = w->glw_root;
   int64_t dt;
   const int grabbed = gr->gr_pointer_grab_scroll == w;
+  if (grabbed)
+    gs->scroll_to_me = NULL;
+
   float v;
   switch(gpe->type) {
 
@@ -82,6 +85,7 @@ glw_scroll_handle_pointer_event(glw_scroll_control_t *gs,
     gs->target_pos += gs->page_size * gpe->delta_y;
     w->glw_flags |= GLW_UPDATE_METRICS;
     glw_schedule_refresh(w->glw_root, 0);
+    gs->scroll_to_me = NULL;
     return 1;
 
   case GLW_POINTER_FINE_SCROLL:
@@ -89,6 +93,7 @@ glw_scroll_handle_pointer_event(glw_scroll_control_t *gs,
     gs->target_pos += gpe->delta_y;
     w->glw_flags |= GLW_UPDATE_METRICS;
     glw_schedule_refresh(w->glw_root, 0);
+    gs->scroll_to_me = NULL;
     return 1;
 
   case GLW_POINTER_TOUCH_CANCEL:
