@@ -277,7 +277,7 @@ ovd_blackout(glw_video_t *gv)
 /**
  *
  */
-static int
+static intptr_t
 ovd_set_codec(media_codec_t *mc, glw_video_t *gv, const frame_info_t *fi,
               struct glw_video_engine *gve)
 {

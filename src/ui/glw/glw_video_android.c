@@ -267,7 +267,7 @@ GLW_REGISTER_GVE(glw_android_video_yuvp);
  *
  * (related to how the surface locking is (not) done)
  */
-static int
+static intptr_t
 surface_set_codec(media_codec_t *mc, glw_video_t *gv,
                   const frame_info_t *fi,
                   struct glw_video_engine *gve)
@@ -289,7 +289,7 @@ surface_set_codec(media_codec_t *mc, glw_video_t *gv,
   mid = (*env)->GetMethodID(env, class, "getSurfaceUnlocked",
                             "()Landroid/view/Surface;");
 
-  jobject surface = 0;
+  jobject surface = NULL;
 
   while(1) {
     surface = (*env)->CallObjectMethod(env, av->av_VideoRenderer, mid);
@@ -298,7 +298,12 @@ surface_set_codec(media_codec_t *mc, glw_video_t *gv,
       break;
     usleep(10000);
   }
-  return (int)surface;
+
+  // Promote to global ref so it can be used from other threads safely
+  jobject gsurf = (*env)->NewGlobalRef(env, surface);
+  (*env)->DeleteLocalRef(env, surface);
+  TRACE(TRACE_DEBUG, "GLW", "surface_set_codec returning global Surface ref %p", (void *)gsurf);
+  return (intptr_t)gsurf;
 }
 
 

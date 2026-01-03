@@ -29,6 +29,8 @@ extern JavaVM *JVM;
 typedef struct android_video_codec {
   AMediaCodec *codec;
   ANativeWindow *window;
+  jobject surface_ref;
+  int is_attached;
 
   const char *mime;
   int width;
@@ -140,10 +142,15 @@ drain_output(android_video_codec_t *avc, video_decoder_t *vd)
       int64_t wt = fi.fi_pts + rtd;
       
       if(epoch == fi.fi_epoch && (wt - now) > 10000LL) {
-        AVC_TRACE("Display buffer %zd @ %10lld in %16lld rtd=%lld",
-                  idx, fi.fi_pts, wt - now, rtd);
-        
-        AMediaCodec_releaseOutputBufferAtTime(avc->codec, idx, wt * 1000LL);
+        while((wt - arch_get_avtime()) > 5000LL) {
+          hts_mutex_lock(&mp->mp_clock_mutex);
+          int current_epoch = mp->mp_audio_clock_epoch;
+          hts_mutex_unlock(&mp->mp_clock_mutex);
+          if (current_epoch != epoch) break;
+
+          usleep(2000);
+        }
+        AMediaCodec_releaseOutputBuffer(avc->codec, idx, 1);
         
         fi.fi_update_pts_only = 1;
         fi.fi_type = 'SURF';
@@ -162,6 +169,7 @@ drain_output(android_video_codec_t *avc, video_decoder_t *vd)
     } else if (idx == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
       break;
     } else {
+      TRACE(TRACE_ERROR, "MediaCodec", "dequeueOutputBuffer failed: %zd", idx);
       break;
     }
   }
@@ -179,19 +187,27 @@ android_codec_decode(struct media_codec *mc, struct video_decoder *vd,
   if(avc->bsf) {
     AVPacket *pkt_in = av_packet_alloc();
     AVPacket *pkt_out = av_packet_alloc();
-    pkt_in->data = data;
-    pkt_in->size = size;
-    
-    int ret = av_bsf_send_packet(avc->bsf, pkt_in);
-    if (ret == 0) {
+    if (pkt_in && pkt_out) {
+      pkt_in->data = data;
+      pkt_in->size = size;
+      
+      int ret = av_bsf_send_packet(avc->bsf, pkt_in);
+      if (ret == 0) {
         ret = av_bsf_receive_packet(avc->bsf, pkt_out);
         if (ret == 0) {
              av_freep(&converted);
              converted = malloc(pkt_out->size);
-             memcpy(converted, pkt_out->data, pkt_out->size);
-             data = converted;
-             size = pkt_out->size;
+             if (converted) {
+               memcpy(converted, pkt_out->data, pkt_out->size);
+               data = converted;
+               size = pkt_out->size;
+             }
+        } else if (ret != AVERROR(EAGAIN)) {
+             TRACE(TRACE_ERROR, "Video", "BSF receive packet failed: %d", ret);
         }
+      } else {
+         TRACE(TRACE_ERROR, "Video", "BSF send packet failed: %d", ret);
+      }
     }
     av_packet_free(&pkt_in);
     av_packet_free(&pkt_out);
@@ -207,15 +223,18 @@ android_codec_decode(struct media_codec *mc, struct video_decoder *vd,
       uint8_t *buf = AMediaCodec_getInputBuffer(avc->codec, idx, &bufsize);
       if (buf) {
         if (size > bufsize) {
-           TRACE(TRACE_ERROR, "MediaCodec", "Input buffer too small: %d < %d", bufsize, size);
+           TRACE(TRACE_ERROR, "MediaCodec", "Input buffer too small: %zu < %d", bufsize, size);
            size = bufsize;
         }
         memcpy(buf, data, size);
         AMediaCodec_queueInputBuffer(avc->codec, idx, 0, size, pts, flags);
       }
       break;
-    } else {
+    } else if (idx == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
       drain_output(avc, vd);
+    } else {
+      TRACE(TRACE_ERROR, "MediaCodec", "dequeueInputBuffer failed: %zd", idx);
+      break;
     }
   }
   
@@ -247,6 +266,23 @@ android_codec_close(struct media_codec *mc)
     ANativeWindow_release(avc->window);
   }
 
+  if (avc->surface_ref) {
+    JNIEnv *env;
+    int status = (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
+    if (status == JNI_EDETACHED) {
+        if ((*JVM)->AttachCurrentThread(JVM, &env, NULL) == 0) {
+            (*env)->DeleteGlobalRef(env, avc->surface_ref);
+            (*JVM)->DetachCurrentThread(JVM);
+        }
+    } else if (status == JNI_OK) {
+        (*env)->DeleteGlobalRef(env, avc->surface_ref);
+    }
+  }
+
+  if (avc->is_attached) {
+    (*JVM)->DetachCurrentThread(JVM);
+  }
+
   prop_ref_dec(avc->codec_info);
 
   if(avc->bsf)
@@ -276,16 +312,30 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
 
   TRACE(TRACE_DEBUG, "Video", "Creating NDK MediaCodec for %s", mime);
 
+  android_video_codec_t *avc = calloc(1, sizeof(android_video_codec_t));
+  avc->mime = mime;
+  avc->codec_info = prop_ref_inc(mp->mp_video.mq_prop_codec);
+
+  // Attach thread FIRST
+  JNIEnv *env;
+  int jni_status = (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
+  if (jni_status == JNI_EDETACHED) {
+    if ((*JVM)->AttachCurrentThread(JVM, &env, NULL) != 0) {
+       TRACE(TRACE_ERROR, "Video", "Failed to attach to JVM");
+       free(avc);
+       return -1;
+    }
+    avc->is_attached = 1;
+  }
+
   AMediaCodec *codec = AMediaCodec_createDecoderByType(mime);
   if (!codec) {
     TRACE(TRACE_ERROR, "Video", "Failed to create MediaCodec for %s", mime);
+    if (avc->is_attached) (*JVM)->DetachCurrentThread(JVM);
+    free(avc);
     return -1;
   }
-
-  android_video_codec_t *avc = calloc(1, sizeof(android_video_codec_t));
   avc->codec = codec;
-  avc->mime = mime;
-  avc->codec_info = prop_ref_inc(mp->mp_video.mq_prop_codec);
   
   const frame_info_t fi = {
       .fi_dar_num = 0,
@@ -293,23 +343,25 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
       .fi_height = 0,
   };
   
-  int surface_int = mp->mp_set_video_codec('SURF', mc, mp->mp_video_frame_opaque, &fi);
-  jobject surface = (jobject)surface_int;
+  intptr_t surface_ptr = mp->mp_set_video_codec('SURF', mc, mp->mp_video_frame_opaque, &fi);
+  jobject surface = (jobject)surface_ptr;
   
   if (!surface) {
      TRACE(TRACE_ERROR, "Video", "Failed to get surface");
      AMediaCodec_delete(codec);
+     if (avc->is_attached) (*JVM)->DetachCurrentThread(JVM);
      free(avc);
      return -1;
   }
 
-  JNIEnv *env;
-  (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
+  avc->surface_ref = surface;
   avc->window = ANativeWindow_fromSurface(env, surface);
   
   if (!avc->window) {
      TRACE(TRACE_ERROR, "Video", "Failed to get ANativeWindow");
+     (*env)->DeleteGlobalRef(env, avc->surface_ref);
      AMediaCodec_delete(codec);
+     if (avc->is_attached) (*JVM)->DetachCurrentThread(JVM);
      free(avc);
      return -1;
   }
@@ -317,8 +369,11 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
   AMediaFormat *format = AMediaFormat_new();
   AMediaFormat_setString(format, AMEDIAFORMAT_KEY_MIME, mime);
   
-  if (mcp && mcp->extradata_size > 0) {
-     AMediaFormat_setBuffer(format, "csd-0", mcp->extradata, mcp->extradata_size);
+  if (mcp) {
+    if (mcp->width > 0)
+      AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_WIDTH, mcp->width);
+    if (mcp->height > 0)
+      AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_HEIGHT, mcp->height);
   }
   
   media_status_t status = AMediaCodec_configure(codec, format, avc->window, NULL, 0);
@@ -327,16 +382,22 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
   if (status != AMEDIA_OK) {
      TRACE(TRACE_ERROR, "Video", "AMediaCodec_configure failed: %d", status);
      ANativeWindow_release(avc->window);
+     (*env)->DeleteGlobalRef(env, avc->surface_ref);
      AMediaCodec_delete(codec);
+     if (avc->is_attached) (*JVM)->DetachCurrentThread(JVM);
      free(avc);
      return -1;
   }
   
+  TRACE(TRACE_INFO, "Video", "AMediaCodec configured successfully. Surface: %p Window: %p", surface, avc->window);
+
   status = AMediaCodec_start(codec);
   if (status != AMEDIA_OK) {
      TRACE(TRACE_ERROR, "Video", "AMediaCodec_start failed: %d", status);
      ANativeWindow_release(avc->window);
+     (*env)->DeleteGlobalRef(env, avc->surface_ref);
      AMediaCodec_delete(codec);
+     if (avc->is_attached) (*JVM)->DetachCurrentThread(JVM);
      free(avc);
      return -1;
   }
@@ -344,7 +405,36 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
   if(mc->codec_id == AV_CODEC_ID_H264) {
     const AVBitStreamFilter *filter = av_bsf_get_by_name("h264_mp4toannexb");
     if(filter) {
-      av_bsf_alloc(filter, &avc->bsf);
+      int ret = av_bsf_alloc(filter, &avc->bsf);
+      if (ret < 0) {
+        TRACE(TRACE_ERROR, "Video", "Failed to allocate BSF: %d", ret);
+        avc->bsf = NULL;
+      } else {
+        avc->bsf->par_in->codec_type = AVMEDIA_TYPE_VIDEO;
+        avc->bsf->par_in->codec_id = mc->codec_id;
+        avc->bsf->par_in->width = mcp ? mcp->width : 0;
+        avc->bsf->par_in->height = mcp ? mcp->height : 0;
+
+        if (mcp && mcp->extradata && mcp->extradata_size > 0) {
+          avc->bsf->par_in->extradata = av_malloc(mcp->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+          if (avc->bsf->par_in->extradata) {
+            memcpy(avc->bsf->par_in->extradata, mcp->extradata, mcp->extradata_size);
+            avc->bsf->par_in->extradata_size = mcp->extradata_size;
+            memset(avc->bsf->par_in->extradata + mcp->extradata_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+          }
+        }
+
+        ret = av_bsf_init(avc->bsf);
+        if (ret < 0) {
+          TRACE(TRACE_ERROR, "Video", "Failed to init BSF: %d", ret);
+          av_bsf_free(&avc->bsf);
+          avc->bsf = NULL;
+        } else {
+          TRACE(TRACE_INFO, "Video", "BSF h264_mp4toannexb initialized");
+        }
+      }
+    } else {
+      TRACE(TRACE_ERROR, "Video", "BSF h264_mp4toannexb not found");
     }
   }
 

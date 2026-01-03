@@ -33,7 +33,7 @@
 #include "glw_texture.h"
 
 static int glw_video_input(const frame_info_t *info, void *opaque);
-static int glw_set_video_codec(uint32_t type, media_codec_t *mc, void *opaque,
+static intptr_t glw_set_video_codec(uint32_t type, media_codec_t *mc, void *opaque,
 			       const frame_info_t *fi);
 
 
@@ -1200,13 +1200,13 @@ glw_video_input(const frame_info_t *fi, void *opaque)
 /**
  *
  */
-static int
+static intptr_t
 glw_set_video_codec(uint32_t type, media_codec_t *mc, void *opaque,
 		    const frame_info_t *fi)
 {
   glw_video_t *gv = opaque;
   glw_video_engine_t *gve;
-  int r = -1;
+  intptr_t r = -1;
   hts_mutex_lock(&gv->gv_surface_mutex);
 
   if(type == 'none') {

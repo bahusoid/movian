@@ -260,7 +260,7 @@ typedef struct glw_video_engine {
   int (*gve_deliver)(const frame_info_t *fi, glw_video_t *gv,
                      struct glw_video_engine *gve);
 
-  int (*gve_set_codec)(media_codec_t *mc, glw_video_t *gv,
+  intptr_t (*gve_set_codec)(media_codec_t *mc, glw_video_t *gv,
 		       const frame_info_t *fi,
                        struct glw_video_engine *gve);
 

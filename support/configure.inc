@@ -425,6 +425,7 @@ libav_setup() {
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=spdif --enable-encoder=ac3 --enable-encoder=eac3"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=matroska --enable-encoder=ffvhuff --enable-encoder=pcm_s16le"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-swresample"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-bsf=h264_mp4toannexb --enable-bsf=hevc_mp4toannexb"
 
     # Add cross-compile tools if specified
     LIBAV_TOOLS_FLAGS=""

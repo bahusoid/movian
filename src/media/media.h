@@ -152,7 +152,7 @@ typedef struct frame_info {
  *
  */
 typedef int (video_frame_deliver_t)(const frame_info_t *info, void *opaque);
-typedef int (set_video_codec_t)(uint32_t type, struct media_codec *mc,
+typedef intptr_t (set_video_codec_t)(uint32_t type, struct media_codec *mc,
 				void *opaque, const frame_info_t *info);
 
 
