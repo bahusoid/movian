@@ -164,7 +164,7 @@ libyuv_setup
 cat >> ${CONFIG_MAK} <<EOF
 CFLAGS_arch = ${ARCH_CFLAGS}
 CFLAGS_cfg += ${ARCH_CFLAGS}
-LDFLAGS_cfg += ${ARCH_LDFLAGS} -lOpenSLES -lGLESv2 -llog -landroid -ljnigraphics
+LDFLAGS_cfg += ${ARCH_LDFLAGS} -lOpenSLES -lGLESv2 -llog -landroid -ljnigraphics -lmediandk
 ANDROID_BUILD_TOOLS := ${SDK}/build-tools/${BUILD_TOOLS}
 ANDROID_PLATFORM_PATH := ${SDK}/platforms/android-${ANDROID_TARGET_SDK_VERSION}
 ANDROID_BUILDKIND_DESCRIMINATOR := ${ANDROID_BUILDKIND_DESCRIMINATOR}
