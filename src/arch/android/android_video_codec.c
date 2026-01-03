@@ -133,7 +133,8 @@ fill_frame_info_from_pts(frame_info_t *fi,
     if(mbm->mbm_pts == pts) {
       fi->fi_epoch = mbm->mbm_epoch;
       fi->fi_duration = mbm->mbm_duration;
-      // fi->fi_pos = mbm->mbm_pos;
+      fi->fi_user_time = mbm->mbm_user_time;
+      fi->fi_drive_clock = mbm->mbm_drive_clock;
       return 0;
     }
   }
