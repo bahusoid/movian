@@ -81,14 +81,31 @@ update_output_format(android_video_codec_t *avc)
 {
   AMediaFormat *format = AMediaCodec_getOutputFormat(avc->codec);
   if (format) {
-    AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_WIDTH, &avc->out_width);
-    AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_HEIGHT, &avc->out_height);
+    int32_t width = 0, height = 0;
+    AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_WIDTH, &width);
+    AMediaFormat_getInt32(format, AMEDIAFORMAT_KEY_HEIGHT, &height);
+
+    int32_t left = 0, top = 0, right = width - 1, bottom = height - 1;
+    int32_t l = 0, t = 0, r = 0, b = 0;
     
-    TRACE(TRACE_DEBUG, "VIDEO", "Output format changed to %d x %d",
-          avc->out_width, avc->out_height);
+    int has_l = AMediaFormat_getInt32(format, "crop-left", &l);
+    int has_t = AMediaFormat_getInt32(format, "crop-top", &t);
+    int has_r = AMediaFormat_getInt32(format, "crop-right", &r);
+    int has_b = AMediaFormat_getInt32(format, "crop-bottom", &b);
+    
+    if (has_l) left = l;
+    if (has_t) top = t;
+    if (has_r) right = r;
+    if (has_b) bottom = b;
+
+    avc->out_width = right - left + 1;
+    avc->out_height = bottom - top + 1;
+
+    TRACE(TRACE_DEBUG, "VIDEO", "Format: %dx%d Crop: %d,%d-%d,%d (%d%d%d%d) -> %dx%d",
+          width, height, left, top, right, bottom, has_l, has_t, has_r, has_b, avc->out_width, avc->out_height);
 
     char codec_info[64];
-    snprintf(codec_info, sizeof(codec_info), "%s %dx%d (Accelerated)",
+    snprintf(codec_info, sizeof(codec_info), "%s %dx%d (HW)",
              avc->mime ? avc->mime : "Unknown", avc->out_width, avc->out_height);
     prop_set_string(avc->codec_info, codec_info);
     
@@ -102,8 +119,13 @@ fill_frame_info_from_pts(frame_info_t *fi,
                          android_video_codec_t *avc,
                          int64_t pts)
 {
-  fi->fi_dar_num = avc->width;
-  fi->fi_dar_den = avc->height;
+  if (avc->out_width > 0 && avc->out_height > 0) {
+    fi->fi_dar_num = avc->out_width;
+    fi->fi_dar_den = avc->out_height;
+  } else {
+    fi->fi_dar_num = avc->width;
+    fi->fi_dar_den = avc->height;
+  }
   fi->fi_pts = pts;
 
   for(int i = 0; i < VIDEO_DECODER_REORDER_SIZE; i++) {
@@ -152,11 +174,16 @@ drain_output(android_video_codec_t *avc, video_decoder_t *vd)
         }
         AMediaCodec_releaseOutputBuffer(avc->codec, idx, 1);
         
-        fi.fi_update_pts_only = 1;
         fi.fi_type = 'SURF';
-        fi.fi_dar_num = avc->width;
-        fi.fi_dar_den = avc->height;
-        fi.fi_height = avc->height;
+        if (avc->out_width > 0 && avc->out_height > 0) {
+            fi.fi_dar_num = avc->out_width;
+            fi.fi_dar_den = avc->out_height;
+            fi.fi_height = avc->out_height;
+        } else {
+            fi.fi_dar_num = avc->width;
+            fi.fi_dar_den = avc->height;
+            fi.fi_height = avc->height;
+        }
         video_deliver_frame(vd, &fi);
       } else {
         AVC_TRACE("   Skip buffer %zd @ %10lld in %16lld rtd=%lld",
@@ -314,6 +341,10 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
 
   android_video_codec_t *avc = calloc(1, sizeof(android_video_codec_t));
   avc->mime = mime;
+  if (mcp) {
+    avc->width = mcp->width;
+    avc->height = mcp->height;
+  }
   avc->codec_info = prop_ref_inc(mp->mp_video.mq_prop_codec);
 
   // Attach thread FIRST
@@ -338,9 +369,9 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
   avc->codec = codec;
   
   const frame_info_t fi = {
-      .fi_dar_num = 0,
-      .fi_dar_den = 0,
-      .fi_height = 0,
+      .fi_dar_num = avc->width,
+      .fi_dar_den = avc->height,
+      .fi_height = avc->height,
   };
   
   intptr_t surface_ptr = mp->mp_set_video_codec('SURF', mc, mp->mp_video_frame_opaque, &fi);
@@ -374,7 +405,11 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
       AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_WIDTH, mcp->width);
     if (mcp->height > 0)
       AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_HEIGHT, mcp->height);
+      
+    TRACE(TRACE_DEBUG, "Video", "Configure MediaCodec: %dx%d", mcp->width, mcp->height);
   }
+  
+  AMediaFormat_setInt32(format, "video-scaling-mode", 1); // SCALE_TO_FIT
   
   media_status_t status = AMediaCodec_configure(codec, format, avc->window, NULL, 0);
   AMediaFormat_delete(format);
