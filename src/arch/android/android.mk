@@ -103,8 +103,10 @@ apk: ${BUILDDIR}/${APPNAME}.apk
 install: ${BUILDDIR}/${APPNAME}.apk
 	adb install -r $<
 
+# Old way to run the app (doesn't work with newer Android versions):
+#	adb shell am start -n com.lonelycoder.mediaplayer/.GLWActivity
 run:
-	adb shell am start -n com.lonelycoder.mediaplayer/.GLWActivity
+	adb shell monkey -p com.lonelycoder.mediaplayer -c android.intent.category.LAUNCHER 1
 
 stop:
 	adb shell am force-stop com.lonelycoder.mediaplayer
