@@ -164,14 +164,16 @@ drain_output(android_video_codec_t *avc, video_decoder_t *vd)
 
       int64_t wt = fi.fi_pts + rtd;
       
-      if(epoch == fi.fi_epoch && (wt - now) > 10000LL) {
-        while((wt - arch_get_avtime()) > 5000LL) {
-          hts_mutex_lock(&mp->mp_clock_mutex);
-          int current_epoch = mp->mp_audio_clock_epoch;
-          hts_mutex_unlock(&mp->mp_clock_mutex);
-          if (current_epoch != epoch) break;
+      if(epoch == fi.fi_epoch) {
+        if((wt - now) > 10000LL) {
+          while((wt - arch_get_avtime()) > 5000LL) {
+            hts_mutex_lock(&mp->mp_clock_mutex);
+            int current_epoch = mp->mp_audio_clock_epoch;
+            hts_mutex_unlock(&mp->mp_clock_mutex);
+            if (current_epoch != epoch) break;
 
-          usleep(2000);
+            usleep(2000);
+          }
         }
         AMediaCodec_releaseOutputBuffer(avc->codec, idx, 1);
         
