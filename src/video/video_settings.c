@@ -76,6 +76,11 @@ video_settings_init(void)
                  NULL);
 #endif
 
+#ifdef __ANDROID__
+  extern void android_register_settings(prop_t *parent);
+  android_register_settings(s);
+#endif
+
   video_settings.vzoom_setting =
     setting_create(SETTING_INT, s, SETTINGS_INITIAL_UPDATE,
                    SETTING_TITLE(_p("Video zoom")),

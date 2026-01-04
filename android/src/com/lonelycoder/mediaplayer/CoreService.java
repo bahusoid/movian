@@ -45,25 +45,5 @@ public class CoreService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
-
-    public int getSystemAudioSampleRate() {
-
-        if(Build.VERSION.SDK_INT >= 21) {
-            AudioManager audioManager = (AudioManager) this.getSystemService(Context.AUDIO_SERVICE);
-            String sr = audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
-            return Integer.parseInt(sr);
-        }
-        return 0;
-    }
-
-    public int getSystemAudioFramesPerBuffer() {
-
-        if(Build.VERSION.SDK_INT >= 21) {
-            AudioManager audioManager = (AudioManager) this.getSystemService(Context.AUDIO_SERVICE);
-            String sr = audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER);
-            return Integer.parseInt(sr);
-        }
-        return 0;
-    }
 }
 

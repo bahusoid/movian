@@ -517,7 +517,15 @@ Java_com_lonelycoder_mediaplayer_Core_glwMotion(JNIEnv *env,
 
 
 
-#define end_of_AKEYCODE (AKEYCODE_BUTTON_MODE+1)
+#ifndef AKEYCODE_MEDIA_PAUSE
+#define AKEYCODE_MEDIA_PAUSE 127
+#endif
+
+#ifndef AKEYCODE_MEDIA_STOP
+#define AKEYCODE_MEDIA_STOP 86
+#endif
+
+#define end_of_AKEYCODE 256
 
 #define AVEC(x...) (const action_type_t []){x, ACTION_NONE}
 
@@ -532,6 +540,8 @@ const static action_type_t *btn_to_action[end_of_AKEYCODE] = {
   [AKEYCODE_MEDIA_REWIND]       = AVEC(ACTION_SEEK_BACKWARD),
   [AKEYCODE_MEDIA_FAST_FORWARD] = AVEC(ACTION_SEEK_FORWARD),
   [AKEYCODE_MEDIA_PLAY_PAUSE]   = AVEC(ACTION_PLAYPAUSE),
+  [AKEYCODE_MEDIA_PAUSE]        = AVEC(ACTION_PAUSE),
+  [AKEYCODE_MEDIA_STOP]         = AVEC(ACTION_STOP),
   [AKEYCODE_ENTER]           = AVEC(ACTION_ACTIVATE),
   [AKEYCODE_DEL]             = AVEC(ACTION_NAV_BACK, ACTION_BS),
 };

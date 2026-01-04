@@ -20,6 +20,7 @@ import android.content.pm.PackageManager;
 
 import android.media.MediaCodec;
 import android.media.MediaFormat;
+import android.media.AudioManager;
 
 import android.provider.Settings.Secure;
 
@@ -29,7 +30,7 @@ public class Core {
 
     private static Activity currentActivity;
     private static SurfaceView sv;
-    private static CoreService mService;
+    private static Context mContext;
 
     static {
         System.loadLibrary("avutil");
@@ -98,34 +99,53 @@ public class Core {
 
     public static native void networkStatusChanged();
 
-    public static void init(CoreService svc) {
+    public static native int getBackgroundPlaybackMode();
 
-        mService = svc;
+    public static void init(Context context) {
+
+        mContext = context.getApplicationContext();
         
         // Initialize audio passthrough with application context
-        AudioPassthrough.setApplicationContext(svc.getApplicationContext());
+        AudioPassthrough.setApplicationContext(mContext);
 
-        int clock_24hrs = DateFormat.is24HourFormat(svc) ? 1 : 0;
+        int clock_24hrs = DateFormat.is24HourFormat(context) ? 1 : 0;
 
         // Determine cache directory path
         // Use noBackupFilesDir for persistent cache that shouldn't be backed up
         // This is safer for SQLite databases than getCacheDir() which can be cleared by OS
-        File cacheDir = new File(svc.getNoBackupFilesDir(), "cache");
+        File cacheDir = new File(context.getNoBackupFilesDir(), "cache");
         if (!cacheDir.exists()) {
             cacheDir.mkdirs();
         }
         String cachePath = cacheDir.getPath();
 
-        coreInit(svc.getFilesDir().getPath(),
+        String androidId = Secure.getString(context.getContentResolver(), Secure.ANDROID_ID);
+        if (androidId == null)
+            androidId = "unknown";
+
+        int sampleRate = 0;
+        int framesPerBuffer = 0;
+
+        if(Build.VERSION.SDK_INT >= 21) {
+            AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager != null) {
+                String sr = audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
+                if (sr != null) sampleRate = Integer.parseInt(sr);
+                String fpb = audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER);
+                if (fpb != null) framesPerBuffer = Integer.parseInt(fpb);
+            }
+        }
+
+        coreInit(context.getFilesDir().getPath(),
                  cachePath,
                  Environment.getExternalStorageDirectory().toString(),
-                 Secure.getString(svc.getContentResolver(), Secure.ANDROID_ID),
+                 androidId,
                  clock_24hrs,
                  Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).toString(),
                  Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString(),
                  Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).toString(),
-                 svc.getSystemAudioSampleRate(),
-                 svc.getSystemAudioFramesPerBuffer());
+                 sampleRate,
+                 framesPerBuffer);
     }
 
     public static Bitmap createBitmap(int width, int height) {
@@ -133,7 +153,7 @@ public class Core {
     }
 
     public static boolean checkPermission(String permission) {
-        return mService.checkSelfPermission(permission) ==
+        return mContext.checkSelfPermission(permission) ==
             PackageManager.PERMISSION_GRANTED;
     }
 

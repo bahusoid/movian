@@ -43,6 +43,7 @@
 #include "arch/halloc.h"
 #include "misc/md5.h"
 #include "misc/str.h"
+#include "settings.h"
 
 static char android_manufacturer[PROP_VALUE_MAX];
 static char android_model[PROP_VALUE_MAX];
@@ -285,6 +286,28 @@ Java_com_lonelycoder_mediaplayer_Core_coreIntent(JNIEnv *env, jobject obj, jstri
 
 
 
+static int android_background_playback = 0; // 0=Stop, 1=Pause, 2=Play
+
+int android_get_background_playback_mode(void) {
+  return android_background_playback;
+}
+
+static const char *bg_playback_opts[] = {
+  "0", "Stop",
+  "1", "Pause",
+  "2", "Play",
+  NULL
+};
+
+void android_register_settings(prop_t *parent) {
+  setting_create(SETTING_MULTIOPT, parent, 0,
+                 SETTING_TITLE_CSTR("Background Playback"),
+                 SETTING_STORE("android", "background_playback"),
+                 SETTING_WRITE_INT(&android_background_playback),
+                 SETTING_OPTION_LIST(bg_playback_opts),
+                 NULL);
+}
+
 /**
  *
  */
@@ -376,6 +399,16 @@ Java_com_lonelycoder_mediaplayer_Core_openUri(JNIEnv *env, jobject obj, jstring 
   event_release(e);
 
   (*env)->ReleaseStringUTFChars(env, j_uri, uri);
+}
+
+
+/**
+ *
+ */
+JNIEXPORT jint JNICALL
+Java_com_lonelycoder_mediaplayer_Core_getBackgroundPlaybackMode(JNIEnv *env, jobject obj)
+{
+  return android_get_background_playback_mode();
 }
 
 

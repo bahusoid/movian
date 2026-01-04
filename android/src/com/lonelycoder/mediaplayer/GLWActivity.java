@@ -52,36 +52,6 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     SurfaceView sv;
     private AlertDialog mKeyboardDialog;
 
-    private void startGLW() {
-        // remove title
-        mRoot = new FrameLayout(this);
-
-        mGLWView = new GLWView(getApplication(), this);
-        mRoot.addView(mGLWView);
-
-        setContentView(mRoot);
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-
-        Handler h = new Handler(new Handler.Callback() {
-                public boolean handleMessage(Message msg) {
-                    startGLW();
-                    return true;
-                }
-            });
-
-        h.sendEmptyMessage(0);
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        mGLWView.destroy();
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.d("Movian", "onCreate");
@@ -90,7 +60,24 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
+        Core.init(this);
+
+        mRoot = new FrameLayout(this);
+        mGLWView = new GLWView(getApplication(), this);
+        mRoot.addView(mGLWView);
+        setContentView(mRoot);
+
         startService(new Intent(this, CoreService.class));
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
     }
 
     public boolean onKeyUp(int keyCode, KeyEvent event) {
@@ -112,6 +99,9 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     protected void onResume() {
         Log.d("Movian", "onResume");
         super.onResume();
+        if (mGLWView != null) {
+            mGLWView.onResume();
+        }
 
         Handler h = new Handler(new Handler.Callback() {
                 public boolean handleMessage(Message msg) {
@@ -135,12 +125,37 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     protected void onPause() {
         Log.d("Movian", "onPause");
         super.onPause();
+        if (mGLWView != null) {
+            int mode = Core.getBackgroundPlaybackMode();
+            // 0=Stop, 1=Pause, 2=Play
+
+            if (mode == 0) {
+                mGLWView.keyDown(KeyEvent.KEYCODE_MEDIA_STOP, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP));
+                mGLWView.keyUp(KeyEvent.KEYCODE_MEDIA_STOP, new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP));
+            } else if (mode == 1) {
+                mGLWView.keyDown(KeyEvent.KEYCODE_MEDIA_PAUSE, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE));
+                mGLWView.keyUp(KeyEvent.KEYCODE_MEDIA_PAUSE, new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE));
+            }
+            
+            // Give the native thread some time to process the event before suspending the surface
+            if (mode != 2) {
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                }
+            }
+            
+            mGLWView.onPause();
+        }
     }
 
     @Override
     protected void onDestroy() {
         Log.d("Movian", "onDestroy");
         super.onDestroy();
+        if (mGLWView != null) {
+            mGLWView.destroy();
+        }
     }
 
     // These does not execute on the main ui thread so we need to dispatch
