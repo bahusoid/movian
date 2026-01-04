@@ -22,4 +22,4 @@
 
 void sub_ass_render(media_pipe_t *mp, const char *src,
 		    const uint8_t *header, int header_len,
-		    int context);
+		    int context, int64_t start, int64_t stop);

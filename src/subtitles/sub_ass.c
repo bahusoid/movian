@@ -115,7 +115,7 @@ static const ass_style_t ass_style_default = {
   .as_shadow = 1,
   .as_outline = 1,
   .as_bold = 1,
-  .as_alignment = 1,
+  .as_alignment = 2, // Bottom Center
   .as_margin_left = 20,
   .as_margin_right = 20,
   .as_margin_vertical = 20,
@@ -542,51 +542,12 @@ extern char font_subs[];
  *
  */
 static video_overlay_t *
-ad_dialogue_decode(const ass_decoder_ctx_t *adc, const char *line,
-		   int fontdomain)
+ad_render_text(const ass_decoder_ctx_t *adc, const char *str,
+               int64_t start, int64_t end, const ass_style_t *as,
+               int layer, int fontdomain)
 {
-  char key[128];
-  char val[128];
-  const char *fmt = adc->adc_event_format;
-  const ass_style_t *as = &ass_style_default;
-  int layer = 0;
-  int64_t start = PTS_UNSET;
-  int64_t end = PTS_UNSET;
-  const char *str = NULL;
   ass_dialoge_t ad;
-
   memset(&ad, 0, sizeof(ad));
-
-  if(fmt == NULL)
-    return NULL;
-
-#ifdef ASS_DEBUG
-  printf("ass/dialogue: %s\n", line);
-#endif
-
-  while(*fmt && *line && *line != '\n' && *line != '\r') {
-    gettoken(key, sizeof(key), &fmt);
-    if(!strcasecmp(key, "text")) {
-      char *d = mystrdupa(line);
-      d[strcspn(d, "\n\r")] = 0;
-      str = d;
-      break;
-    }
-
-    gettoken(val, sizeof(val), &line);
-
-    if(!strcasecmp(key, "layer"))
-      layer = atoi(val);
-    else if(!strcasecmp(key, "start"))
-      start = ass_get_ts(val);
-    else if(!strcasecmp(key, "end"))
-      end = ass_get_ts(val);
-    else if(!strcasecmp(key, "style"))
-      as = adc_find_style(adc, val);
-  }
-
-  if(start == PTS_UNSET || end == PTS_UNSET || str == NULL)
-    return NULL;
 
   if(as->as_bold)
     ad_txt_append(&ad, TR_CODE_BOLD_ON);
@@ -674,6 +635,11 @@ ad_dialogue_decode(const ass_decoder_ctx_t *adc, const char *line,
 
   free(ad.ad_text);
 
+  if(end == PTS_UNSET || end == start) {
+    end = start + calculate_subtitle_duration(ad.ad_textlen) * 1000000;
+    vo->vo_stop_estimated = 1;
+  }
+
   vo->vo_start = start;
   vo->vo_stop = end;
   vo->vo_fadein = ad.ad_fadein;
@@ -724,6 +690,53 @@ ad_dialogue_decode(const ass_decoder_ctx_t *adc, const char *line,
   return vo;
 }
 
+static video_overlay_t *
+ad_dialogue_decode(const ass_decoder_ctx_t *adc, const char *line,
+		   int fontdomain)
+{
+  char key[128];
+  char val[128];
+  const char *fmt = adc->adc_event_format;
+  const ass_style_t *as = &ass_style_default;
+  int layer = 0;
+  int64_t start = PTS_UNSET;
+  int64_t end = PTS_UNSET;
+  const char *str = NULL;
+
+  if(fmt == NULL)
+    return NULL;
+
+#ifdef ASS_DEBUG
+  printf("ass/dialogue: %s\n", line);
+#endif
+
+  while(*fmt && *line && *line != '\n' && *line != '\r') {
+    gettoken(key, sizeof(key), &fmt);
+    if(!strcasecmp(key, "text")) {
+      char *d = mystrdupa(line);
+      d[strcspn(d, "\n\r")] = 0;
+      str = d;
+      break;
+    }
+
+    gettoken(val, sizeof(val), &line);
+
+    if(!strcasecmp(key, "layer"))
+      layer = atoi(val);
+    else if(!strcasecmp(key, "start"))
+      start = ass_get_ts(val);
+    else if(!strcasecmp(key, "end"))
+      end = ass_get_ts(val);
+    else if(!strcasecmp(key, "style"))
+      as = adc_find_style(adc, val);
+  }
+
+  if(start == PTS_UNSET || end == PTS_UNSET || str == NULL)
+    return NULL;
+
+  return ad_render_text(adc, str, start, end, as, layer, fontdomain);
+}
+
 
 /**
  *
@@ -731,26 +744,67 @@ ad_dialogue_decode(const ass_decoder_ctx_t *adc, const char *line,
 void
 sub_ass_render(media_pipe_t *mp, const char *src,
 	       const uint8_t *header, int header_len,
-	       int fontdomain)
+	       int fontdomain, int64_t start, int64_t end)
 {
   ass_decoder_ctx_t adc;
+  video_overlay_t *vo = NULL;
 
-  if(strncmp(src, "Dialogue:", strlen("Dialogue:")))
-    return;
-  src += strlen("Dialogue:");
   adc_init(&adc);
 
   // Headers
+  if(header && header_len > 0) {
+    char *hdr;
+    hdr = malloc(header_len + 1);
+    memcpy(hdr, header, header_len);
+    hdr[header_len] = 0;
+    ass_decode_lines(&adc, hdr);
+    free(hdr);
+  }
 
-  char *hdr;
-  hdr = malloc(header_len + 1);
-  memcpy(hdr, header, header_len);
-  hdr[header_len] = 0;
-  ass_decode_lines(&adc, hdr);
-  free(hdr);
+  if(strncmp(src, "Dialogue:", strlen("Dialogue:")) == 0) {
+    src += strlen("Dialogue:");
+    vo = ad_dialogue_decode(&adc, src, fontdomain);
+  } else {
+    // Check if it is FFmpeg's raw ASS format: ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+    // Example: 0,0,Default,,0,0,0,,Text
+    // See libavcodec/ass.c: ff_ass_get_dialog()
+    // Example: 0,0,Default,,0,0,0,,Text
+    // We need to skip 8 commas to get to the text.
+    const char *p = src;
+    int commas = 0;
+    const char *style_start = NULL;
+    int style_len = 0;
 
-  // Dialogue
-  video_overlay_t *vo = ad_dialogue_decode(&adc, src, fontdomain);
+    while (*p) {
+      if (*p == ',') {
+        commas++;
+        if (commas == 2) {
+          style_start = p + 1;
+        } else if (commas == 3) {
+          style_len = p - style_start;
+        } else if (commas == 8) {
+          p++; // Skip the 8th comma
+          break;
+        }
+      }
+      p++;
+    }
+
+    if (commas == 8) {
+      // It looks like FFmpeg ASS format
+      const ass_style_t *as = &ass_style_default;
+      if (style_start && style_len > 0) {
+        char style_name[128];
+        if (style_len >= sizeof(style_name)) style_len = sizeof(style_name) - 1;
+        memcpy(style_name, style_start, style_len);
+        style_name[style_len] = 0;
+        as = adc_find_style(&adc, style_name);
+      }
+      vo = ad_render_text(&adc, p, start, end, as, 0, fontdomain);
+    } else {
+      vo = ad_render_text(&adc, src, start, end, &ass_style_default, 0, fontdomain);
+    }
+  }
 
   if(vo != NULL)
     video_overlay_enqueue(mp, vo);

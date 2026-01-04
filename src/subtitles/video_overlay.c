@@ -113,10 +113,14 @@ video_subtitles_lavc(media_pipe_t *mp, media_buf_t *mb,
 		  case SUBTITLE_ASS:
 		sub_ass_render(mp, r->ass,
 				   ctx->subtitle_header, ctx->subtitle_header_size,
-				   mb->mb_font_context);
+		       mb->mb_font_context,
+		       mb->mb_pts + sub.start_display_time * 1000,
+		       sub.end_display_time == 0 ? PTS_UNSET : mb->mb_pts + sub.end_display_time * 1000);
 		break;
-
-		  default:
+	  
+	  case SUBTITLE_TEXT:
+	  case SUBTITLE_NONE:
+	  default:
 		break;
       }
     }
