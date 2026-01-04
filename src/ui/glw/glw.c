@@ -2084,6 +2084,11 @@ glw_pointer_event_deliver(glw_t *w, glw_pointer_event_t *gpe)
 static void
 glw_touch_longpress(glw_root_t *gr)
 {
+  if(gr->gr_pointer_grab != NULL) {
+    gr->gr_pointer_press_time = 0;
+    return;
+  }
+
   gr->gr_pointer_press_time = 0;
   glw_t *w = gr->gr_pointer_press;
   event_t *e = event_create_action(ACTION_ITEMMENU);
@@ -2093,6 +2098,8 @@ glw_touch_longpress(glw_root_t *gr)
   if(r) {
     glw_path_modify(w, 0, GLW_IN_PRESSED_PATH, NULL);
     gr->gr_pointer_press = NULL;
+    if(gr->gr_pointer_grab == w)
+      gr->gr_pointer_grab = NULL;
   }
 }
 
@@ -2213,6 +2220,15 @@ glw_pointer_event(glw_root_t *gr, glw_pointer_event_t *gpe)
   if(gpe->type == GLW_POINTER_TOUCH_MOVE) {
     gr->gr_touch_move_x = gpe->screen_x;
     gr->gr_touch_move_y = gpe->screen_y;
+
+    if(gr->gr_pointer_press_time) {
+      float dx = gpe->screen_x - gr->gr_touch_start_x;
+      float dy = gpe->screen_y - gr->gr_touch_start_y;
+      // If pointer moved more than 10 pixels, cancel long press
+      if(dx * dx + dy * dy > 100) {
+        gr->gr_pointer_press_time = 0;
+      }
+    }
   }
 
   if(gpe->type == GLW_POINTER_TOUCH_END) {
@@ -2276,6 +2292,11 @@ glw_pointer_event(glw_root_t *gr, glw_pointer_event_t *gpe)
 
     glw_send_pointer_event(w, &gpe0);
     gr->gr_pointer_grab = NULL;
+
+    if(gr->gr_pointer_press == w) {
+      glw_path_modify(w, 0, GLW_IN_PRESSED_PATH, NULL);
+      gr->gr_pointer_press = NULL;
+    }
     return;
   }
 

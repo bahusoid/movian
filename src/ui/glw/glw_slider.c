@@ -333,6 +333,7 @@ pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
   float v = 0;
   float knob_pos;
   float knob_size = (float)s->knob_size_px / s->slider_size_px;
+  float hit_knob_size = GLW_MAX(knob_size, 0.15f); // Minimum hit area
   int tentative = 0;
 
   if(w->glw_class == &glw_slider_x) {
@@ -341,15 +342,24 @@ pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
     knob_pos =  1 - 2.0 * (float)s->knob_pos_px  / s->slider_size_px;
   }
 
-  if(v0 < knob_pos - knob_size)
+  if(v0 < knob_pos - hit_knob_size)
     hitpos = -1;
-  else if(v0 > knob_pos + knob_size)
+  else if(v0 > knob_pos + hit_knob_size)
     hitpos = 1;
 
   switch(gpe->type) {
   case GLW_POINTER_LEFT_PRESS:
   case GLW_POINTER_TOUCH_START:
-    if(w->glw_flags2 & GLW2_ALWAYS_GRAB_KNOB) {
+    if((w->glw_flags2 & GLW2_SLIDER_DISABLE_TRACK_CLICK) &&
+       gpe->type == GLW_POINTER_TOUCH_START) {
+      if(hitpos == 0) {
+        s->grab_delta = knob_pos - v0;
+        gr->gr_pointer_grab = w;
+        v = s->value;
+      } else {
+        return 0;
+      }
+    } else if(w->glw_flags2 & GLW2_ALWAYS_GRAB_KNOB) {
       v = GLW_RESCALE(v0 + s->grab_delta,
 		      -1.0 + knob_size, 1.0 - knob_size);
       gr->gr_pointer_grab = w;
@@ -659,6 +669,13 @@ glw_slider_set_int_unresolved(glw_t *w, const char *a, int value,
       return GLW_SET_NO_CHANGE;
     s->knob_over_edges = value;
     return GLW_SET_RERENDER_REQUIRED;
+  }
+  if(!strcmp(a, "disableTrackClick")) {
+    if(value)
+      w->glw_flags2 |= GLW2_SLIDER_DISABLE_TRACK_CLICK;
+    else
+      w->glw_flags2 &= ~GLW2_SLIDER_DISABLE_TRACK_CLICK;
+    return GLW_SET_NO_CHANGE;
   }
   return GLW_SET_NOT_RESPONDING;
 }

@@ -1264,6 +1264,7 @@ typedef struct glw {
 #define GLW2_FHP_SPILL              0x4000000
 #define GLW2_SELECT_ON_FOCUS        0x8000000
 #define GLW2_SELECT_ON_HOVER        0x10000000
+#define GLW2_SLIDER_DISABLE_TRACK_CLICK 0x20000000
 
   float glw_alpha;                   /* Alpha set by user */
   float glw_sharpness;               /* 1-Blur set by user */
