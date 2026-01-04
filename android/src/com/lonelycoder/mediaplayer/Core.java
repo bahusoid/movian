@@ -23,6 +23,9 @@ import android.media.MediaFormat;
 import android.media.AudioManager;
 
 import android.provider.Settings.Secure;
+import android.provider.Settings;
+import android.content.Intent;
+import android.net.Uri;
 
 
 public class Core {
@@ -153,6 +156,9 @@ public class Core {
     }
 
     public static boolean checkPermission(String permission) {
+        if (Build.VERSION.SDK_INT >= 30 && "android.permission.MANAGE_EXTERNAL_STORAGE".equals(permission)) {
+            return Environment.isExternalStorageManager();
+        }
         return mContext.checkSelfPermission(permission) ==
             PackageManager.PERMISSION_GRANTED;
     }

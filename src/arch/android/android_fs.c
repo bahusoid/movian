@@ -41,6 +41,7 @@ char *android_fs_settings_path;
 char *android_fs_cache_path;
 char *android_fs_sdcard_path;
 
+extern int android_sdk;
 
 typedef struct fs_handle {
   fa_handle_t h;
@@ -62,9 +63,16 @@ android_url_to_path(const fa_protocol_t *fap, const char *url, int flags,
     *path = strdup(url);
   } else {
 
-    if(!android_get_permission(flags & FA_WRITE ?
-                               "android.permission.WRITE_EXTERNAL_STORAGE" :
-                               "android.permission.READ_EXTERNAL_STORAGE",
+    const char *perm;
+    if (android_sdk >= 30) {
+        perm = "android.permission.MANAGE_EXTERNAL_STORAGE";
+    } else {
+        perm = flags & FA_WRITE ?
+               "android.permission.WRITE_EXTERNAL_STORAGE" :
+               "android.permission.READ_EXTERNAL_STORAGE";
+    }
+
+    if(!android_get_permission(perm,
                                !(flags & FA_NON_INTERACTIVE))) {
       snprintf(errbuf, errlen, "Access rejected by user");
       TRACE(TRACE_INFO, "ANDROID_FS", "Access to %s://%s rejected by user",

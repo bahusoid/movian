@@ -29,6 +29,11 @@ import android.util.Log;
 import android.os.Environment;
 import android.content.ContentUris;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.Settings;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.MediaStore.MediaColumns;
@@ -220,9 +225,34 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     public void askPermission(final String permission) {
         runOnUiThread(new Runnable() {
                 public void run() {
-                    requestPermissions(new String[] {permission}, 1);
+                    if (Build.VERSION.SDK_INT >= 30 && "android.permission.MANAGE_EXTERNAL_STORAGE".equals(permission)) {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                            intent.addCategory("android.intent.category.DEFAULT");
+                            intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+                            startActivityForResult(intent, 2);
+                        } catch (Exception e) {
+                            Intent intent = new Intent();
+                            intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                            startActivityForResult(intent, 2);
+                        }
+                    } else {
+                        requestPermissions(new String[] {permission}, 1);
+                    }
                 }
             });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == 2) {
+            if (Build.VERSION.SDK_INT >= 30) {
+                Core.permissionResult(Environment.isExternalStorageManager());
+            } else {
+                Core.permissionResult(false);
+            }
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
