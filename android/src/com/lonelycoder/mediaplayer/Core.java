@@ -108,16 +108,13 @@ public class Core {
         int clock_24hrs = DateFormat.is24HourFormat(svc) ? 1 : 0;
 
         // Determine cache directory path
-        String cachePath;
-        if (Build.VERSION.SDK_INT >= 34) {
-            File cacheDir = new File(svc.getFilesDir(), "cache");
-            if (!cacheDir.exists()) {
-                cacheDir.mkdirs(); // Create the cache directory and any missing parents
-            }
-            cachePath = cacheDir.getPath();
-        } else {
-            cachePath = svc.getCacheDir().getPath();
+        // Use noBackupFilesDir for persistent cache that shouldn't be backed up
+        // This is safer for SQLite databases than getCacheDir() which can be cleared by OS
+        File cacheDir = new File(svc.getNoBackupFilesDir(), "cache");
+        if (!cacheDir.exists()) {
+            cacheDir.mkdirs();
         }
+        String cachePath = cacheDir.getPath();
 
         coreInit(svc.getFilesDir().getPath(),
                  cachePath,
