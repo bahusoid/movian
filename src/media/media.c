@@ -262,6 +262,9 @@ mp_create(const char *name, int flags)
   mp->mp_prop_canRepeat =
     prop_create(mp->mp_prop_root, "canRepeat");
 
+  mp->mp_prop_quality_label =
+    prop_create(mp->mp_prop_root, "qualityLabel");
+
   prop_set_int(prop_create(mp->mp_prop_root, "canStop"), 1);
 
   mp->mp_prop_ctrl = prop_create(mp->mp_prop_root, "ctrl");

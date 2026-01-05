@@ -295,6 +295,8 @@ typedef struct media_pipe {
   prop_t *mp_prop_canShuffle;
   prop_t *mp_prop_canRepeat;
 
+  prop_t *mp_prop_quality_label;
+
   prop_t *mp_prop_video;
   prop_t *mp_prop_audio;
 
