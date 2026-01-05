@@ -300,10 +300,13 @@ update_state(plugin_t *pl)
   int cantUpgrade = 0;
   rstr_t *status = NULL;
 
-  int version_dep_ok =
-    pl->pl_app_min_version == NULL ||
-    parse_version_int(pl->pl_app_min_version) <=
-    app_get_version_int();
+  //TODO: Temporary disable plugin version check
+  // int version_dep_ok =
+  // pl->pl_app_min_version == NULL ||
+  // parse_version_int(pl->pl_app_min_version) <=
+  // app_get_version_int();
+
+  int version_dep_ok = 1;
 
   prop_set(pl->pl_status, "minver", PROP_SET_VOID);
   pl->pl_new_version_avail = 0;
