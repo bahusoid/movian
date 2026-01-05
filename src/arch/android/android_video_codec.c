@@ -479,6 +479,40 @@ configure_media_codec(android_video_codec_t *avc, media_codec_t *mc, const media
     } else {
       TRACE(TRACE_ERROR, "Video", "BSF h264_mp4toannexb not found");
     }
+  } else if(mc->codec_id == AV_CODEC_ID_HEVC) {
+    const AVBitStreamFilter *filter = av_bsf_get_by_name("hevc_mp4toannexb");
+    if(filter) {
+      int ret = av_bsf_alloc(filter, &avc->bsf);
+      if (ret < 0) {
+        TRACE(TRACE_ERROR, "Video", "Failed to allocate BSF: %d", ret);
+        avc->bsf = NULL;
+      } else {
+        avc->bsf->par_in->codec_type = AVMEDIA_TYPE_VIDEO;
+        avc->bsf->par_in->codec_id = mc->codec_id;
+        avc->bsf->par_in->width = avc->width;
+        avc->bsf->par_in->height = avc->height;
+
+        if (mcp && mcp->extradata && mcp->extradata_size > 0) {
+          avc->bsf->par_in->extradata = av_malloc(mcp->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+          if (avc->bsf->par_in->extradata) {
+            memcpy(avc->bsf->par_in->extradata, mcp->extradata, mcp->extradata_size);
+            avc->bsf->par_in->extradata_size = mcp->extradata_size;
+            memset(avc->bsf->par_in->extradata + mcp->extradata_size, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+          }
+        }
+
+        ret = av_bsf_init(avc->bsf);
+        if (ret < 0) {
+          TRACE(TRACE_ERROR, "Video", "Failed to init BSF: %d", ret);
+          av_bsf_free(&avc->bsf);
+          avc->bsf = NULL;
+        } else {
+          TRACE(TRACE_INFO, "Video", "BSF hevc_mp4toannexb initialized");
+        }
+      }
+    } else {
+      TRACE(TRACE_ERROR, "Video", "BSF hevc_mp4toannexb not found");
+    }
   }
   return 0;
 }
