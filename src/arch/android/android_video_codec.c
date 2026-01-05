@@ -16,6 +16,11 @@
 #include <libavcodec/bsf.h>
 #include <libavcodec/avcodec.h>
 
+//needed  for mp_set_mq_meta
+#include "main.h"
+#include "media/media.h"
+#include "libav.h"
+
 #include "main.h"
 #include "video/video_decoder.h"
 #include "video/video_settings.h"
@@ -235,6 +240,7 @@ android_codec_decode(struct media_codec *mc, struct video_decoder *vd,
            return;
       }
   }
+  mp_set_mq_meta(mq, mc->ctx->codec,mc->ctx);
 
   uint8_t *data = mb->mb_data;
   int size = mb->mb_size;
