@@ -306,17 +306,25 @@ android_audio_init(audio_decoder_t *ad)
 static void
 android_stop_player(decoder_t *d)
 {
-  d->d_avail_buffers = 0;
-  free(d->d_pcmbuf);
-
   if(d->d_player != NULL) {
+    // Explicitly stop and clear before destroying to prevent callbacks
+    if(d->d_pif != NULL)
+      (*d->d_pif)->SetPlayState(d->d_pif, SL_PLAYSTATE_STOPPED);
+    if(d->d_bif != NULL)
+      (*d->d_bif)->Clear(d->d_bif);
+
     (*d->d_player)->Destroy(d->d_player);
     d->d_player = NULL;
-    d->d_eif = NULL;
+    // d->d_eif must NOT be cleared here as it is needed for re-creation
     d->d_pif = NULL;
     d->d_vif = NULL;
     d->d_bif = NULL;
   }
+
+  // Free memory AFTER stopping the player to avoid race conditions in callbacks
+  d->d_avail_buffers = 0;
+  free(d->d_pcmbuf);
+  d->d_pcmbuf = NULL; 
 }
 
 /**
