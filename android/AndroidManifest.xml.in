@@ -28,6 +28,7 @@
 
     <activity android:name=".GLWActivity"
               android:label="@@APPNAME@@"
+              android:launchMode="singleTask"
               android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"
               android:exported="true">
       <intent-filter>
@@ -38,6 +39,27 @@
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+      </intent-filter>
+
+      <!-- Video files -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="file" />
+        <data android:scheme="content" />
+        <data android:scheme="http" />
+        <data android:scheme="https" />
+        <data android:mimeType="video/*" />
+        <data android:mimeType="application/x-mpegurl" />
+        <data android:mimeType="application/vnd.apple.mpegurl" />
+      </intent-filter>
+
+      <!-- Shared links (text/plain) -->
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
       </intent-filter>
 
       <intent-filter>

@@ -101,6 +101,12 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+    }
+
+    @Override
     protected void onResume() {
         Log.d("Movian", "onResume");
         super.onResume();
@@ -111,13 +117,25 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
         Handler h = new Handler(new Handler.Callback() {
                 public boolean handleMessage(Message msg) {
                     Intent intent = getIntent();
-                    Uri uri = intent.getData();
-                    if(uri == null)
-                        uri = intent.getParcelableExtra("uri");
+                    String action = intent.getAction();
+                    String type = intent.getType();
+                    String uriString = null;
+                    
+                    if (Intent.ACTION_SEND.equals(action) && "text/plain".equals(type)) {
+                        uriString = intent.getStringExtra(Intent.EXTRA_TEXT);
+                    } else {
+                        Uri uri = intent.getData();
+                        if(uri == null)
+                            uri = intent.getParcelableExtra("uri");
 
-                    if(uri != null) {
-                        String u = getRealPathFromUri(uri);
-                        Core.openUri(u != null ? u : uri.toString());
+                        if(uri != null) {
+                            String u = getRealPathFromUri(uri);
+                            uriString = u != null ? u : uri.toString();
+                        }
+                    }
+
+                    if (uriString != null) {
+                        Core.openUri(uriString);
                     }
                     return true;
                 }
