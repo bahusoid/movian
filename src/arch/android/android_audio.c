@@ -416,7 +416,7 @@ android_audio_reconfig(audio_decoder_t *ad)
 
   android_stop_player(d);
 
-  int num_sles_buffers = 2;
+  int num_sles_buffers = 4;
 
   ad->ad_out_sample_rate = android_system_audio_sample_rate ?: 44100;
 
@@ -526,8 +526,11 @@ android_audio_reconfig(audio_decoder_t *ad)
   }
 
   (*d->d_bif)->Enqueue(d->d_bif, d->d_pcmbuf, d->d_pcmbuf_size);
-  d->d_read_ptr = 0;
-  d->d_write_ptr = 1;
+  (*d->d_bif)->Enqueue(d->d_bif, d->d_pcmbuf + d->d_pcmbuf_size, d->d_pcmbuf_size);
+  d->d_read_ptr = 1;
+  d->d_write_ptr = 2;
+  // Account for the samples we just pre-filled so delay calculation is correct
+  d->d_samples_sent = 2 * d->ad.ad_tile_size;
 
   d->d_avail_buffers = num_sles_buffers;
   return 0;
