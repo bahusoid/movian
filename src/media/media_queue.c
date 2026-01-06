@@ -548,3 +548,72 @@ mb_enq(media_pipe_t *mp, media_queue_t *mq, media_buf_t *mb)
   if(do_signal)
     hts_cond_signal(&mq->mq_avail);
 }
+
+void mq_update_quality_label(media_queue_t *mq)
+{
+  if (mq->mq_mp)
+  {
+    int channels = mq->mq_mp->mp_audio.mq_meta_channels;
+    int width = mq->mq_mp->mp_video.mq_meta_width;
+    int height = mq->mq_mp->mp_video.mq_meta_height;
+    int max_dim = width > height ? width : height;
+    const char *label = NULL;
+    const char *quality = NULL;
+    const char *audio = NULL;
+
+    if (max_dim > 0)
+    {
+      if (max_dim >= 3840)
+        quality = "UHD";
+      else if (max_dim >= 1920)
+        quality = "FHD";
+      else if (max_dim >= 1280)
+        quality = "HD";
+      else
+        quality = "SD";
+    }
+
+    char audio_buf[16];
+
+    if (channels > 0)
+    {
+      if (channels == 6)
+        audio = "5.1";
+      else if (channels == 8)
+        audio = "7.1";
+      else if (channels == 1)
+        audio = "1.0";
+      else if (channels == 2)
+        audio = "2.0";
+      else
+      {
+        snprintf(audio_buf, sizeof(audio_buf), "%d.0", channels);
+        audio = audio_buf;
+      }
+    }
+
+    char buffer[64];
+    if (quality && audio)
+    {
+      snprintf(buffer, sizeof(buffer), "%s %s", quality, audio);
+      label = buffer;
+    }
+    else
+    {
+      label = quality ? quality : audio;
+    }
+
+    prop_set_string(mq->mq_mp->mp_prop_quality_label, label);
+  }
+}
+
+void mq_update_video_meta(media_queue_t *mq, int width, int height)
+{
+  if (width != mq->mq_meta_width && height != mq->mq_meta_height)
+  {
+    mq->mq_meta_width = width;
+    mq->mq_meta_height = height;
+
+    mq_update_quality_label(mq);
+  }
+}

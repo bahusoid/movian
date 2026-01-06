@@ -85,7 +85,9 @@ typedef struct media_queue {
 
 } media_queue_t;
 
+void mq_update_video_meta(media_queue_t *mq, int width, int height);
 
+void mq_update_quality_label(media_queue_t *mq);
 
 void mp_send_cmd_locked(struct media_pipe *mp, media_queue_t *mq, int cmd);
 
