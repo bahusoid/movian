@@ -493,7 +493,22 @@ nav_insert_page(navigator_t *nav, nav_page_t *np, prop_t *item_model)
 
 }
 
+static void send_event(navigator_t *nav, action_type_t action)
+{
+  event_t *e = event_create_action(action);
+  // Send to GLOBAL event sink for Quit, local for others?
+  // Or just always send to global if that's where the listeners are?
+  // Navigator event sink is locally scoped.
 
+  if (action == ACTION_QUIT) {
+      prop_send_ext_event(prop_create(prop_get_global(), "eventSink"), e);
+  } else {
+      prop_t *eventsink = prop_create_r(nav->nav_prop_root, "eventSink");
+      prop_send_ext_event(eventsink, e);
+      prop_ref_dec(eventsink);
+  }
+  event_release(e);
+}
 
 /**
  *
@@ -508,7 +523,14 @@ nav_page_close_set(void *opaque, int value)
 
   if(nav->nav_page_current == np) {
     np2 = TAILQ_PREV(np, nav_page_queue, np_history_link);
-    nav_select(nav, np2, NULL);
+    if(np2)
+      nav_select(nav, np2, NULL);
+    else
+    {
+      nav_close(np, 1);
+      send_event(nav, ACTION_QUIT);
+      return;
+    }
   }
 
   nav_close(np, 1);
@@ -765,8 +787,6 @@ nav_open0(navigator_t *nav, const char *url, const char *view,
           prop_t *item_model, prop_t *parent_model,
           const char *how, const char *parent_url)
 {
-  if(how && !strcmp(how, "replace_root"))
-    nav_close_all(nav, 1);
 
   nav_page_t *np = calloc(1, sizeof(nav_page_t));
 
@@ -817,14 +837,9 @@ nav_back(navigator_t *nav)
     if(doclose)
       nav_close(np, 1);
   } else {
-    event_t *e = event_create_action(ACTION_SYSTEM_HOME);
-    prop_t *eventsink = prop_create_r(nav->nav_prop_root, "eventSink");
-    prop_send_ext_event(eventsink, e);
-    prop_ref_dec(eventsink);
-    event_release(e);
+    send_event(nav, ACTION_SYSTEM_HOME);
   }
 }
-
 
 /**
  *
