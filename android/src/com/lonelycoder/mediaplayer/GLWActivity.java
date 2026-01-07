@@ -56,7 +56,6 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     FrameLayout mRoot;
     SurfaceView sv;
     private AlertDialog mKeyboardDialog;
-    private boolean mIsIntentLaunch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,12 +64,6 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
-        if (getIntent() != null && 
-            (Intent.ACTION_VIEW.equals(getIntent().getAction()) || 
-             Intent.ACTION_SEND.equals(getIntent().getAction()))) {
-            mIsIntentLaunch = true;
-        }
 
         Core.init(this);
 
@@ -111,13 +104,6 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (intent != null && 
-            (Intent.ACTION_VIEW.equals(intent.getAction()) || 
-             Intent.ACTION_SEND.equals(intent.getAction()))) {
-            mIsIntentLaunch = true;
-        } else {
-            mIsIntentLaunch = false;
-        }
     }
 
     @Override
@@ -149,12 +135,7 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
                     }
 
                     if (uriString != null) {
-                        Core.openUri(uriString, mIsIntentLaunch);
-                    } else if (mIsIntentLaunch && !Intent.ACTION_SEND.equals(action)) {
-                         // Fallback for cases where we got an intent but couldn't resolve a URI
-                         // and it wasn't a standard share (e.g. some malformed VIEW intent).
-                         // We probably shouldn't leave the user stuck if we can't open the content.
-                         mIsIntentLaunch = false; 
+                        Core.openUri(uriString);
                     }
                     return true;
                 }
@@ -250,14 +231,10 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     public void sysHome() {
         runOnUiThread(new Runnable() {
                 public void run() {
-                    if (mIsIntentLaunch) {
-                        finish();
-                    } else {
-                        Intent startMain = new Intent(Intent.ACTION_MAIN);
-                        startMain.addCategory(Intent.CATEGORY_HOME);
-                        startMain.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(startMain);
-                    }
+                    Intent startMain = new Intent(Intent.ACTION_MAIN);
+                    startMain.addCategory(Intent.CATEGORY_HOME);
+                    startMain.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(startMain);
                 }
             });
     }
