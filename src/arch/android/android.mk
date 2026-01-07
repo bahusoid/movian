@@ -87,12 +87,8 @@ ${BUILDDIR}/${APPNAME}.aligned.apk: ${BUILDDIR}/${APPNAME}.unsigned.apk
 ${BUILDDIR}/${APPNAME}.apk: ${BUILDDIR}/${APPNAME}.aligned.apk
 	@if [ -n "$$MOVIAN_KEYSTORE_PASS" ]; then \
 		${APKSIGNER} sign -ks android/movian.keystore -ks-pass env:MOVIAN_KEYSTORE_PASS --out $@ $< && echo "APK signed with release key"; \
-	elif [ -f android/debug.keystore ]; then \
-		${APKSIGNER} sign -ks android/debug.keystore -ks-pass pass:android --out $@ $< && echo "APK signed with debug key"; \
 	else \
-		echo "Warning: No keystore available, creating debug keystore..."; \
-		keytool -genkey -v -keystore android/debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -storepass android -keypass android && \
-		${APKSIGNER} sign -ks android/debug.keystore -ks-pass pass:android --out $@ $< && echo "APK signed with new debug key"; \
+		echo "Error: MOVIAN_KEYSTORE_PASS is not set. Cannot sign APK." && exit 1; \
 	fi
 
 aligned: ${BUILDDIR}/${APPNAME}.aligned.apk
