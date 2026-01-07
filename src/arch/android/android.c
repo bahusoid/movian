@@ -390,11 +390,13 @@ Java_com_lonelycoder_mediaplayer_Core_coreInit(JNIEnv *env, jobject obj, jstring
 
 
 JNIEXPORT void JNICALL
-Java_com_lonelycoder_mediaplayer_Core_openUri(JNIEnv *env, jobject obj, jstring j_uri)
+Java_com_lonelycoder_mediaplayer_Core_openUri(JNIEnv *env, jobject obj, jstring j_uri, jboolean quitOnStop)
 {
   const char *uri = (*env)->GetStringUTFChars(env, j_uri, 0);
 
-  event_t *e = event_create_openurl(.url  = uri);
+  const char *how = quitOnStop ? "replace_root" : NULL;
+
+  event_t *e = event_create_openurl(.url  = uri, .how = how);
   prop_send_ext_event(prop_create(android_nav, "eventSink"), e);
   event_release(e);
 

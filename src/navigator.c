@@ -374,8 +374,10 @@ nav_close(nav_page_t *np, int with_prop)
 
   page_unsub(np);
 
-  if(nav->nav_page_current == np)
+  if(nav->nav_page_current == np) {
     nav->nav_page_current = NULL;
+    prop_unlink(nav->nav_prop_curpage);
+  }
 
   TAILQ_REMOVE(&nav->nav_history, np, np_history_link);
   TAILQ_REMOVE(&nav->nav_pages, np, np_global_link);
@@ -763,6 +765,9 @@ nav_open0(navigator_t *nav, const char *url, const char *view,
           prop_t *item_model, prop_t *parent_model,
           const char *how, const char *parent_url)
 {
+  if(how && !strcmp(how, "replace_root"))
+    nav_close_all(nav, 1);
+
   nav_page_t *np = calloc(1, sizeof(nav_page_t));
 
   TRACE(TRACE_INFO, "navigator", "Opening %s", url);
