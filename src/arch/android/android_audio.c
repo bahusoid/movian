@@ -428,10 +428,27 @@ android_audio_reconfig(audio_decoder_t *ad)
   SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {
     SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, num_sles_buffers};
 
-  ad->ad_out_sample_format  = AV_SAMPLE_FMT_S16;
-  ad->ad_out_channel_layout = AV_CH_LAYOUT_STEREO;
+  extern int android_sdk;
+  int use_float = 0;
+  // Android 5.0 (API 21) supports float, but it is reported to be unstable/buggy on some 5.1 devices.
+  // We enable it for Marshmallow (API 23) and newer.
+  if (android_sdk >= 23 && 
+      (ad->ad_in_sample_format == AV_SAMPLE_FMT_FLT || 
+      ad->ad_in_sample_format == AV_SAMPLE_FMT_FLTP ||
+      ad->ad_in_sample_format == AV_SAMPLE_FMT_DBL ||
+      ad->ad_in_sample_format == AV_SAMPLE_FMT_DBLP)) {
+      use_float = 1;
+  }
+ 
+  if (use_float) {
+    ad->ad_out_sample_format = AV_SAMPLE_FMT_FLT;
+    d->d_framesize = 2 * sizeof(float);
+  } else {
+    ad->ad_out_sample_format  = AV_SAMPLE_FMT_S16;
+    d->d_framesize = 2 * sizeof(int16_t);
+  }
 
-  d->d_framesize = 2 * sizeof(int16_t);
+  ad->ad_out_channel_layout = AV_CH_LAYOUT_STEREO;
 
   ad->ad_tile_size = android_system_audio_frames_per_buffer ?: 1024;
   while(ad->ad_tile_size < 512)
@@ -443,8 +460,9 @@ android_audio_reconfig(audio_decoder_t *ad)
   d->d_pcmbuf = calloc(PCM_RING_SIZE, d->d_pcmbuf_size);
 
   TRACE(TRACE_DEBUG, "SLES",
-        "Player samplerate=%d framesize=%d",
-        ad->ad_out_sample_rate, ad->ad_tile_size);
+        "Player samplerate=%d framesize=%d fmt=%s",
+        ad->ad_out_sample_rate, ad->ad_tile_size,
+        use_float ? "float" : "s16");
 
   SLDataFormat_PCM format_pcm = {SL_DATAFORMAT_PCM,
                                  2,
@@ -455,7 +473,17 @@ android_audio_reconfig(audio_decoder_t *ad)
                                  SL_SPEAKER_FRONT_RIGHT,
                                  SL_BYTEORDER_LITTLEENDIAN};
 
-  SLDataSource audioSrc = {&loc_bufq, &format_pcm};
+  SLAndroidDataFormat_PCM_EX format_pcm_ex = {SL_ANDROID_DATAFORMAT_PCM_EX,
+                                 2,
+                                 ad->ad_out_sample_rate * 1000,
+                                 SL_PCMSAMPLEFORMAT_FIXED_32,
+                                 SL_PCMSAMPLEFORMAT_FIXED_32,
+                                 SL_SPEAKER_FRONT_LEFT |
+                                 SL_SPEAKER_FRONT_RIGHT,
+                                 SL_BYTEORDER_LITTLEENDIAN,
+                                 SL_ANDROID_PCM_REPRESENTATION_FLOAT};
+
+  SLDataSource audioSrc = {&loc_bufq, use_float ? (void *)&format_pcm_ex : (void *)&format_pcm};
 
   // configure audio sink
   SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX,
