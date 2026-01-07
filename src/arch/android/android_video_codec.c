@@ -160,12 +160,18 @@ drain_output(android_video_codec_t *avc, video_decoder_t *vd)
       int64_t now = arch_get_avtime();
       media_pipe_t *mp = vd->vd_mp;
       hts_mutex_lock(&mp->mp_clock_mutex);
+      if(mp->mp_realtime_delta == 0) 
+      {
+        mp->mp_realtime_delta = now - fi.fi_pts;
+        if(mp->mp_audio_clock_epoch == 0)
+          mp->mp_audio_clock_epoch = fi.fi_epoch;
+      }
       int64_t rtd = mp->mp_realtime_delta + mp->mp_avdelta;
       int epoch = mp->mp_audio_clock_epoch;
       hts_mutex_unlock(&mp->mp_clock_mutex);
 
       int64_t wt = fi.fi_pts + rtd;
-      
+
       if(epoch == fi.fi_epoch) {
         if((wt - now) > 10000LL) {
           while((wt - arch_get_avtime()) > 5000LL) {
