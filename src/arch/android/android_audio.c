@@ -117,6 +117,8 @@ typedef struct decoder {
 
   int d_paused;
 
+  int d_partial_samples;
+
   // Passthrough support
   int d_passthrough_mode;       // 0=PCM, 1=passthrough active
   int d_passthrough_codec;      // PT_CODEC_* constant
@@ -529,6 +531,7 @@ android_audio_reconfig(audio_decoder_t *ad)
   (*d->d_bif)->Enqueue(d->d_bif, d->d_pcmbuf + d->d_pcmbuf_size, d->d_pcmbuf_size);
   d->d_read_ptr = 1;
   d->d_write_ptr = 2;
+  d->d_partial_samples = 0;
   // Account for the samples we just pre-filled so delay calculation is correct
   d->d_samples_sent = 2 * d->ad.ad_tile_size;
 
@@ -590,7 +593,10 @@ android_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
     (*d->d_vif)->SetVolumeLevel(d->d_vif, mb);
   }
 
-  while(swr_get_out_samples(ad->ad_avr, 0) >= ad->ad_tile_size) {
+  while(1) {
+    int needed = ad->ad_tile_size - d->d_partial_samples;
+    if(swr_get_out_samples(ad->ad_avr, 0) < needed)
+      break;
 
     __sync_synchronize();
 
@@ -598,16 +604,26 @@ android_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
       return d->d_sleeptime; // Time for one slot in ring buffer
 
     uint8_t *data[8] = {0};
-    data[0] = d->d_pcmbuf + d->d_write_ptr * d->d_pcmbuf_size;
-    swr_convert(ad->ad_avr, data, ad->ad_tile_size, NULL, 0);
+    uint8_t *dst = d->d_pcmbuf + d->d_write_ptr * d->d_pcmbuf_size + d->d_partial_samples * d->d_framesize;
+    data[0] = dst;
 
-    if(pts != PTS_UNSET) {
+    int ret = swr_convert(ad->ad_avr, data, needed, NULL, 0);
+    if(ret < 0) ret = 0;
+
+    d->d_partial_samples += ret; // Accumulate samples
+
+    if(d->d_partial_samples < ad->ad_tile_size) {
+      break; // Not enough data for a full tile yet
+    }
+
+    if(pts != PTS_UNSET && d->d_partial_samples == ret) {
       d->d_timestamp[d->d_write_ptr] = pts;
       d->d_epoch[d->d_write_ptr] = epoch;
       pts = PTS_UNSET;
     }
 
     d->d_write_ptr = (d->d_write_ptr + 1) & PCM_RING_MASK;
+    d->d_partial_samples = 0;
     __sync_synchronize();
   }
 
@@ -695,6 +711,7 @@ android_audio_flush(audio_decoder_t *ad)
   
   d->d_read_ptr = 0;
   d->d_write_ptr = 1;
+  d->d_partial_samples = 0;
   __sync_synchronize();
 }
 
