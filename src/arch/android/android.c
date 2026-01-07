@@ -394,10 +394,9 @@ Java_com_lonelycoder_mediaplayer_Core_openUri(JNIEnv *env, jobject obj, jstring 
 {
   const char *uri = (*env)->GetStringUTFChars(env, j_uri, 0);
 
-  if(quitOnStop)
-    nav_fini();
+  const char *how = quitOnStop ? "replace_root" : NULL;
 
-  event_t *e = event_create_openurl(.url  = uri);
+  event_t *e = event_create_openurl(.url  = uri, .how = how);
   prop_send_ext_event(prop_create(android_nav, "eventSink"), e);
   event_release(e);
 
