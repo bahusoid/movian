@@ -117,6 +117,11 @@ SIDEBAR_ACTION(_("Plugin Settings"),
                navOpen("settings:plugin:" + $self.pluginId),
                isVoid($self.pluginId));
 
+SIDEBAR_ACTION(_("System Settings"),
+               "skin://icons/ic_tv_48px.svg",
+               deliverEvent($core.androidSettings.eventSink, "Activate"),
+               $core.platform != "Android");
+
 SIDEBAR_ACTION(_("Settings"),
                "skin://icons/ic_settings_48px.svg",
                navOpen("settings:"),

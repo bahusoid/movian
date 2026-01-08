@@ -299,6 +299,36 @@ static const char *bg_playback_opts[] = {
   NULL
 };
 
+void
+android_open_settings(void *opaque, prop_event_t event, ...)
+{
+  JNIEnv *env;
+  int status = (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
+  int attached = 0;
+  if (status < 0) {
+      status = (*JVM)->AttachCurrentThread(JVM, &env, NULL);
+      if(status < 0) {
+          trace_arch(TRACE_ERROR, "Core", "Failed to attach thread");
+          return;
+      }
+      attached = 1;
+  }
+
+  if (STCore == NULL) {
+      trace_arch(TRACE_ERROR, "Core", "STCore is NULL");
+  } else {
+      jmethodID mid = (*env)->GetStaticMethodID(env, STCore, "openSettings", "()V");
+      if(mid) {
+          (*env)->CallStaticVoidMethod(env, STCore, mid);
+      } else {
+          trace_arch(TRACE_ERROR, "Core", "openSettings method not found");
+      }
+  }
+
+  if(attached)
+      (*JVM)->DetachCurrentThread(JVM);
+}
+
 void android_register_settings(prop_t *parent) {
   setting_create(SETTING_MULTIOPT, parent, 0,
                  SETTING_TITLE_CSTR("Background Playback"),

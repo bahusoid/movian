@@ -1428,7 +1428,17 @@ settings_init(void)
 
   init_dev_settings();
 
-
+#ifdef __ANDROID__
+  {
+    extern void android_open_settings(void *opaque, prop_event_t event, ...);
+    prop_t *p = prop_create(prop_get_global(), "androidSettings");
+    prop_t *es = prop_create(p, "eventSink");
+    prop_subscribe(PROP_SUB_NO_INITIAL_UPDATE,
+                   PROP_TAG_CALLBACK, android_open_settings, NULL,
+                   PROP_TAG_ROOT, es,
+                   NULL);
+  }
+#endif
 }
 
 

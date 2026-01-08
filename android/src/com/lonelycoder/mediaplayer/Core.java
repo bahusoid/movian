@@ -97,6 +97,22 @@ public class Core {
 
     public static native void propRelease(int id);
 
+    public static void openSettings() {
+        Log.i("Movian", "Core.openSettings called");
+        if (mContext != null) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_SETTINGS);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                mContext.startActivity(intent);
+                Log.i("Movian", "Started settings activity");
+            } catch (Exception e) {
+                Log.e("Movian", "Failed to open settings", e);
+            }
+        } else {
+             Log.e("Movian", "mContext is null");
+        }
+    }
+
     // Dispatch a round of property updates, should only be called on UI thread
     public static native void pollCourier();
 

@@ -128,6 +128,8 @@ init_global_info(void)
   prop_set(s, "version", PROP_SET_STRING, appversion);
   prop_set(s, "fullversion", PROP_SET_STRING, appversion);
   prop_set(s, "copyright", PROP_SET_STRING, "© 2006 - 2018 Lonelycoder AB");
+
+  prop_set(prop_get_global(), "platform", PROP_SET_STRING, arch_get_system_type());
 }
 
 
