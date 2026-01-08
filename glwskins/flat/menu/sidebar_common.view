@@ -127,6 +127,11 @@ SIDEBAR_ACTION(_("Settings"),
                navOpen("settings:"),
                false);
 
+SIDEBAR_ACTION(_("Screensaver"),
+               "skin://icons/ic_album_48px.svg",
+               deliverEvent($ui.eventSink, "EnableScreenSaver"),
+               false);
+
 SIDEBAR_ACTION(_("Dev Settings"),
                "skin://icons/ic_settings_48px.svg",
                navOpen("settings:dev"),
