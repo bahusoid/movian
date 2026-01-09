@@ -453,6 +453,20 @@ libav_setup() {
     # Bitstream filters
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-bsf=aac_adtstoasc --enable-bsf=h264_mp4toannexb --enable-bsf=hevc_mp4toannexb"
 
+    # Hardware acceleration
+    if [ "$PLATFORM" = "linux" ]; then
+        LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-vdpau"
+        LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-hwaccel=h264_vdpau --enable-hwaccel=hevc_vdpau"
+        LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-hwaccel=mpeg2_vdpau --enable-hwaccel=mpeg4_vdpau"
+        LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-hwaccel=vc1_vdpau --enable-hwaccel=wmv3_vdpau"
+        LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-hwaccel=vp9_vdpau"
+    fi
+    
+    if [ "$PLATFORM" = "osx" ]; then
+        LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-videotoolbox"
+        LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-hwaccel=h264_videotoolbox --enable-hwaccel=hevc_videotoolbox"
+    fi
+
     # Add cross-compile tools if specified
     LIBAV_TOOLS_FLAGS=""
     if [ -n "${LIBAV_STRIP}" ]; then
