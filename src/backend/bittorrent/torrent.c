@@ -1210,7 +1210,14 @@ torrent_piece_destroy(torrent_t *to, torrent_piece_t *tp)
   assert(LIST_FIRST(&tp->tp_active_fh) == NULL);
   assert(LIST_FIRST(&tp->tp_waiting_blocks) == NULL);
   assert(LIST_FIRST(&tp->tp_sent_blocks) == NULL);
-  assert(LIST_FIRST(&tp->tp_sendreqs) == NULL);
+  
+  torrent_sendreq_t *ts;
+  while((ts = LIST_FIRST(&tp->tp_sendreqs)) != NULL) {
+    peer_send_reject(ts->ts_peer, tp->tp_index,
+                     ts->ts_offset, ts->ts_length);
+    torrent_sendreq_destroy(ts);
+  }
+
   to->to_active_pieces_mem -= tp->tp_piece_length;
   to->to_num_active_pieces--;
 
