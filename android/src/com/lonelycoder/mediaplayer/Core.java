@@ -97,19 +97,25 @@ public class Core {
 
     public static native void propRelease(int id);
 
-    public static void openSettings() {
-        Log.i("Movian", "Core.openSettings called");
-        if (mContext != null) {
+    public static void openSettings()
+    {
+        try {
+            Intent intent = new Intent();
+            intent.setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            mContext.startActivity(intent);
+            Log.i("Movian", "Started settings activity via component");
+        } catch (Exception e3) {
+            Log.e("Movian", "Failed to open settings via component", e3);
+            // Fallback to standard settings
             try {
                 Intent intent = new Intent(Settings.ACTION_SETTINGS);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 mContext.startActivity(intent);
-                Log.i("Movian", "Started settings activity");
-            } catch (Exception e) {
-                Log.e("Movian", "Failed to open settings", e);
+                Log.i("Movian", "Started standard settings activity");
+            } catch (Exception e2) {
+                Log.e("Movian", "Failed to open standard settings", e2);
             }
-        } else {
-             Log.e("Movian", "mContext is null");
         }
     }
 
