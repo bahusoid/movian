@@ -400,32 +400,58 @@ libav_setup() {
     # Size optimization flags
     LIBAV_COMMON_FLAGS="--enable-small"
 
-    # Disable unnecessary components to reduce size
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-encoders --disable-filters --disable-muxers --disable-devices"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-demuxer=rtp --disable-protocol=rtp"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-bzlib --disable-programs --disable-avfilter"
+    # Disable everything by default and assign whitelist what we need
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-everything"
+    
+    # Core components
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-avcodec --enable-avformat --enable-avutil --enable-swresample --enable-swscale"
+    
+    # Metadata and docs
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-doc --disable-htmlpages --disable-manpages --disable-podpages --disable-txtpages"
     
-    # Disable some rarely used decoders to save space
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=twinvq --disable-decoder=snow --disable-decoder=cavs"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=apng --disable-decoder=cfhd --disable-decoder=cllc"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=dds --disable-decoder=dpx --disable-decoder=dxv"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=exr --disable-decoder=hap --disable-decoder=magicyuv"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=notchlc --disable-decoder=photocd --disable-decoder=pixlet"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=prores --disable-decoder=r10k --disable-decoder=r210"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=sanm --disable-decoder=screenpresso --disable-decoder=sgirle"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=sheervideo --disable-decoder=simbiosis_imx"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=speedhq --disable-decoder=truemotion1 --disable-decoder=truemotion2"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=v210 --disable-decoder=v210x --disable-decoder=v308"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-decoder=v408 --disable-decoder=v410 --disable-decoder=ylc"
+    # Protocols
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-protocol=file"
     
-    # Enable only needed encoders
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=png --enable-decoder=mjpeg"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-encoder=mjpeg --enable-encoder=png"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=spdif --enable-encoder=ac3 --enable-encoder=eac3"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=matroska --enable-encoder=ffvhuff --enable-encoder=pcm_s16le"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-swresample"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-bsf=h264_mp4toannexb --enable-bsf=hevc_mp4toannexb"
+    # Demuxers
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-demuxer=aac --enable-demuxer=ac3 --enable-demuxer=asf --enable-demuxer=avi"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-demuxer=dts --enable-demuxer=eac3 --enable-demuxer=flac --enable-demuxer=flv"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-demuxer=h264 --enable-demuxer=hevc --enable-demuxer=hls --enable-demuxer=image2"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-demuxer=matroska --enable-demuxer=m4v --enable-demuxer=mov --enable-demuxer=mp3"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-demuxer=mpegps --enable-demuxer=mpegts --enable-demuxer=ogg --enable-demuxer=vc1"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-demuxer=wav"
+    
+    # Muxers
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-muxer=image2 --enable-muxer=matroska --enable-muxer=mp4 --enable-muxer=spdif"
+    
+    # Decoders - Video
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=bmp --enable-decoder=flv1 --enable-decoder=gif --enable-decoder=h263"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=h264 --enable-decoder=hevc --enable-decoder=mjpeg --enable-decoder=mjpegb"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=mpeg2video --enable-decoder=mpeg4 --enable-decoder=png --enable-decoder=svq3"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=theora --enable-decoder=vc1 --enable-decoder=vp8 --enable-decoder=vp9"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=webp --enable-decoder=wmv3 --enable-decoder=zlib"
+    
+    # Decoders - Audio
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=aac --enable-decoder=ac3 --enable-decoder=alac --enable-decoder=dca"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=eac3 --enable-decoder=flac --enable-decoder=mp2 --enable-decoder=mp3"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=opus --enable-decoder=pcm_s16be --enable-decoder=pcm_s16le --enable-decoder=pcm_u8"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=truehd --enable-decoder=vorbis --enable-decoder=wmapro --enable-decoder=wmav2"
+    
+    # Decoders - Subtitle
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=ass --enable-decoder=dvbsub --enable-decoder=dvdsub --enable-decoder=mov_text"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=ssa --enable-decoder=subrip --enable-decoder=text --enable-decoder=webvtt"
+
+    # Encoders
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-encoder=ac3 --enable-encoder=eac3 --enable-encoder=ffvhuff --enable-encoder=mjpeg"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-encoder=pcm_s16le --enable-encoder=png"
+
+    # Parsers
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=aac --enable-parser=ac3 --enable-parser=dca --enable-parser=flac"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=h264 --enable-parser=hevc --enable-parser=mpegaudio --enable-parser=mpeg4video"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=mpegvideo --enable-parser=opus --enable-parser=vc1 --enable-parser=vorbis"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=vp8 --enable-parser=vp9"
+
+    # Bitstream filters
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-bsf=aac_adtstoasc --enable-bsf=h264_mp4toannexb --enable-bsf=hevc_mp4toannexb"
 
     # Add cross-compile tools if specified
     LIBAV_TOOLS_FLAGS=""
