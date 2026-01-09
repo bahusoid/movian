@@ -94,11 +94,13 @@ int64_t
 arch_cache_avail_bytes(void)
 {
   struct statfs buf;
+  extern char *android_fs_cache_path;
+  const char *path = android_fs_cache_path ?: gconf.cache_path;
 
-  if(gconf.cache_path == NULL || statfs(gconf.cache_path, &buf))
+  if(path == NULL || statfs(path, &buf))
     return 0;
 
-  return buf.f_bfree * buf.f_bsize;
+  return (int64_t)buf.f_bavail * (int64_t)buf.f_bsize;
 }
 
 

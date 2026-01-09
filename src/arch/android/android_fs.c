@@ -28,6 +28,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <limits.h>
+#include <sys/vfs.h>
 #include "main.h"
 #include "misc/minmax.h"
 #include "misc/str.h"
@@ -365,6 +366,25 @@ fs_rename(const fa_protocol_t *fap, const char *old_url, const char *new_url,
 }
 
 
+static fa_err_code_t
+fs_fsinfo(struct fa_protocol *fap, const char *url, fa_fsinfo_t *ffi)
+{
+  struct statfs f;
+  scoped_char *path = NULL;
+
+  fa_err_code_t err =
+    android_url_to_path(fap, url, 0, NULL, 0, &path);
+  if(err)
+    return err;
+
+  if(statfs(path, &f))
+    return FAP_ERROR;
+
+  ffi->ffi_size  = (int64_t)f.f_bsize * f.f_blocks;
+  ffi->ffi_avail = (int64_t)f.f_bsize * f.f_bavail;
+  return 0;
+}
+
 
 static int
 fs_ftruncate(fa_handle_t *fh0, uint64_t newsize)
@@ -391,6 +411,7 @@ fa_protocol_t fa_protocol_es = {
   .fap_rename = fs_rename,
   .fap_makedir = fs_makedir,
   .fap_ftruncate = fs_ftruncate,
+  .fap_fsinfo = fs_fsinfo,
 };
 FAP_REGISTER(es);
 
@@ -410,6 +431,7 @@ fa_protocol_t fa_protocol_cache = {
   .fap_rename = fs_rename,
   .fap_makedir = fs_makedir,
   .fap_ftruncate = fs_ftruncate,
+  .fap_fsinfo = fs_fsinfo,
 };
 FAP_REGISTER(cache);
 
@@ -429,6 +451,7 @@ fa_protocol_t fa_protocol_persistent = {
   .fap_rename = fs_rename,
   .fap_makedir = fs_makedir,
   .fap_ftruncate = fs_ftruncate,
+  .fap_fsinfo = fs_fsinfo,
 };
 FAP_REGISTER(persistent);
 
@@ -448,6 +471,7 @@ fa_protocol_t fa_protocol_file = {
   .fap_rename = fs_rename,
   .fap_makedir = fs_makedir,
   .fap_ftruncate = fs_ftruncate,
+  .fap_fsinfo = fs_fsinfo,
 };
 
 FAP_REGISTER(file);
