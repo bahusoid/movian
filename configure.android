@@ -57,7 +57,7 @@ for opt do
             ANDROID_KIND=armv7
             ARCH_CFLAGS="-march=armv7-a -mfloat-abi=softfp -mfpu=neon -funwind-tables -fPIC"
             ARCH_LDFLAGS="-march=armv7-a"
-            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=armv7 --target-os=android --enable-shared --disable-static"
+            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=armv7 --target-os=android --disable-shared --enable-static"
             ;;
         --kind=api21_x86)
             ANDROID_MIN_SDK_VERSION=21
@@ -67,7 +67,7 @@ for opt do
             BUILD=android.api${ANDROID_MIN_SDK_VERSION}_x86
             ANDROID_KIND=x86
             ARCH_CFLAGS="-fPIC"
-            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=x86 --target-os=android --enable-shared --disable-static --disable-asm --disable-inline-asm"
+            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=x86 --target-os=android --disable-shared --enable-static --disable-asm --disable-inline-asm"
             ;;
         --kind=api34_armv8)
             ANDROID_MIN_SDK_VERSION=21
@@ -78,7 +78,7 @@ for opt do
             ANDROID_KIND=armv8
             ARCH_CFLAGS="-march=armv8-a -fPIC"
             ARCH_LDFLAGS=""
-            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=aarch64 --target-os=android --enable-shared --disable-static"
+            LIBAV_ARCH_FLAGS="--enable-cross-compile --arch=aarch64 --target-os=android --disable-shared --enable-static"
             ;;
         *)
             common_opt $opt $optval

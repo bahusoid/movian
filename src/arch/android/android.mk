@@ -39,22 +39,19 @@ JAVA_SRCS := $(shell find android/src/com/lonelycoder/mediaplayer -name '*.java'
 RESFILES := $(shell find android/res -type f)
 
 
+
+ifeq ($(CONFIG_RELEASE),yes)
+DO_STRIP = ${STRIP} -o $@ $<
+else
+DO_STRIP = cp $< $@
+endif
+
 ${BUILDDIR}/apk/lib/${ANDROID_ABI}/libcore.so: ${LIB}.so
 	@mkdir -p $(dir $@)
-	${STRIP} -o $@ $<
-
-${BUILDDIR}/inst/lib/libavcodec.so:    $(BUILDDIR)/stamps/libav.stamp
-${BUILDDIR}/inst/lib/libavdevice.so:   $(BUILDDIR)/stamps/libav.stamp
-${BUILDDIR}/inst/lib/libavformat.so:   $(BUILDDIR)/stamps/libav.stamp
-${BUILDDIR}/inst/lib/libswresample.so: $(BUILDDIR)/stamps/libav.stamp
-${BUILDDIR}/inst/lib/libavutil.so:     $(BUILDDIR)/stamps/libav.stamp
-${BUILDDIR}/inst/lib/libswscale.so:    $(BUILDDIR)/stamps/libav.stamp
-
-${BUILDDIR}/apk/lib/${ANDROID_ABI}/%.so: ${BUILDDIR}/inst/lib/%.so
-	@mkdir -p $(dir $@)
-	${STRIP} -o $@ $<
+	$(DO_STRIP)
 
 ${MANIFEST}: android/AndroidManifest.xml.in ${BUILDDIR}/version_git.h
+
 	sed >$@ -e s/@@VERSION@@/${VERSION}/g -e s/@@APPNAME@@/${APPNAMEUSER}/g -e s/@@VERCODE@@/${NUMVER}/g -e s/@@ANDROID_MIN_SDK_VERSION@@/${ANDROID_MIN_SDK_VERSION}/g -e s/@@ANDROID_TARGET_SDK_VERSION@@/${ANDROID_TARGET_SDK_VERSION}/g $<
 
 ${R_JAVA}: ${MANIFEST} ${RESFILES}
@@ -71,13 +68,7 @@ ${BUILDDIR}/apk/classes.dex: ${JAVA_SRCS} ${R_JAVA}
 	${D8} --output $(dir $@) --lib ${ANDROID_PLATFORM_PATH}/android.jar $$(find ${BUILDDIR}/classes -name '*.class')
 
 ${BUILDDIR}/${APPNAME}.unsigned.apk: ${BUILDDIR}/apk/classes.dex ${RESFILES} \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libcore.so \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavcodec.so \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavdevice.so \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavformat.so \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libswresample.so \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libavutil.so \
-	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libswscale.so
+	${BUILDDIR}/apk/lib/${ANDROID_ABI}/libcore.so
 	${AAPT} package -f -M ${MANIFEST} -S android/res \
 	-I ${ANDROID_PLATFORM_PATH}/android.jar -F $@ ${BUILDDIR}/apk/
 
