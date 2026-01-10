@@ -84,7 +84,7 @@ class GLWView extends GLSurfaceView {
             }
         }
         return Core.glwKeyDown(glwId, keyCode, dead ? 0 : c,
-                               event.isShiftPressed());
+                               event.getMetaState());
     }
 
     public boolean keyUp(int keyCode, KeyEvent event) {

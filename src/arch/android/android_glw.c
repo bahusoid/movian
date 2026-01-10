@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <jni.h>
 #include <android/keycodes.h>
+#include <android/input.h>
 #include <GLES2/gl2.h>
 
 #include "arch/arch.h"
@@ -42,6 +43,100 @@
 static android_glw_root_t *permission_glw_root;
 static pthread_mutex_t permission_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t permission_cond = PTHREAD_COND_INITIALIZER;
+
+#define NO_KEY 0
+
+typedef enum {
+  KEYPRESS_SHORT = 1,
+  KEYPRESS_LONG,
+  KEYPRESS_RELEASE
+} press_type_t;
+
+typedef enum {
+  CTX_NONE     = 0,
+  CTX_PLAYBACK = (1 << 0),
+} key_context_t;
+
+typedef struct {
+  int keycode;
+  int meta_mask;
+  press_type_t type;
+  key_context_t ctx_mask;
+  action_type_t action;
+  action_type_t action2;
+} key_map_t;
+
+// Pointer to the triggered long-press action 
+// Used to suppress the release action if loop fired
+static const key_map_t *active_long_press_map; 
+// Tracking the key currently being held down
+static int active_down_keycode;
+
+#define end_of_AKEYCODE 256
+
+static const key_map_t key_map[] = {  
+  // -- Playback Context ---
+  { AKEYCODE_DPAD_UP,    0, KEYPRESS_LONG,  CTX_PLAYBACK, ACTION_CYCLE_AUDIO },
+  
+  // -- Navigation ---
+  { AKEYCODE_DPAD_UP,    0, KEYPRESS_SHORT, 0, ACTION_UP },
+  { AKEYCODE_DPAD_DOWN,  0, KEYPRESS_SHORT, 0, ACTION_DOWN },
+  { AKEYCODE_DPAD_LEFT,  0, KEYPRESS_SHORT, 0, ACTION_LEFT },
+  { AKEYCODE_DPAD_RIGHT, 0, KEYPRESS_SHORT, 0, ACTION_RIGHT },
+
+  // -- Standard Functionality --
+  // Enter/Center: Wait for release to activate, allows Long Press (e.g. Menu)
+  { AKEYCODE_DPAD_CENTER,0, KEYPRESS_RELEASE,0, ACTION_ACTIVATE },
+  { AKEYCODE_DPAD_CENTER,0, KEYPRESS_LONG,   0, ACTION_ITEMMENU},
+
+  { AKEYCODE_ENTER,      0, KEYPRESS_RELEASE,0, ACTION_ACTIVATE },
+  { AKEYCODE_ENTER,0, KEYPRESS_LONG,   0, ACTION_ITEMMENU},
+
+  { AKEYCODE_BACK,       0, KEYPRESS_SHORT,  0, ACTION_NAV_BACK },
+  { AKEYCODE_MENU,       0, KEYPRESS_SHORT,  0, ACTION_MENU },
+  { AKEYCODE_STAR,       0, KEYPRESS_SHORT,  0, ACTION_ITEMMENU },
+  { AKEYCODE_DEL,        0, KEYPRESS_SHORT,  0, ACTION_NAV_BACK, ACTION_BS },
+  
+  // -- Media Keys --
+  { AKEYCODE_MEDIA_PLAY_PAUSE, 0, KEYPRESS_SHORT, 0, ACTION_PLAYPAUSE },
+  { AKEYCODE_MEDIA_PAUSE,      0, KEYPRESS_SHORT, 0, ACTION_PAUSE },
+  { AKEYCODE_MEDIA_STOP,       0, KEYPRESS_SHORT, 0, ACTION_STOP },
+  { AKEYCODE_MEDIA_REWIND,     0, KEYPRESS_SHORT, 0, ACTION_SEEK_BACKWARD },
+  { AKEYCODE_MEDIA_FAST_FORWARD,0,KEYPRESS_SHORT, 0, ACTION_SEEK_FORWARD },
+
+  // -- Modifiers (Shift) --
+  { AKEYCODE_DPAD_UP,    AMETA_SHIFT_ON, KEYPRESS_SHORT, 0, ACTION_MOVE_UP },
+  { AKEYCODE_DPAD_DOWN,  AMETA_SHIFT_ON, KEYPRESS_SHORT, 0, ACTION_MOVE_DOWN },
+  { AKEYCODE_DPAD_LEFT,  AMETA_SHIFT_ON, KEYPRESS_SHORT, 0, ACTION_MOVE_LEFT },
+  { AKEYCODE_DPAD_RIGHT, AMETA_SHIFT_ON, KEYPRESS_SHORT, 0, ACTION_MOVE_RIGHT },
+
+  { 0 }
+};
+
+static const key_map_t *
+find_key_map(int keycode, int meta, press_type_t type, key_context_t ctx)
+{
+  const key_map_t *best = NULL;
+  const key_map_t *p;
+
+  for(p = key_map; p->keycode; p++) {
+    if(p->keycode != keycode)
+      continue;
+    if(p->type != type)
+      continue;
+    if((meta & p->meta_mask) != p->meta_mask)
+      continue;
+
+    // Perfect context match
+    if((ctx & p->ctx_mask) == p->ctx_mask)
+      return p;
+    
+    // Fallback match (no context requirement)
+    if(p->ctx_mask == 0)
+      best = p;
+  }
+  return best;
+}
 
 static enum {
   PERMISSION_STATE_NONE,
@@ -251,6 +346,16 @@ nav_eventsink(void *opaque, event_t *e)
   }
 }
 
+static void
+fullwindow_callback(void *opaque, int value)
+{
+  android_glw_root_t *agr = opaque;
+  if(value)
+    agr->context_flags |= CTX_PLAYBACK;
+  else
+    agr->context_flags &= ~CTX_PLAYBACK;
+}
+
 JNIEXPORT jint JNICALL
 Java_com_lonelycoder_mediaplayer_Core_glwCreate(JNIEnv *env,
                                                        jobject obj,
@@ -282,6 +387,14 @@ Java_com_lonelycoder_mediaplayer_Core_glwCreate(JNIEnv *env,
                    PROP_TAG_CALLBACK_EVENT, nav_eventsink, agr,
                    PROP_TAG_NAME("nav", "eventSink"),
                    PROP_TAG_NAMED_ROOT, android_nav, "nav",
+                   PROP_TAG_COURIER, agr->gr.gr_courier,
+                   NULL);
+
+  agr->video_view_sub =
+    prop_subscribe(0,
+                   PROP_TAG_CALLBACK_INT, fullwindow_callback, agr,
+                   PROP_TAG_NAME("ui", "fullwindow"),
+                   PROP_TAG_ROOT, agr->gr.gr_prop_ui,
                    PROP_TAG_COURIER, agr->gr.gr_courier,
                    NULL);
 
@@ -347,6 +460,7 @@ Java_com_lonelycoder_mediaplayer_Core_glwDestroy(JNIEnv *env,
 
   prop_unsubscribe(agr->agr_disable_screensaver_sub);
   prop_unsubscribe(agr->agr_nav_eventsink_sub);
+  prop_unsubscribe(agr->video_view_sub);
 
   glw_lock(gr);
   while(agr->agr_running == 1)
@@ -467,10 +581,18 @@ Java_com_lonelycoder_mediaplayer_Core_glwStep(JNIEnv *env,
 
   glw_post_scene(gr);
 
-  if(longpress_periodic(&agr->agr_dpad_center, gr->gr_frame_start)) {
-    event_t *e = event_create_action(ACTION_ITEMMENU);
-    e->e_flags |= EVENT_KEYPRESS;
-    glw_inject_event(gr, e);
+  if(active_long_press_map && active_down_keycode) {
+    if(longpress_periodic(&agr->agr_key_lph, gr->gr_frame_start)) {
+      event_t *e;
+      if (active_long_press_map->action2 != ACTION_NONE) {
+          const action_type_t acts[] = { active_long_press_map->action, active_long_press_map->action2, ACTION_NONE };
+          e = event_create_action_multi(acts, 2);
+      } else {
+        e = event_create_action(active_long_press_map->action);
+      }
+      e->e_flags |= EVENT_KEYPRESS;
+      glw_inject_event(gr, e);
+    }
   }
 }
 
@@ -527,32 +649,8 @@ Java_com_lonelycoder_mediaplayer_Core_glwMotion(JNIEnv *env,
 
 #define end_of_AKEYCODE 256
 
-#define AVEC(x...) (const action_type_t []){x, ACTION_NONE}
 
-const static action_type_t *btn_to_action[end_of_AKEYCODE] = {
-  [AKEYCODE_BACK]            = AVEC(ACTION_NAV_BACK),
-  [AKEYCODE_DPAD_LEFT]       = AVEC(ACTION_LEFT),
-  [AKEYCODE_DPAD_UP]         = AVEC(ACTION_UP),
-  [AKEYCODE_DPAD_RIGHT]      = AVEC(ACTION_RIGHT),
-  [AKEYCODE_DPAD_DOWN]       = AVEC(ACTION_DOWN),
-  [AKEYCODE_MENU]            = AVEC(ACTION_MENU),
-  [AKEYCODE_STAR]            = AVEC(ACTION_ITEMMENU),
-  [AKEYCODE_MEDIA_REWIND]       = AVEC(ACTION_SEEK_BACKWARD),
-  [AKEYCODE_MEDIA_FAST_FORWARD] = AVEC(ACTION_SEEK_FORWARD),
-  [AKEYCODE_MEDIA_PLAY_PAUSE]   = AVEC(ACTION_PLAYPAUSE),
-  [AKEYCODE_MEDIA_PAUSE]        = AVEC(ACTION_PAUSE),
-  [AKEYCODE_MEDIA_STOP]         = AVEC(ACTION_STOP),
-  [AKEYCODE_ENTER]           = AVEC(ACTION_ACTIVATE),
-  [AKEYCODE_DEL]             = AVEC(ACTION_NAV_BACK, ACTION_BS),
-};
-
-const static action_type_t *shift_btn_to_action[end_of_AKEYCODE] = {
-  [AKEYCODE_DPAD_LEFT]       = AVEC(ACTION_MOVE_LEFT),
-  [AKEYCODE_DPAD_UP]         = AVEC(ACTION_MOVE_UP),
-  [AKEYCODE_DPAD_RIGHT]      = AVEC(ACTION_MOVE_RIGHT),
-  [AKEYCODE_DPAD_DOWN]       = AVEC(ACTION_MOVE_DOWN),
-};
-
+// -- Replaced Key Logic --
 
 JNIEXPORT jboolean JNICALL
 Java_com_lonelycoder_mediaplayer_Core_glwKeyDown(JNIEnv *env,
@@ -560,48 +658,74 @@ Java_com_lonelycoder_mediaplayer_Core_glwKeyDown(JNIEnv *env,
                                                  jint id,
                                                  jint keycode,
                                                  jint unicode,
-                                                 jboolean shift)
+                                                 jint metaState)
 {
   android_glw_root_t *agr = (android_glw_root_t *)id;
   glw_root_t *gr = &agr->gr;
   event_t *e = NULL;
 
+  // Track meta state
+  agr->meta_state = metaState;
+
+  if(gconf.enable_input_event_debug)
+    TRACE(TRACE_DEBUG, "KEYBOARD", "KeyDown: AndroidKey:%d Unicode:%d Meta:0x%x Ctx:0x%x",
+          keycode, unicode, metaState, agr->context_flags);
+
+  // 1. Unicode handling
   // along with AKEYCODE_ENTER usually passed Line Feed char - 10
   if(keycode == AKEYCODE_ENTER)
     unicode = 0;
 
-  if(gconf.enable_input_event_debug)
-    TRACE(TRACE_DEBUG, "KEYBOARD", "KeyDown: AndroidKey:%d Unicode:%d",
-          keycode, unicode);
-
   if(unicode != 0) {
     e = event_create_int(EVENT_UNICODE, unicode);
-  } else {
-
-
-    if(keycode == AKEYCODE_DPAD_CENTER) {
-      longpress_down(&agr->agr_dpad_center);
-      return 1;
-    }
-
-    if(keycode < end_of_AKEYCODE) {
-      const action_type_t *avec = shift ? shift_btn_to_action[keycode] :
-        btn_to_action[keycode];
-      if(avec) {
-        int i = 0;
-        while(avec[i] != 0)
-          i++;
-        e = event_create_action_multi(avec, i);
-      }
-    }
-  }
-
-  if(e != NULL) {
     e->e_flags |= EVENT_KEYPRESS;
     glw_inject_event(gr, e);
+    return 1;
+  }
+
+  // 2. Action Mapping
+  // Check if this is a repeat (key already down)
+  if(active_down_keycode == keycode) {
+      // It's a repeat. 
+      // If we are evaluating a long press, do nothing (let periodic handle it).
+      // If it's a short press action, we might want to repeat it?
+      // Standard Movian behavior usually repeats actions on KeyDown.
+      
+      if(active_long_press_map) {
+          // Swallow repeats for long press waiters
+          return 1;
+      }
+      // Fall through to re-trigger short press action
+  } else {
+      // New key press
+      active_down_keycode = keycode;
+      active_long_press_map = NULL;
+  }
+
+  // Try to find Long Press map first
+  const key_map_t *map = find_key_map(keycode, metaState, KEYPRESS_LONG, agr->context_flags);
+  if(map) {
+      // We have a potential long press action. Start tracking.
+      active_long_press_map = map;
+      longpress_down(&agr->agr_key_lph);
+      return 1; // Handled
+  }
+
+  // Try Short Press
+  map = find_key_map(keycode, metaState, KEYPRESS_SHORT, agr->context_flags);
+  if(map) {
+      if (map->action2 != ACTION_NONE) {
+          const action_type_t acts[] = { map->action, map->action2, ACTION_NONE };
+          e = event_create_action_multi(acts, 2);
+      } else {
+          e = event_create_action(map->action);
+      }
+      e->e_flags |= EVENT_KEYPRESS;
+      glw_inject_event(gr, e);
+      return 1;
   }
   
-  return e != NULL;
+  return 0;
 }
 
 JNIEXPORT jboolean JNICALL
@@ -611,25 +735,64 @@ Java_com_lonelycoder_mediaplayer_Core_glwKeyUp(JNIEnv *env,
                                                       jint keycode)
 {
   android_glw_root_t *agr = (android_glw_root_t *)id;
+  glw_root_t *gr = &agr->gr;
   event_t *e = NULL;
 
   if(gconf.enable_input_event_debug)
     TRACE(TRACE_DEBUG, "KEYBOARD", "KeyUp: AndroidKey:%d", keycode);
 
-  switch(keycode) {
-  case AKEYCODE_DPAD_CENTER:
-    if(longpress_up(&agr->agr_dpad_center))
-      e = event_create_action(ACTION_ACTIVATE);
-    break;
+  if(active_down_keycode == keycode) {
+      if(active_long_press_map) {
+          // We were waiting for a long press.
+          // Check if it was short enough to be a click?
+          // Longpress helper 'up' returns true if valid 'click' (short press).
+          // BUT: If the map was ONLY long press, do we have a short/release action fallback?
+          
+          if(longpress_up(&agr->agr_key_lph)) {
+               // It was a short press. 
+               // Check if we have a short/release action for this key?
+               // The map we found was 'KEYPRESS_LONG'. 
+               // If we want to support "Long Press = Menu, Short Press = Select", 
+               // we need to look up the Short/Release map now.
+               
+               const key_map_t *map = find_key_map(keycode, agr->meta_state, KEYPRESS_RELEASE, agr->context_flags);
+               if(!map) map = find_key_map(keycode, agr->meta_state, KEYPRESS_SHORT, agr->context_flags);
+               
+               if(map) {
+                   if (map->action2 != ACTION_NONE) {
+                       const action_type_t acts[] = { map->action, map->action2, ACTION_NONE };
+                       e = event_create_action_multi(acts, 2);
+                   } else {
+                       e = event_create_action(map->action);
+                   }
+               } 
+               // Else: User tapped a key that only has a Long Press action? Do nothing?
+          }
+          // Reset
+          active_long_press_map = NULL;
+      } else {
+          // Standard key release. Check for release action.
+          const key_map_t *map = find_key_map(keycode, agr->meta_state, KEYPRESS_RELEASE, agr->context_flags);
+          if(map) {
+               if (map->action2 != ACTION_NONE) {
+                   const action_type_t acts[] = { map->action, map->action2, ACTION_NONE };
+                   e = event_create_action_multi(acts, 2);
+               } else {
+                   e = event_create_action(map->action);
+               }
+          }
+      }
+      active_down_keycode = 0;
   }
 
   if(e != NULL) {
     e->e_flags |= EVENT_KEYPRESS;
-    glw_inject_event(&agr->gr, e);
+    glw_inject_event(gr, e);
     return 1;
   }
   return 0;
 }
+
 
 
 JNIEXPORT void JNICALL

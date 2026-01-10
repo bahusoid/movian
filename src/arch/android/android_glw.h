@@ -29,7 +29,10 @@ typedef struct android_glw_root {
   int agr_running;
   hts_cond_t agr_runcond;
 
-  lphelper_t agr_dpad_center;
+  lphelper_t agr_key_lph;    // Generic long press helper
+  int context_flags;         // Current Context (bitmask)
+  int meta_state;            // Current Modifiers
+  prop_sub_t *video_view_sub;// Subscription for Video View visibility
 
   prop_sub_t *agr_disable_screensaver_sub;
 

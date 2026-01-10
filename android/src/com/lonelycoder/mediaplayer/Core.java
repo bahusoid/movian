@@ -67,7 +67,7 @@ public class Core {
 
     public static native void glwMotion(int id, int source, int event, int x, int y, long timestamp);
     public static native boolean glwKeyDown(int id, int code, int unicode,
-                                            boolean shift);
+                                            int metaState);
     public static native boolean glwKeyUp(int id, int code);
 
     public static native void permissionResult(boolean ok);
