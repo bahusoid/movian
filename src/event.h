@@ -132,6 +132,9 @@ typedef enum {
 
   ACTION_RECORD_UI,
 
+  ACTION_SELECT_AUDIO_TRACK,
+  ACTION_SELECT_SUBTITLE_TRACK,
+
   ACTION_mappable_end,
 
   ACTION_invalid = -1,

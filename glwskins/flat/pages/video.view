@@ -89,6 +89,7 @@ widget(container_z, {
     widget(video, {
       id: "videowidget";
       primary: true;
+      delta($ui.wps, isFocused());
 
       how: $self.how;
       itemModel: $self.previous.itemModel;
@@ -105,7 +106,18 @@ widget(container_z, {
 
       onEvent(up,    deliverEvent($self.media.eventSink, "VolumeUp"));
       onEvent(down,  deliverEvent($self.media.eventSink, "VolumeDown"));
+      // Support remote actions that open the subtitle/audio OSD views
+      onEvent(SubtitleTrackView, {
+        $clone.osdpage = select($clone.osdpage == 100, 0, 100);
+        $clone.showPlaydeck = 1;
+        focus("osd_subs");
+      });
 
+      onEvent(AudioTrackView, {
+        $clone.osdpage = select($clone.osdpage == 101, 0, 101);
+        $clone.showPlaydeck = 1;
+        focus("osd_audio");
+      });
       bottomOverlayDisplacement: $clone.bottomOsdHeight;
 
     });

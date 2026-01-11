@@ -198,6 +198,9 @@ static struct strtab actionnames[] = {
 
   { "SwitchUI",              ACTION_SWITCH_UI },
 
+  { "AudioTrackView",            ACTION_SELECT_AUDIO_TRACK },
+  { "SubtitleTrackView",         ACTION_SELECT_SUBTITLE_TRACK },
+
 };
 
 
