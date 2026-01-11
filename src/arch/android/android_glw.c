@@ -76,7 +76,8 @@ static int active_down_keycode;
 
 static const key_map_t key_map[] = {  
   // -- Playback Context ---
-  { AKEYCODE_DPAD_UP,    0, KEYPRESS_LONG,  CTX_PLAYBACK, ACTION_CYCLE_AUDIO },
+  { AKEYCODE_DPAD_UP,    0, KEYPRESS_LONG,  CTX_PLAYBACK, ACTION_SELECT_AUDIO_TRACK },
+  { AKEYCODE_DPAD_DOWN,  0, KEYPRESS_LONG,  CTX_PLAYBACK, ACTION_SELECT_SUBTITLE_TRACK },
   
   // -- Navigation ---
   { AKEYCODE_DPAD_UP,    0, KEYPRESS_SHORT, 0, ACTION_UP },
@@ -396,7 +397,7 @@ Java_com_lonelycoder_mediaplayer_Core_glwCreate(JNIEnv *env,
   agr->video_view_sub =
     prop_subscribe(0,
                    PROP_TAG_CALLBACK_INT, fullwindow_callback, agr,
-                   PROP_TAG_NAME("ui", "fullwindow"),
+                   PROP_TAG_NAME("ui", "wps"),
                    PROP_TAG_ROOT, agr->gr.gr_prop_ui,
                    PROP_TAG_COURIER, agr->gr.gr_courier,
                    NULL);
