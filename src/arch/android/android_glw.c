@@ -124,7 +124,8 @@ find_key_map(int keycode, int meta, press_type_t type, key_context_t ctx)
       continue;
     if(p->type != type)
       continue;
-    if((meta & p->meta_mask) != p->meta_mask)
+
+    if(meta && (meta & p->meta_mask) == 0)
       continue;
 
     // Perfect context match
