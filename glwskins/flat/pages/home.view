@@ -113,9 +113,17 @@ widget(container_z, {
             focusable: select($self.metadata.autofocus, 1.5, 1.0);
             autoRefocusable: select($self.metadata.autofocus, 1.5, 1.0);
             GridItemHighlight();
-            onEvent(activate, navOpen($self.url, void, $self));
+            onEvent(activate, navOpen($self.url, void, $self), !$ui.moveMode);
 
             onEvent(itemMenu, eventWithProp(homeInfo, $self));
+
+            //Move mode
+            onEvent(activate, {$ui.moveMode = 0;}, $ui.moveMode);
+            onEvent(back, {$ui.moveMode = 0;}, $ui.moveMode);
+            onEvent(right, deliverEvent($ui.eventSink, "MoveRight"), $ui.moveMode);
+            onEvent(left, deliverEvent($ui.eventSink, "MoveLeft"), $ui.moveMode);
+            onEvent(up, deliverEvent($ui.eventSink, "MoveUp"), $ui.moveMode);
+            onEvent(down, deliverEvent($ui.eventSink, "MoveDown"), $ui.moveMode);
 
             widget(container_y, {
 

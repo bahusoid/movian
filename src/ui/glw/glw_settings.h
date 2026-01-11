@@ -29,7 +29,6 @@ typedef struct glw_settings {
 
   int gs_screensaver_delay;
   int gs_bing_image;
-  int gs_move_mode;  // Move mode for reordering items
 
 #ifdef __ANDROID__
   int gs_keyboard_mode; // 0=Internal, 1=Android, 2=Physical

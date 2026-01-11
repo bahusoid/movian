@@ -860,7 +860,6 @@ typedef struct glw_root {
   prop_t *gr_screensaver_active;
   int gr_inhibit_screensaver;
   prop_sub_t *gr_disable_screensaver_sub;
-  prop_sub_t *gr_move_mode_sub;
   
   /**
    * View loader
