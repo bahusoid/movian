@@ -385,7 +385,8 @@ db_open(const char *path, int flags)
   sqlite3 *db;
 
   rc = sqlite3_open_v2(path, &db,
-		       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+		       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
+		       SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_SHAREDCACHE,
 		       NULL);
 
   if(rc) {
@@ -394,8 +395,6 @@ db_open(const char *path, int flags)
     sqlite3_close(db);
     return NULL;
   }
-
-  sqlite3_busy_timeout(db, 30000);
 
   db_one_statement(db, "PRAGMA synchronous = normal", path);
   if(flags & DB_OPEN_CASE_SENSITIVE_LIKE)
