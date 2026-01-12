@@ -313,6 +313,13 @@ android_codec_flush(struct media_codec *mc, struct video_decoder *vd)
   if (avc->codec) {
     AMediaCodec_flush(avc->codec);
   }
+
+  if (avc->bsf) {
+    av_bsf_flush(avc->bsf);
+  }
+
+  for(int i=0; i<VIDEO_DECODER_REORDER_SIZE; i++)
+    vd->vd_reorder[i].mbm_pts = AV_NOPTS_VALUE;
 }
 
 static void
