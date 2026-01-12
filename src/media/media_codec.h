@@ -74,11 +74,23 @@ typedef struct media_codec_params {
   int level;
   int cheat_for_speed : 1;
   int broken_aud_placement : 1;
+
+  union{
+  //video parameters
+  struct{
   unsigned int sar_num;
   unsigned int sar_den;
 
   unsigned int frame_rate_num;
   unsigned int frame_rate_den;
+  };
+  // audio parameters (required for raw audio)
+  struct{
+  int channels;
+  int sample_rate;
+  uint64_t channel_layout;
+  };
+  };
 
 } media_codec_params_t;
 

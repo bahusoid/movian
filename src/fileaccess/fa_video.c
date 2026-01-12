@@ -255,6 +255,9 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
 
       } else if(fctx->streams[si]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
 
+	if(cwvec[si] == NULL)
+	  goto bad;
+
 	mb = media_buf_from_avpkt_unlocked(mp, &pkt);
 	mb->mb_data_type = MB_AUDIO;
 	mq = &mp->mp_audio;
@@ -832,6 +835,12 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
 
     mcp.extradata      = codecpar->extradata;
     mcp.extradata_size = codecpar->extradata_size;
+
+    if(codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+      mcp.channels = codecpar->ch_layout.nb_channels;
+      mcp.sample_rate = codecpar->sample_rate;
+      mcp.channel_layout = codecpar->ch_layout.u.mask;
+    }
 
     cwvec[i] = media_codec_create(codecpar->codec_id, 0, fw, NULL, &mcp, mp);
 

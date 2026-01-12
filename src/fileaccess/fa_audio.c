@@ -215,6 +215,10 @@ be_file_playaudio(const char *url, media_pipe_t *mp,
     media_codec_params_t mcp = {0};
     mcp.extradata = codecpar->extradata;
     mcp.extradata_size = codecpar->extradata_size;
+    mcp.channels = codecpar->ch_layout.nb_channels;
+    mcp.sample_rate = codecpar->sample_rate;
+    mcp.channel_layout = codecpar->ch_layout.u.mask;
+
     cw = media_codec_create(codecpar->codec_id, 0, fw, NULL, &mcp, mp);
     mp->mp_audio.mq_stream = i;
     break;

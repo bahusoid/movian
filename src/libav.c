@@ -444,6 +444,14 @@ media_codec_create_lavc(media_codec_t *cw, const media_codec_params_t *mcp,
 
     cw->decode = &libav_decode_video;
     cw->flush  = &libav_video_flush;
+  } else if(codec->type == AVMEDIA_TYPE_AUDIO) {
+    if(mcp) {
+      cw->ctx->sample_rate = mcp->sample_rate;
+      if(mcp->channel_layout)
+        av_channel_layout_from_mask(&cw->ctx->ch_layout, mcp->channel_layout);
+      else if(mcp->channels)
+        av_channel_layout_default(&cw->ctx->ch_layout, mcp->channels);
+    }
   }
 
   if(avcodec_open2(cw->ctx, codec, NULL) < 0) {

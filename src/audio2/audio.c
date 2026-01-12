@@ -382,7 +382,12 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
       frame->nb_samples = mb->mb_size / 4;
       break;
     default:
-      abort();
+      if(!ad->ad_channel_layout_fail) {
+	ad->ad_channel_layout_fail = 1;
+	TRACE(TRACE_ERROR, "Audio", "Unsupported channel count %d for raw audio",
+	      mb->mb_channels);
+      }
+      return 0;
     }
     frame->data[0] = mb->mb_data;
     frame->linesize[0] = 0;
