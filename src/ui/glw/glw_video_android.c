@@ -23,6 +23,7 @@
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
 #include <libswscale/swscale.h>
+#include <libavutil/pixfmt.h>
 
 #include "main.h"
 #include "glw_video_common.h"
@@ -38,6 +39,8 @@ typedef struct android_video {
 
   jobject av_VideoRenderer;
   jclass av_VideoRendererClass;
+  ANativeWindow *av_window;
+  jmethodID av_getSurfaceUnlocked;
 
   int64_t av_pts;
 
@@ -71,6 +74,7 @@ android_init(glw_video_t *gv)
 
   class = (*env)->GetObjectClass(env, av->av_VideoRenderer);
   av->av_VideoRendererClass = (*env)->NewGlobalRef(env, class);
+  av->av_getSurfaceUnlocked = (*env)->GetMethodID(env, class, "getSurfaceUnlocked", "()Landroid/view/Surface;");
   return 0;
 }
 
@@ -145,6 +149,9 @@ android_reset(glw_video_t *gv)
   (*env)->DeleteGlobalRef(env, av->av_VideoRenderer);
   (*env)->DeleteGlobalRef(env, av->av_VideoRendererClass);
 
+  if(av->av_window)
+    ANativeWindow_release(av->av_window);
+
   free(av);
 }
 
@@ -155,6 +162,10 @@ static int
 android_yuvp_deliver(const frame_info_t *fi, glw_video_t *gv,
                      glw_video_engine_t *gve)
 {
+  if(fi->fi_pix_fmt != AV_PIX_FMT_YUV420P &&
+     fi->fi_pix_fmt != AV_PIX_FMT_YUVJ420P)
+    return 1;
+
   JNIEnv *env;
   (*JVM)->GetEnv(JVM, (void **)&env, JNI_VERSION_1_6);
 
@@ -202,45 +213,43 @@ android_yuvp_deliver(const frame_info_t *fi, glw_video_t *gv,
 
   av->av_pts = pts;
 
-  jmethodID mid;
-  jclass class = av->av_VideoRendererClass;
+  if(av->av_window == NULL) {
+    jobject surface = (*env)->CallObjectMethod(env, av->av_VideoRenderer, av->av_getSurfaceUnlocked);
+    if(surface != NULL) {
+      av->av_window = ANativeWindow_fromSurface(env, surface);
+      (*env)->DeleteLocalRef(env, surface);
+    }
+  }
 
-  (*env)->PushLocalFrame(env, 64);
+  if(av->av_window != NULL) {
+    ANativeWindow *anw = av->av_window;
 
-  mid = (*env)->GetMethodID(env, class, "getSurface",
-                            "()Landroid/view/Surface;");
-
-  jobject surface = (*env)->CallObjectMethod(env, av->av_VideoRenderer, mid);
-
-  if(surface) {
-
-    ANativeWindow *anw = ANativeWindow_fromSurface(env, surface);
-
-    ANativeWindow_setBuffersGeometry(anw, fi->fi_width, fi->fi_height,
-                                     WINDOW_FORMAT_RGBA_8888);
+    if (ANativeWindow_getWidth(anw) != fi->fi_width ||
+        ANativeWindow_getHeight(anw) != fi->fi_height ||
+        ANativeWindow_getFormat(anw) != WINDOW_FORMAT_RGBA_8888) {
+        ANativeWindow_setBuffersGeometry(anw, fi->fi_width, fi->fi_height,
+                                         WINDOW_FORMAT_RGBA_8888);
+    }
 
     ANativeWindow_Buffer buffer;
 
     hts_mutex_unlock(&gv->gv_surface_mutex);
-    ANativeWindow_lock(anw, &buffer, NULL);
-    hts_mutex_lock(&gv->gv_surface_mutex);
+    if(ANativeWindow_lock(anw, &buffer, NULL) == 0) {
+      hts_mutex_lock(&gv->gv_surface_mutex);
+      I420ToARGB(fi->fi_data[0], fi->fi_pitch[0],
+                 fi->fi_data[2], fi->fi_pitch[2],
+                 fi->fi_data[1], fi->fi_pitch[1],
+                 buffer.bits, buffer.stride * 4,
+                 fi->fi_width, fi->fi_height);
 
-    I420ToARGB(fi->fi_data[0], fi->fi_pitch[0],
-               fi->fi_data[2], fi->fi_pitch[2],
-               fi->fi_data[1], fi->fi_pitch[1],
-               buffer.bits, buffer.stride * 4,
-               fi->fi_width, fi->fi_height);
-
-    ANativeWindow_unlockAndPost(anw);
-
-    ANativeWindow_release(anw);
-    (*env)->DeleteLocalRef(env, surface);
+      ANativeWindow_unlockAndPost(anw);
+    } else {
+      hts_mutex_lock(&gv->gv_surface_mutex);
+      ANativeWindow_release(av->av_window);
+      av->av_window = NULL;
+    }
   }
 
-  mid = (*env)->GetMethodID(env, class, "releaseSurface", "()V");
-  (*env)->CallVoidMethod(env, av->av_VideoRenderer, mid);
-
-  (*env)->PopLocalFrame(env, NULL);
   return 0;
 }
 
