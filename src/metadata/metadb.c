@@ -2229,13 +2229,6 @@ metadb_metadata_get(void *db, const char *url, time_t mtime)
 }
 
 
-struct scan_aux {
-  struct scan_aux *next;
-  fa_dir_entry_t *fde;
-  int64_t item_id;
-  int index_status;
-};
-
 /**
  *
  */
@@ -2277,8 +2270,6 @@ metadb_metadata_scandir(void *db, const char *url, time_t *mtime)
 
   get_cache_t gc = {0};
 
-  struct scan_aux *aux, *head = NULL, **tail = &head;
-
   while((rc = db_step(sel)) == SQLITE_ROW) {
     if(sqlite3_column_type(sel, 2) != SQLITE_INTEGER)
       continue;
@@ -2298,27 +2289,15 @@ metadb_metadata_scandir(void *db, const char *url, time_t *mtime)
 	fde->fde_stat.fs_mtime = sqlite3_column_int(sel, 3);
       }
 
-      aux = calloc(1, sizeof(struct scan_aux));
-      aux->fde = fde;
-      aux->item_id = item_id;
-      aux->index_status = sqlite3_column_int(sel, 4);
-      *tail = aux;
-      tail = &aux->next;
+      fde->fde_md = metadata_get(db, item_id, contenttype, &gc);
+      if(fde->fde_md != NULL) {
+	fde->fde_md->md_cache_status = METADATA_CACHE_STATUS_FULL;
+        fde->fde_md->md_index_status = sqlite3_column_int(sel, 4);
+      }
     }
   }
 
   sqlite3_finalize(sel);
-
-  for(aux = head; aux != NULL; ) {
-    struct scan_aux *n = aux->next;
-    aux->fde->fde_md = metadata_get(db, aux->item_id, aux->fde->fde_type, &gc);
-    if(aux->fde->fde_md != NULL) {
-      aux->fde->fde_md->md_cache_status = METADATA_CACHE_STATUS_FULL;
-      aux->fde->fde_md->md_index_status = aux->index_status;
-    }
-    free(aux);
-    aux = n;
-  }
 
   get_cache_release(&gc);
 
