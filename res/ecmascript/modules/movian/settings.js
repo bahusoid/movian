@@ -2,6 +2,105 @@ var prop  = require('movian/prop');
 var store = require('movian/store');
 
 
+function addPluginMetadataInfo(nodes, pluginId) {
+
+  function propValue(v) {
+    if(v === undefined || v === null)
+      return null;
+
+    try {
+      v = v.valueOf();
+    } catch(e) {
+      return null;
+    }
+
+    if(v === undefined || v === null)
+      return null;
+
+    v = String(v).trim();
+    return v.length ? v : null;
+  }
+
+  function addInfo(info, label, value) {
+    if(value)
+      info.push([label, value]);
+  }
+
+  var pluginNode = null;
+
+  if(prop.global.plugins && prop.global.plugins.nodes) {
+    pluginNode = prop.global.plugins.nodes[pluginId];
+
+    if(!pluginNode || !pluginNode.metadata) {
+      var prefix = pluginId + '@';
+      var all = prop.global.plugins.nodes;
+      for(var key in all) {
+        if(key.indexOf(prefix) === 0) {
+          pluginNode = all[key];
+          break;
+        }
+      }
+    }
+  }
+
+  var metadataMap = {};
+
+  if(pluginNode && pluginNode.metadata) {
+    for(var key in pluginNode.metadata) {
+      metadataMap[key] = propValue(pluginNode.metadata[key]);
+    }
+  }
+
+  // Fallback for plugins where global plugin model is not keyed by plain Plugin.id
+  if(typeof Plugin !== 'undefined' && Plugin.manifest) {
+    try {
+      var manifest = JSON.parse(Plugin.manifest);
+      for(var mk in manifest) {
+        if(metadataMap[mk])
+          continue;
+
+        if(typeof manifest[mk] === 'object' || typeof manifest[mk] === 'function')
+          continue;
+
+        var mv = propValue(manifest[mk]);
+        if(mv)
+          metadataMap[mk] = mv;
+      }
+    } catch(e) {
+    }
+  }
+
+  var info = [];
+  for(var metaKey in metadataMap) {
+    addInfo(info, metaKey, metadataMap[metaKey]);
+  }
+
+  if(!info.length)
+    return {
+      version: null
+    };
+
+  var group = prop.createRoot();
+  group.type = 'settings';
+  group.subtype = 'metadata';
+  group.metadata.title = 'Plugin metadata';
+  group.metadata.shortdesc = info.length + ' entries';
+  group.url = prop.makeUrl(group);
+  prop.setParent(group, nodes);
+
+  for(var i = 0; i < info.length; i++) {
+    var node = prop.createRoot();
+    node.type = 'info';
+    node.description = info[i][0] + ': ' + info[i][1];
+    prop.setParent(node, group.nodes);
+  }
+
+  return {
+    version: metadataMap.version || null
+  };
+}
+
+
 function createSetting(group, type, id, title) {
 
   var model = group.nodes[id];
@@ -286,6 +385,14 @@ exports.globalSettings = function(id, title, icon, desc) {
   metadata.title = title;
   metadata.icon = icon;
   metadata.shortdesc = desc;
+
+  var pluginMeta = addPluginMetadataInfo(this.nodes, id) || {};
+
+  if(pluginMeta.version) {
+    var versionTag = 'v' + pluginMeta.version;
+    if(String(metadata.title).indexOf(versionTag) === -1)
+      metadata.title = metadata.title + ' (' + versionTag + ')';
+  }
 
   var mystore = store.createFromPath(basepath + '/' + id);
 
