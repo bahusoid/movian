@@ -110,6 +110,9 @@ metadata_destroy(metadata_t *md)
   rstr_vec_free(md->md_thumbs);
 
   free(md->md_redirect);
+  free(md->md_plugin_zippath);
+  if(md->md_plugin_info != NULL)
+    htsmsg_release(md->md_plugin_info);
 
   metadata_stream_t *ms;
 

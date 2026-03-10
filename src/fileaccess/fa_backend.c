@@ -243,7 +243,8 @@ file_open_file(prop_t *page, const char *url, fa_stat_t *fs,
 #if ENABLE_PLUGINS
   case CONTENT_PLUGIN:
     prop_set_int(loading, 0);
-    plugin_open_file(page, url);
+    plugin_open_file(page, url, md->md_plugin_info, md->md_plugin_zippath);
+    md->md_plugin_info = NULL;  // ownership transferred to plugin_open_file
     break;
 #endif
 

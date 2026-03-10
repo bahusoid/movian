@@ -21,6 +21,8 @@
 #include "misc/queue.h"
 #include "misc/rstr.h"
 
+struct htsmsg;
+
 #define METADATA_TRACE(x, ...) do {                                     \
     if(gconf.enable_metadata_debug)                                     \
       TRACE(TRACE_DEBUG, "METADATA", x, ##__VA_ARGS__);                 \
@@ -232,6 +234,10 @@ typedef struct metadata {
 #define METADATA_CACHE_STATUS_UNPARENTED 2
 
   metadata_index_status_t md_index_status;
+
+  // Pre-parsed plugin metadata from probe (avoids re-downloading on open)
+  struct htsmsg *md_plugin_info;
+  char *md_plugin_zippath;
 
 } metadata_t;
 

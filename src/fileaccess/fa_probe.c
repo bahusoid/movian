@@ -283,7 +283,9 @@ fa_probe_header(metadata_t *md, const char *url, fa_handle_t *fh,
 	   htsmsg_get_str(json, "type") != NULL) {
 	  md->md_title = rstr_alloc(title);
 	  md->md_contenttype = CONTENT_PLUGIN;
-	  htsmsg_release(json);
+	  // Store pre-parsed JSON and zippath so plugin_open_file can avoid re-downloading
+	  md->md_plugin_info = json;
+	  md->md_plugin_zippath = fmt("zip://%s", url);
 	  return 1;
 	}
 	htsmsg_release(json);

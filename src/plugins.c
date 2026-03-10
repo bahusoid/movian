@@ -1785,34 +1785,40 @@ BE_REGISTER(plugin);
  *
  */
 void
-plugin_open_file(prop_t *page, const char *url)
+plugin_open_file(prop_t *page, const char *url,
+                 htsmsg_t *pm, const char *zippath_hint)
 {
   char errbuf[200];
   buf_t *b;
+  int pm_local = 0;
 
+  scoped_char *zippath = zippath_hint != NULL
+    ? strdup(zippath_hint) : plugin_resolve_zip_path(url);
 
-  scoped_char *zippath = plugin_resolve_zip_path(url);
   if(zippath == NULL) {
     nav_open_errorf(page, _("Unable to load plugin.json: %s"),
                     "Not a valid plugin archive");
     return;
   }
 
-  scoped_char *plugin_json = fmt("%s/plugin.json", zippath);
-  b = fa_load(plugin_json,
-              FA_LOAD_ERRBUF(errbuf, sizeof(errbuf)),
-              NULL);
-  if(b == NULL) {
-    nav_open_errorf(page, _("Unable to load plugin.json: %s"), errbuf);
-    return;
-  }
-
-  htsmsg_t *pm = htsmsg_json_deserialize(buf_cstr(b));
-  buf_release(b);
-
   if(pm == NULL) {
-    nav_open_errorf(page, _("Unable to load plugin.json: Malformed JSON"));
-    return;
+    scoped_char *plugin_json = fmt("%s/plugin.json", zippath);
+    b = fa_load(plugin_json,
+                FA_LOAD_ERRBUF(errbuf, sizeof(errbuf)),
+                NULL);
+    if(b == NULL) {
+      nav_open_errorf(page, _("Unable to load plugin.json: %s"), errbuf);
+      return;
+    }
+
+    pm = htsmsg_json_deserialize(buf_cstr(b));
+    buf_release(b);
+    pm_local = 1;
+
+    if(pm == NULL) {
+      nav_open_errorf(page, _("Unable to load plugin.json: Malformed JSON"));
+      return;
+    }
   }
 
   const char *id = htsmsg_get_str(pm, "id");
@@ -1832,7 +1838,8 @@ plugin_open_file(prop_t *page, const char *url)
     nav_open_errorf(page, _("Field \"id\" not found in plugin.json"));
   }
 
-  htsmsg_release(pm);
+  if(pm_local)
+    htsmsg_release(pm);
 }
 
 /**

@@ -22,6 +22,7 @@
 #include "config.h"
 #if ENABLE_PLUGINS
 struct prop;
+struct htsmsg;
 
 void plugins_init(char **devplugins);
 
@@ -29,7 +30,8 @@ void plugins_load_all(void);
 
 int plugins_upgrade_check(void);
 
-void plugin_open_file(struct prop *page, const char *url);
+void plugin_open_file(struct prop *page, const char *url,
+                      struct htsmsg *plugin_info, const char *zippath_hint);
 
 void plugins_reload_dev_plugin(void);
 
