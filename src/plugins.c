@@ -1818,13 +1818,20 @@ plugin_open_file(prop_t *page, const char *url)
   const char *id = htsmsg_get_str(pm, "id");
 
   if(id != NULL) {
+    prop_t *model = prop_create_r(page, "model");
+    prop_set(model, "type", PROP_SET_STRING, "plugin");
+
     hts_mutex_lock(&plugin_mutex);
     plugin_t *pl = plugin_make(id, "local");
-    plugin_install(pl, url);
+    plugin_fill_prop(pm, model, zippath, pl);
+    prop_set(model, "package", PROP_SET_STRING, url);
+    update_state(pl);
     hts_mutex_unlock(&plugin_mutex);
+    prop_ref_dec(model);
   } else {
     nav_open_errorf(page, _("Field \"id\" not found in plugin.json"));
   }
+
   htsmsg_release(pm);
 }
 

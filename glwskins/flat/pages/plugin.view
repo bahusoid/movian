@@ -1,0 +1,4 @@
+widget(loader, {
+  .args <- $self.model;
+  source: "skin://ctxmenu/plugin_details.view";
+});
