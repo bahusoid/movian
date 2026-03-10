@@ -80,7 +80,8 @@ widget(container_z, {
             !$args.status.installedVersion);
     INFOROW(_("Available version:"), $args.status.availableVersion,
             !$args.status.availableVersion);
-
+    INFOROW(_("Version:"), $args.metadata.version,
+          !$args.package || !$args.metadata.version);
 
     widget(container_x, {
       padding: [7.5em, 0.1em, 0, 0];
