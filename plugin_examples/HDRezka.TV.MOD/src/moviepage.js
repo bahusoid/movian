@@ -252,6 +252,8 @@ function moviePage(page, data) {
 //        icon: '',
         icon: LOGOARROW,
       });
+
+      display_franchise(page, pageHtml.dom);
     });
   }
 };
@@ -486,6 +488,124 @@ function display_translate(page) {
     });
   }
 };
+
+function normalizeFranchiseUrl(url) {
+  if (!url) return null;
+
+  if (/^https?:\/\//.test(url)) {
+    var match = url.match(/^https?:\/\/[^/]+(\/.*)$/);
+    return match ? BASE_URL + match[1] : url;
+  }
+
+  return url.charAt(0) === '/' ? BASE_URL + url : BASE_URL + '/' + url;
+};
+
+function getFranchiseItems(pageDom) {
+  var franchise = [];
+  var blocks = pageDom.getElementByClassName('b-post__partcontent');
+
+  if (!blocks || !blocks.length) {
+    return franchise;
+  }
+
+  var items = blocks[0].getElementByClassName('b-post__partcontent_item');
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var itemClass = item.attributes.getNamedItem('class');
+    var isCurrent = itemClass && /current/.test(itemClass.value);
+
+    var title = '';
+    var links = item.getElementByTagName('a');
+    if (links && links.length) {
+      title = links[0].textContent;
+    }
+
+    if (!title && item.getElementByClassName('title').length) {
+      title = item.getElementByClassName('title')[0].textContent;
+    }
+
+    title = title ? title.trim() : '';
+
+    var itemUrl = null;
+    if (item.attributes.getNamedItem('data-url')) {
+      itemUrl = item.attributes.getNamedItem('data-url').value;
+    }
+    if (!itemUrl && links && links.length && links[0].attributes.getNamedItem('href')) {
+      itemUrl = links[0].attributes.getNamedItem('href').value;
+    }
+
+    itemUrl = normalizeFranchiseUrl(itemUrl);
+    if ((!itemUrl && !isCurrent) || !title) {
+      continue;
+    }
+
+    var year = '';
+    if (item.getElementByClassName('year').length) {
+      year = item.getElementByClassName('year')[0].textContent.trim();
+    }
+
+    var rating = '';
+    if (item.getElementByClassName('rating').length) {
+      rating = item.getElementByClassName('rating')[0].textContent.trim();
+      if (!rating || !(rating[0] >= '0' && rating[0] <= '9')) {
+        rating = '';
+      }
+    }
+
+    franchise.push({
+      title: title,
+      url: itemUrl,
+      year: year,
+      rating: rating,
+      isCurrent: isCurrent,
+    });
+  }
+
+  return franchise;
+};
+
+function display_franchise(page, pageDom) {
+  var franchiseItems = getFranchiseItems(pageDom);
+
+  if (!franchiseItems.length) {
+    return;
+  }
+
+  page.appendPassiveItem('separator', null, {title: 'Все части'});
+  franchiseItems.forEach(function (item) {
+    var itemTitle = item.title;
+    if (item.year) {
+      itemTitle += ' (' + item.year + ')';
+    }
+    if (item.rating) {
+      itemTitle += ' (' + item.rating + ')';
+    }
+
+    if (item.isCurrent) {
+      var currentTitle = itemTitle;
+      if (typeof RichText !== 'undefined' && typeof coloredStr === 'function') {
+        currentTitle = new RichText(coloredStr(itemTitle, green));
+      }
+
+      page.appendPassiveItem('directory', '', {
+        title: currentTitle,
+        icon: data.icon,
+      });
+      return;
+    }
+
+    var franchiseData = {
+      url: item.url,
+      title: item.title,
+    };
+
+    page.appendItem(PREFIX + ':moviepage:' + JSON.stringify(franchiseData), 'directory', {
+      title: itemTitle,
+      icon: LOGOARROW,
+    });
+  });
+};
+
 function display_season(page) {
   console.log('display_season called with data:', {
     id: data.id,
