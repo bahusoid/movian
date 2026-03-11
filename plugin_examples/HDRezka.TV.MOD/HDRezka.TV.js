@@ -305,15 +305,14 @@ settings.createMultiOpt('list', 'Отображение списка', [
   ['video', 'Списком с данными', true],
   ],
   function (v) {
-  printDebug('Установите список на ' + v);
   service.list = v;
 });
-settings.createBool('Show_META', 'Показ информации из базы данных thetvdb', true, function (v) {service.tvdb = v});
+settings.createBool('Show_META', 'Показ информации из базы данных thetvdb', false, function (v) {service.tvdb = v});
 //settings.createBool('cp', 'Непрерывное воспроизведение', false, function (v) {service.cp = v});
 settings.createBool('movianDRM', 'Проигрыватель Movian DRM', true, function (v) {service.movianDRM = v});
 
 // Quality settings
-settings.createBool('askQuality', 'Спрашивать качество каждый раз', true, function (v) {store.askQuality = v});
+settings.createBool('askQuality', 'Спрашивать качество каждый раз', false, function (v) {store.askQuality = v});
 settings.createMultiOpt('qualityResolution', 'Предпочтительное разрешение', [
   ['4k', '4K'],
   ['1080p', '1080p', true],
