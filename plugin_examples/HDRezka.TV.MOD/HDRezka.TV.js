@@ -188,8 +188,8 @@ function printDebug(message) {
 //  if (store.debug) console.error(message);
   if (service.debug) console.error(message);
 };
-settings.createString('domain0', 'Пользовательский домен (базовый URL без завершающего "/" в конце)', 'https://rezka.ag', function (v) { 
-  service.domain0 = v;
+settings.createString('domain0', 'Пользовательский домен', 'https://rezka.ag', function (v) {
+  service.domain0 = v.replace(/\/+$/, "");
   if(service.isCustomDomain) {
     service.domain = v;
     BASE_URL = v;
@@ -200,15 +200,9 @@ settings.createString('domain0', 'Пользовательский домен (�
 settings.createMultiOpt('domain', 'Выбор домена', [
   ['custom', 'Пользовательский домен', true],
   ['https://rezkify.com', 'https://rezkify.com'],
-  ['http://rezkify.com', 'http://rezkify.com'],
-  ['http://kinopub.me', 'http://kinopub.me'],
-  ['http://cokinopoisk.com', 'http://cokinopoisk.com'],
-  ['http://metaivi.com', 'http://metaivi.com'],
-  ['http://aghdrezka.com', 'http://aghdrezka.com'],
-  ['http://hdrezkayou.com', 'http://hdrezkayou.com'],
-  ['http://rezka.ag', 'http://rezka.ag'],
   ['https://rezka.ag', 'https://rezka.ag'],
   ['https://rezka-ua.org', 'https://rezka-ua.org'],
+  ['https://rezka-ua.pub', 'https://rezka-ua.pub'],
 ],
   function (v) {
     service.isCustomDomain = v === 'custom';
@@ -223,21 +217,10 @@ settings.createMultiOpt('domain', 'Выбор домена', [
 
 var BASE_URL = service.domain;
 var referer = service.domain;
-//settings.createString('baseTURL', 'Базовый трекер URL (без завершающего "/")', BASE_TURL, function (v) {service.baseTURL = v});
-//settings.createString('tracker', 'Базовый трекер URL (без завершающего "/")', 'https://hdrezka.download', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер', 'https://hdrezka.download', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер', 'hdrezka', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без "http://" и завершающего "/" в конце)', 'hdrezka.download', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'https://hdrezka.download', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без "https://" и завершающего "/" в конце)', 'hdrezka.download', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'http://hdrezka.download', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'http://rezka.tv', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.tv', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'http://rezka.land', function (v) {service.tracker = v});
-//settings.createString('tracker', 'Трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.cc', function (v) {service.tracker = v});
-settings.createString('tracker0', 'Пользовательский трекер (базовый URL без завершающего "/" в конце)', 'https://rezka.tv', 
+settings.createString('tracker0', 'Пользовательский трекер', 'https://rezka.tv',
   function (v) {
-    service.tracker0 = v
+    v= v.replace(/\/+$/, "");
+    service.tracker0 = v;
     if (service.isCustomTracker) {
       service.tracker = v;
       BASE_TURL = v;
@@ -246,9 +229,7 @@ settings.createString('tracker0', 'Пользовательский трекер
   });
 settings.createMultiOpt('tracker', 'Выбор трекера', [
   ['custom', 'Пользовательский трекер', true],
-  ['http://rezka.tv', 'http://rezka.tv'],
   ['https://rezka.tv', 'https://rezka.tv'],
-  ['http://rezka.land', 'http://rezka.land'],
   ['https://rezka.cc', 'https://rezka.cc'],
   ],
   function (v) {
@@ -328,9 +309,7 @@ settings.createMultiOpt('list', 'Отображение списка', [
   service.list = v;
 });
 settings.createBool('Show_META', 'Показ информации из базы данных thetvdb', true, function (v) {service.tvdb = v});
-//settings.createBool('Show_META', 'Показ информации из базы данных thetvdb', false, function (v) {service.tvdb = v});
-//settings.createBool('cp', 'Непрерывное воспроизведение', true, function (v) {service.cp = v});
-settings.createBool('cp', 'Непрерывное воспроизведение', false, function (v) {service.cp = v});
+//settings.createBool('cp', 'Непрерывное воспроизведение', false, function (v) {service.cp = v});
 settings.createBool('movianDRM', 'Проигрыватель Movian DRM', true, function (v) {service.movianDRM = v});
 
 // Quality settings
@@ -347,7 +326,6 @@ settings.createMultiOpt('qualityFormat', 'Предпочтительный фо�
   ['drm', 'DRM'],
 ], function (v) {store.qualityFormat = v});
 
-//settings.createBool('movianDRM', 'Проигрыватель Movian DRM', false, function (v) {service.movianDRM = v});
 /*
 //function setPageHeader(page, title) {
 function setPageHeader(page, title, icon) {
@@ -394,7 +372,7 @@ new page.Route(PREFIX + ':start', function (page) {
 //  var response = showtime.httpReq(BASE_URL, {
   var response = http.request(BASE_URL, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7',
+      'User-Agent': UA,
     },
     noFail: true,
   });
@@ -427,7 +405,7 @@ new page.Route(PREFIX + ':start', function (page) {
           'accept-language': 'ru,en-US;q=0.9,en;q=0.8,zh;q=0.7',
           'cache-control': 'no-cache',
           'content-type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7',
+          'User-Agent': UA,
           'upgrade-insecure-requests': '1',
         },
       });
