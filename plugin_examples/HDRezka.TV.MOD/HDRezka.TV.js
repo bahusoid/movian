@@ -325,6 +325,10 @@ settings.createMultiOpt('qualityFormat', 'Предпочтительный фо�
   ['mp4', 'MP4'],
   ['drm', 'DRM'],
 ], function (v) {store.qualityFormat = v});
+settings.createMultiOpt('preferredCdn', 'Предпочтительный CDN', [
+  ['voidboost.cc', 'voidboost.cc', true],
+  ['ukrtelcdn.net', 'ukrtelcdn.net'],
+], function (v) {store.preferredCdn = v});
 
 /*
 //function setPageHeader(page, title) {
@@ -1152,21 +1156,24 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   var askQuality = store.askQuality !== undefined ? store.askQuality : false;
   var qualityResolution = store.qualityResolution || '1080p';
   var qualityFormat = store.qualityFormat || 'hls';
+  var preferredCdn = store.preferredCdn || 'voidboost.cc';
   
   try {
     if (!askQuality) {
       // Auto-select best quality based on settings
-      var selectedItem = selectBestQuality(list, qualityResolution, qualityFormat);
+      var selectedItem = selectBestQuality(list, qualityResolution, qualityFormat, preferredCdn);
       if (selectedItem) {
-        if (selectedItem.hls && qualityFormat === 'hls') {
+        var selHls = getUrlForCdn(selectedItem.hlsUrls, preferredCdn);
+        var selMp4 = getUrlForCdn(selectedItem.mp4Urls, preferredCdn);
+        if (selHls && qualityFormat === 'hls') {
           videoparams.sources = [{
-            url: 'hls:' + selectedItem.hls,
+            url: 'hls:' + selHls,
           }];
           video = 'videoparams:' + JSON.stringify(videoparams);
           page.redirect(video);
           return;
-        } else if (selectedItem.mp4 && qualityFormat === 'mp4') {
-          page.redirect('mp4:' + selectedItem.mp4);
+        } else if (selMp4 && qualityFormat === 'mp4') {
+          page.redirect('mp4:' + selMp4);
           return;
         }
         // For DRM, fall back to showing options
@@ -1176,24 +1183,27 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
     // Find preferred quality for highlighting when asking
     var preferredItem = null;
     if (askQuality) {
-      preferredItem = selectBestQuality(list, qualityResolution, qualityFormat);
+      preferredItem = selectBestQuality(list, qualityResolution, qualityFormat, preferredCdn);
     }
     
     // Show all quality options (old behavior or fallback)
     for (i = 0; i < list.length; i++) {
-      if (list[i].hls) {
+      var hlsCdns = Object.keys(list[i].hlsUrls || {});
+      // Resolve effective CDN: preferred if available, else first
+      var hlsEffectiveCdn = list[i].hlsUrls[preferredCdn] ? preferredCdn : (hlsCdns[0] || null);
+      for (var ci = 0; ci < hlsCdns.length; ci++) {
+        var cdn = hlsCdns[ci];
+        var hlsUrl = list[i].hlsUrls[cdn];
         videoparams.sources = [{
-          url: 'hls:' + list[i].hls,
+          url: 'hls:' + hlsUrl,
         }];
         video = 'videoparams:' + JSON.stringify(videoparams);
         
-        // Check if this is the preferred quality when asking
-        var isPreferred = askQuality && preferredItem && 
-                         ((preferredItem.hls && list[i].hls === preferredItem.hls) || 
-                          (preferredItem.mp4 && list[i].mp4 === preferredItem.mp4));
+        // Check if this is the preferred quality+CDN when asking
+        var isPreferred = askQuality && preferredItem && preferredItem.q === list[i].q && cdn === hlsEffectiveCdn;
         
         page.appendItem(video, 'item', {
-          title: 'HLS ' + list[i].q + ' | ' + data.title,
+          title: 'HLS ' + list[i].q + ' (' + cdn + ') | ' + data.title,
           description: '',
           icon: data.icon,
           autofocus: isPreferred
@@ -1211,44 +1221,39 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
     try {
       if (!askQuality && qualityFormat === 'drm') {
         // Auto-select best DRM quality
-        var selectedItem = selectBestQuality(list, qualityResolution, 'hls'); // DRM uses HLS streams
-        if (selectedItem && selectedItem.hls) {
-          var uri = 'movianDRM:hls:' + selectedItem.hls + '::HLS ' + selectedItem.q + ' | ' + data.title;
-          page.redirect(uri);
-          return;
+        var selectedItem = selectBestQuality(list, qualityResolution, 'hls', preferredCdn); // DRM uses HLS streams
+        if (selectedItem) {
+          var selHlsDrm = getUrlForCdn(selectedItem.hlsUrls, preferredCdn);
+          if (selHlsDrm) {
+            var uri = 'movianDRM:hls:' + selHlsDrm + '::HLS ' + selectedItem.q + ' | ' + data.title;
+            page.redirect(uri);
+            return;
+          }
         }
       }
       
       // Show all DRM quality options
       for (i = 0; i < list.length; i++) {
-        if (list[i].hls) {
-          var uri = 'movianDRM:hls:' + list[i].hls;
+        var drmHlsCdns = Object.keys(list[i].hlsUrls || {});
+        // Resolve effective CDN: preferred if available, else first
+        var drmEffectiveCdn = list[i].hlsUrls[preferredCdn] ? preferredCdn : (drmHlsCdns[0] || null);
+        for (var dci = 0; dci < drmHlsCdns.length; dci++) {
+          var drmCdn = drmHlsCdns[dci];
+          var drmHlsUrl = list[i].hlsUrls[drmCdn];
+          var uri = 'movianDRM:hls:' + drmHlsUrl;
           uri += '::';
-//          uri += 'DRM';
-//          uri += ' ';
           uri += 'HLS';
           uri += ' ';
           uri += list[i].q;
+          uri += ' (' + drmCdn + ')';
           uri += ' | ';
           uri += data.title;
-//          uri += '::close';
-//          uri = uri.replace(/<.*?>/g, '').trim();
-//          uri = uri.replace(/http:\/\//g, 'https://').trim();
-//          uri = uri.replace(/https:\/\//g, 'http://').trim();
-//          uri = uri.replace(/(     |    |   |  )/g, ' ').trim();
-//          uri = showtime.entityDecode(uri);
-//          uri = unescape(uri);
-//          uri = decodeURIComponent(uri);
-//          uri = escape(uri);
-//          uri = encodeURIComponent(uri);
           
-          // Check if this is the preferred DRM quality when asking
-          var isPreferred = askQuality && preferredItem && 
-                           ((preferredItem.hls && list[i].hls === preferredItem.hls) || 
-                            (preferredItem.mp4 && list[i].mp4 === preferredItem.mp4));
+          // Check if this is the preferred DRM quality+CDN when asking
+          var isPreferred = askQuality && preferredItem && preferredItem.q === list[i].q && drmCdn === drmEffectiveCdn;
           
           page.appendItem(uri, 'item', {
-            title: 'DRM ' + list[i].q + ' | ' + data.title,
+            title: 'DRM ' + list[i].q + ' (' + drmCdn + ') | ' + data.title,
             description: '',
             icon: data.icon,
             autofocus: isPreferred,
@@ -1266,28 +1271,34 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   try {
     if (!askQuality && qualityFormat === 'mp4') {
       // Auto-select best MP4 quality
-      var selectedItem = selectBestQuality(list, qualityResolution, 'mp4');
-      if (selectedItem && selectedItem.mp4) {
-        page.redirect(selectedItem.mp4);
-        return;
+      var selectedItem = selectBestQuality(list, qualityResolution, 'mp4', preferredCdn);
+      if (selectedItem) {
+        var selMp4Auto = getUrlForCdn(selectedItem.mp4Urls, preferredCdn);
+        if (selMp4Auto) {
+          page.redirect(selMp4Auto);
+          return;
+        }
       }
     }
     
     // Show all MP4 quality options
     for (i = 0; i < list.length; i++) {
-      if (list[i].mp4) {
+      var mp4Cdns = Object.keys(list[i].mp4Urls || {});
+      // Resolve effective CDN: preferred if available, else first
+      var mp4EffectiveCdn = list[i].mp4Urls[preferredCdn] ? preferredCdn : (mp4Cdns[0] || null);
+      for (var mci = 0; mci < mp4Cdns.length; mci++) {
+        var mp4Cdn = mp4Cdns[mci];
+        var mp4Url = list[i].mp4Urls[mp4Cdn];
         videoparams.sources = [{
-          url: list[i].mp4,
+          url: mp4Url,
         }];
         video = 'videoparams:' + JSON.stringify(videoparams);
         
-        // Check if this is the preferred MP4 quality when asking
-        var isPreferred = askQuality && preferredItem && 
-                         ((preferredItem.hls && list[i].hls === preferredItem.hls) || 
-                          (preferredItem.mp4 && list[i].mp4 === preferredItem.mp4));
+        // Check if this is the preferred MP4 quality+CDN when asking
+        var isPreferred = askQuality && preferredItem && preferredItem.q === list[i].q && mp4Cdn === mp4EffectiveCdn;
         
         page.appendItem(video, 'item', {
-          title: 'MP4 ' + list[i].q + ' | ' + data.title,
+          title: 'MP4 ' + list[i].q + ' (' + mp4Cdn + ') | ' + data.title,
           description: '',
           icon: data.icon,
           autofocus: isPreferred,
@@ -1597,25 +1608,48 @@ function clearUrl(url) {
 };
 function scrapeSourceLinks(streams) {
   var returnValue = [];
-//  var regex = /(\[.\d+p.*?\])(.*?) or (.*?\d+.mp4)/gm;
-  var regex = /(\[.\d+p.*?\])(.*?) or (.*?\.*?\.mp4)/gm;
-  while ((m = regex.exec(streams)) !== null) {
-//    console.log(m);
-    if (m.index === regex.lastIndex) {
-      regex.lastIndex++;
+  var blocks = streams.split(/,(?=\[)/);
+  for (var b = 0; b < blocks.length; b++) {
+    var block = blocks[b];
+    var qMatch = block.match(/^(\[.*?\])([\s\S]*)$/);
+    if (!qMatch) continue;
+    var q = qMatch[1];
+    var urlList = qMatch[2].split(' or ');
+    var hlsUrls = {};
+    var mp4Urls = {};
+    for (var u = 0; u < urlList.length; u++) {
+      var url = urlList[u].trim();
+      if (!url) continue;
+      var isHls = url.indexOf(':hls:') !== -1;
+      var hostMatch = url.match(/https?:\/\/([^\/]+)/);
+      var cdn = hostMatch ? hostMatch[1] : 'unknown';
+      if (cdn.indexOf('voidboost') !== -1) cdn = 'voidboost.cc';
+      else if (cdn.indexOf('ukrtelcdn') !== -1) cdn = 'ukrtelcdn.net';
+      if (isHls) {
+        hlsUrls[cdn] = url;
+      } else {
+        mp4Urls[cdn] = url;
+      }
     }
     returnValue.push({
-      q: m[1],
-      hls: m[2],
-      mp4: m[3],
+      q: q,
+      hlsUrls: hlsUrls,
+      mp4Urls: mp4Urls,
     });
   }
   return returnValue;
 };
-function selectBestQuality(list, maxResolution, preferredFormat) {
+function getUrlForCdn(urlMap, preferredCdn) {
+  if (!urlMap) return null;
+  if (urlMap[preferredCdn]) return urlMap[preferredCdn];
+  var keys = Object.keys(urlMap);
+  return keys.length > 0 ? urlMap[keys[0]] : null;
+};
+function selectBestQuality(list, maxResolution, preferredFormat, preferredCdn) {
   // Define resolution hierarchy (higher index = better quality)
   var resolutionOrder = ['sd', '720p', '1080p', '4k'];
   var maxResIndex = resolutionOrder.indexOf(maxResolution);
+  preferredCdn = preferredCdn || 'voidboost.cc';
   
   var bestMatch = null;
   var bestResIndex = -1;
@@ -1628,8 +1662,8 @@ function selectBestQuality(list, maxResolution, preferredFormat) {
     // Check if this quality is within our limit and better than current best
     if (resIndex <= maxResIndex && resIndex > bestResIndex) {
       // Check if preferred format is available
-      if ((preferredFormat === 'hls' && item.hls) || 
-          (preferredFormat === 'mp4' && item.mp4)) {
+      if ((preferredFormat === 'hls' && getUrlForCdn(item.hlsUrls, preferredCdn)) || 
+          (preferredFormat === 'mp4' && getUrlForCdn(item.mp4Urls, preferredCdn))) {
         bestMatch = item;
         bestResIndex = resIndex;
       }
