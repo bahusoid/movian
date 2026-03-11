@@ -1578,8 +1578,9 @@ function clearUrl(url) {
     return '';
   }
   service.keys = cache.keys;
-  log.d(service.keys);
-  url = fd2(url);
+  const decoded_url = fd2(url);
+  if (!decoded_url)
+    return url;
   function fd2(x) {
     if (!x) {
       console.log('fd2 called with undefined/null x');
