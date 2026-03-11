@@ -438,9 +438,9 @@ exports.season = function (page, data) {
 
     if (service.tvdb) {
       item.bindVideoMetadata({
-        title: (data.title_en ? data.title_en : data.title) +
-        ' S' + (data.season_id < 10 ? '0' + data.season_id : data.season_id) +
-        'E' + (episodeElement.episode_id < 10 ? '0' + episodeElement.episode_id : episodeElement.episode_id),
+        title: (data.title_en ? data.title_en : data.title),
+        season: data.season_id,
+        episode: data.episode_id
       });
     }
   });
