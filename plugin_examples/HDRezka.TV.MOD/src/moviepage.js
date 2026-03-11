@@ -68,6 +68,8 @@ function moviePage(page, data) {
       getYear();
       getIcon();
       getkpID();
+      var desc = pageHtml.dom.getElementByClassName('b-post__description_text')[0].textContent;
+      data.description = desc;
       yoData = {
         title: data.title,
         icon: data.icon,
@@ -123,6 +125,7 @@ function moviePage(page, data) {
             translator_id: data.translator_id,
             title: data.title,
             year: data.year,
+            description: data.description,
 //            icon: pageHtml.dom.getElementByTagName('img')[0].attributes.getNamedItem('src').value,
 //            icon: data.icon,
           };
@@ -166,21 +169,23 @@ function moviePage(page, data) {
         log.d({playData157: playData});
 //         item =
 //        page.appendItem(PREFIX + ':play:' + uri, 'video', {
-        page.appendItem(PREFIX + ':play:' + uri, service.list, {
+        var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
           title: data.title,
 //          icon: pageHtml.dom.getElementByTagName('img')[0].attributes.getNamedItem('src').value,
           icon: data.icon,
 //          url: 'url',
-/*~
-          description: pageHtml.dom.getElementByClassName('b-post__description_text')[0].textContent,
+          description: data.description,
+/*
           rating: pageHtml.dom.getElementByClassName('bold')[0].textContent*10,
 */
-        })
-//  .bindVideoMetadata({filename: data.filename})
-            .bindVideoMetadata({
-              title: data.title_en ? data.title_en : data.title,
-              year: +data.year,
-            });
+        });
+        if(service.tvdb) {
+          item
+              .bindVideoMetadata({
+                title: data.title_en ? data.title_en : data.title,
+                year: +data.year,
+              });
+        }
       }
       getPerson(page, data);
 /*~
@@ -476,7 +481,7 @@ function display_translate(page) {
       page.appendItem(uri, service.list, {
         title: tr.translator_title,
         icon: data.icon,
-        description: tr,
+        description: data.description,
       });
     });
   }
@@ -530,7 +535,7 @@ function display_season(page) {
       var item = page.appendItem(uri, service.list, {
         title: seasonElement.title,
         icon: data.icon,
-//        description: seasonElement.ep.length + ' эпизодов',
+        description: data.description,
         autofocus: (seasonIndex === focusSeasonIndex),
         focusable: (seasonIndex === focusSeasonIndex) ? 1.5 : 1.0,
       });
