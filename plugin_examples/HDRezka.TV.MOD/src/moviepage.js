@@ -363,7 +363,7 @@ function getSeriesDom(id, translator_id, season_index) {
   var resp = http.request(BASE_URL + '/ajax/get_cdn_series/?t=' + new Date().getTime(), {
     debug: 1,
     headers: {
-      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.87 Safari/537.36',
+      'user-agent': UA,
       'accept': '*/*',
       'accept-language': 'ru,en-US;q=0.9,en;q=0.8,zh;q=0.7',
       'cache-control': 'no-cache',
