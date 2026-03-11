@@ -14,7 +14,7 @@ exports.contentPage = function (page, mdata) {
   
   // Extract series/film ID from URL if not already present
   if (data.url && !data.id) {
-    var idMatch = data.url.match(/\/(?:series|films)\/[^/]+\/(\d+)-/);
+    var idMatch = data.url.match(/\/(\d+)-[^\/]+\.html$/);
     if (idMatch) {
       data.id = idMatch[1];
       console.log('Extracted ID from URL:', data.id);
