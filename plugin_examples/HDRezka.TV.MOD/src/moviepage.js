@@ -227,11 +227,6 @@ function moviePage(page, data) {
 //        icon: '',
         icon: LOGOARROW,
       });
-      page.appendItem(PREFIX + ':trackersearch:' + data.title, 'directory', {
-        title: 'Найти на трекере',
-//        icon: '',
-        icon: LOGOARROW,
-      });
       page.appendItem('search:' + data.title + ' ' + data.year, 'directory', {
 //        title: 'найти ' + data.title + ' ' + data.year + ' в других плагинах',
         title: 'Найти в мовиан',

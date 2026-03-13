@@ -50,7 +50,6 @@ var VER = plugin.version;
 //var LOGO = Plugin.path + 'HDRezka.TV.png';
 var LOGO = Plugin.path + plugin.icon;
 var LOGOBACKGROUND = Plugin.path + 'src/back.jpg';
-var LOGOTRACKER = Plugin.path + 'src/tracker.png';
 var LOGOARROW = Plugin.path + 'src/arrow.png';
 var LOGOFOLDER = Plugin.path + 'src/folder.png';
 var LOGOICON = Plugin.path + 'src/icon.png';
@@ -217,33 +216,7 @@ settings.createMultiOpt('domain', 'Выбор домена', [
 
 var BASE_URL = service.domain;
 var referer = service.domain;
-settings.createString('tracker0', 'Пользовательский трекер', 'https://rezka.tv',
-  function (v) {
-    v= v.replace(/\/+$/, "");
-    service.tracker0 = v;
-    if (service.isCustomTracker) {
-      service.tracker = v;
-      BASE_TURL = v;
-    }
 
-  });
-settings.createMultiOpt('tracker', 'Выбор трекера', [
-  ['custom', 'Пользовательский трекер', true],
-  ['https://rezka.tv', 'https://rezka.tv'],
-  ['https://rezka.cc', 'https://rezka.cc'],
-  ],
-  function (v) {
-    service.isCustomTracker = v === 'custom';
-    if (service.isCustomTracker) {
-      service.tracker = service.tracker0;
-  } else {
-    service.tracker = v;
-  }
-  BASE_TURL = service.tracker;
-});
-
-//var BASE_TURL = 'https://hdrezka.download';
-var BASE_TURL = service.tracker;
 //var inspect_url = BASE_URL.replace(/^http.*(\w{4,15}.\w{2,3})$/gm,'.*\.$1') + '.*';
 //print(inspect_url)
 //io.httpInspectorCreate(inspect_url, function (ctrl) {
@@ -525,9 +498,6 @@ new page.Route(PREFIX + ':start', function (page) {
 //  page.appendItem(PREFIX + ':list:/collections/1876-multfilmy-netflix/:Мультфильмы Netflix', 'directory', {title: 'Мультфильмы Netflix', icon: LOGOARROW});
   page.appendItem(PREFIX + ':list:/collections/1876-multfilmy-netflix/:Мультфильмы Netflix', 'directory', {title: 'Мультфильмы Netflix', icon: LOGOFOLDER});
 */
-//  page.appendItem(PREFIX + ':tracker:Трекер', 'directory', {title: 'Трекер'});
-//  page.appendItem(PREFIX + ':tracker:Трекер', 'directory', {title: 'Трекер', icon: LOGOARROW});
-  page.appendItem(PREFIX + ':tracker:Трекер', 'directory', {title: 'Трекер', icon: LOGOFOLDER});
   page.loading = false;
 });
 //plugin.addURI(PREFIX + ':search:(.*)', function (page, query) {
@@ -777,177 +747,7 @@ new page.Route(PREFIX + ':updates:(.*):(.*)', function (page, href, title) {
   });
   page.loading = false;
 });
-//plugin.addURI(PREFIX + ':tracker:(.*)', function (page, title) {
-new page.Route(PREFIX + ':tracker:(.*)', function (page, title) {
-  page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
-//  setPageHeader(page, title);
-//  setPageHeader(page, TTL);
-  page.metadata.logo = LOGOTRACKER;
-  page.metadata.icon = LOGOTRACKER;
-  page.metadata.title = title;
-//  page.metadata.title = TTL;
-  page.type = 'directory';
-  page.model.contents = 'list';
-//  page.model.contents = 'grid';
-//  page.appendItem(PREFIX + ':trackersearch:', 'search', {title: 'Поиск на ' + PREFIX + '.Tracker'});
-  page.appendItem(PREFIX + ':trackersearch:', 'search', {title: 'Поиск на ' + BASE_TURL});
-//  page.appendItem(PREFIX + ':trackersearch:', 'search', {title: 'Поиск на ' + PREFIX + '.Tracker' + ' (' + BASE_TURL + ')'});
-  var pages = [
-    {url: '', name: 'Новинки'},
-    {url: '/films', name: 'Фильмы'},
-    {url: '/series', name: 'Сериалы'},
-    {url: '/cartoons', name: 'Мультфильмы'},                
-    {url: '/animation', name: 'Аниме'},
-  ],
-  i, length = pages.length;
-//  page.appendItem('', 'separator', {title: 'Разделы'});
-  for (i = 0; i < length; i++) {
-    page.appendItem(PREFIX + ':trackerlist:' + pages[i].url + ':' + pages[i].name, 'directory', {
-//    page.appendItem(PREFIX + ':trackerlist:' + pages[i].url + ':' + pages[i].name, service.list, {
-      title: pages[i].name,
-//      icon: LOGOARROW,
-      icon: LOGOFOLDER,
-    });
-  }
-  page.loading = false;
-});
-//plugin.addURI(PREFIX + ':trackersearch:(.*)', function (page, query) {
-new page.Route(PREFIX + ':trackersearch:(.*)', function (page, query) {
-  page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
-//  setPageHeader(page, 'Результаты поиска для: ' + query + ' (' + page.entries + ')');
-//  setPageHeader(page, 'Результаты поиска для: ' + query);
-//  setPageHeader(page, 'Результат поиска по запросу : ' + query + ' (' + page.entries + ')');
-//  setPageHeader(page, 'Результат поиска по запросу : ' + query);
-//  page.metadata.logo = LOGOTRACKER;
-//  page.metadata.icon = LOGOTRACKER;
-//  page.metadata.title = 'Результаты поиска для: ' + query + ' (' + page.entries + ')';
-  page.metadata.title = 'Результаты поиска для: ' + query;
-//  page.metadata.title = 'Результат поиска по запросу : ' + query + ' (' + page.entries + ')';
-//  page.metadata.title = 'Результат поиска по запросу : ' + query;
-  page.type = 'directory';
-  page.model.contents = 'list';
-//  page.model.contents = 'grid';
-  var url = '/ajax_search?q=';
-  var fromPage = 1, tryToSearch = true;
-//  page.entries = 0;
-//  var doc = showtime.httpReq(BASE_TURL + url).toString();
-//  var doc = http.request(BASE_TURL + url).toString();
-  function loader() {
-//    var doc = showtime.httpReq(BASE_TURL + url + encodeURIComponent(query), {
-    var doc = http.request(BASE_TURL + url + encodeURIComponent(query), {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7',
-      }
-    }).toString();
-//    doc = doc.match(/<div class="cardlist[\s\S]*?<div/);
-    console.log(url + encodeURIComponent(query));
-    if (doc) {
-      var re = /<body>/g;
-      var match = re.exec(doc);
-      while (match) {
-//        page.appendItem('', 'separator', {title: new showtime.RichText(url)});
-//        page.appendItem('', 'separator', {title: new RichText(url)});
-        trackersearch(page, match[1]);
-        match = re.exec(doc);
-      }
-    };
-    {trackersearch(page, doc)};
-    fromPage++;
-    return false;
-  };
-  loader();
-  page.asyncPaginator = loader;
-  page.loading = false;
-});
-//plugin.addSearcher(PREFIX + '.Tracker', LOGOTRACKER, function (page, query) {
-//new page.Searcher(PREFIX + '.Tracker', LOGOTRACKER, function (page, query) {
-//plugin.addSearcher(PREFIX + '.Tracker' + ' - результат', LOGOTRACKER, function (page, query) {
-//new page.Searcher(PREFIX + '.Tracker' + ' - результат', LOGOTRACKER, function (page, query) {
-//plugin.addSearcher(TTL + '.Tracker' + ': результат', LOGOTRACKER, function (page, query) {
-new page.Searcher(TTL + '.Tracker' + ': результат', LOGOTRACKER, function (page, query) {
-  page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
-//  setPageHeader(page, TTL + '.Tracker');
-//  setPageHeader(page, TTL + '.Tracker' + ': результат');
-//  page.metadata.logo = LOGOTRACKER;
-//  page.metadata.icon = LOGOTRACKER;
-//  page.metadata.title = TTL + '.Tracker';
-  page.metadata.title = TTL + '.Tracker' + ': результат';
-  page.type = 'directory';
-  page.model.contents = 'list';
-//  page.model.contents = 'grid';
-  page.entries = 0;
-  var fromPage = 0, tryToSearch = true;
-  function loader() {
-    if (!tryToSearch) return false;
-    page.loading = true;
-    var url = '/ajax_search?q=';
-//    var doc = showtime.httpReq(BASE_TURL + '/search/' + fromPage + '/0/000/0/' + query.replace(/\s/g, '\+')).toString();
-//    var doc = http.request(BASE_TURL + '/search/' + fromPage + '/0/000/0/' + query.replace(/\s/g, '\+')).toString();
-//    var doc = showtime.httpReq(BASE_TURL + '/search/' + fromPage + '/0/000/0/' + query.replace(/\s/g, + '\')).toString();
-//    var doc = http.request(BASE_TURL + '/search/' + fromPage + '/0/000/0/' + query.replace(/\s/g, + '\')).toString();
-//    var doc = showtime.httpReq(BASE_TURL + url + encodeURIComponent(query), {
-    var doc = http.request(BASE_TURL + url + encodeURIComponent(query), {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7',
-      }
-    }).toString();
-    page.loading = false;
-    trackersearch(page, doc);
-    if (!doc.match(/downgif/)) return tryToSearch = false;
-    fromPage++;
-    return true;
-  };
-  loader();
-  page.asyncPaginator = loader;
-});
-//plugin.addURI(PREFIX + ':trackerlist:(.*):(.*)', function (page, url, name) {
-new page.Route(PREFIX + ':trackerlist:(.*):(.*)', function (page, url, name) {
-  page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
-//  setPageHeader(page, name);
-//  setPageHeader(page, TTL);
-  page.metadata.logo = LOGOTRACKER;
-  page.metadata.icon = LOGOTRACKER;
-  page.metadata.title = name;
-//  page.metadata.title = TTL;
-  page.type = 'directory';
-  page.model.contents = 'list';
-//  page.model.contents = 'grid';
-  var fromPage = 1, tryToSearch = true;
-  page.entries = 0;
-//  var doc = showtime.httpReq(BASE_TURL + url).toString();
-//  var doc = http.request(BASE_TURL + url).toString();
-  function loader() {
-//    var doc = showtime.httpReq(BASE_TURL + url + '/page/' + fromPage, {
-    var doc = http.request(BASE_TURL + url + '/page/' + fromPage, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7',
-      }
-    }).toString();
-//    doc = doc.match(/<div class="cardlist[\s\S]*?<div/);
-    console.log(url);
-    if (doc) {
-      var re = /<h1 class="h1__">([\s\S]*?)</g;
-      var match = re.exec(doc);
-      while (match) {
-//        page.appendItem('', 'separator', {title: new showtime.RichText(url)});
-//        page.appendItem('', 'separator', {title: new RichText(url)});
-        torrentpage(page, match[1]);
-        match = re.exec(doc);
-      }
-    };
-    {torrentpage(page, doc)};
-    fromPage++;
-    return true;
-  }
-  loader();
-  page.paginator = loader;
-  page.loading = false;
-}); 
-//plugin.addURI(PREFIX + ':moviepage:(.*)', function (page, data) {
+
 new page.Route(PREFIX + ':moviepage:(.*)', function (page, data) {
   page.loading = true;
   page.metadata.background = LOGOBACKGROUND;
@@ -1325,57 +1125,6 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
 //~}
   page.loading = false;
 });
-//plugin.addURI(PREFIX + ':torrentpage:(.*):(.*)', function (page, url, title) {
-new page.Route(PREFIX + ':torrentpage:(.*):(.*)', function (page, url, title) {
-  page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
-//  setPageHeader(page, unescape(title));
-//  setPageHeader(page, TTL);
-//  page.metadata.logo = LOGOTRACKER;
-//  page.metadata.icon = LOGOTRACKER;
-  page.metadata.title = unescape(title);
-//  page.metadata.title = TTL;
-  page.type = 'directory';
-  page.model.contents = 'list';
-//  page.model.contents = 'grid';
-  page.appendItem('', 'separator', {title: 'Торренты:'});
-//  var doc = showtime.httpReq(url).toString();
-//  var doc = http.request(url).toString();
-//  var doc = showtime.httpReq(url, {
-  var doc = http.request(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_2) AppleWebKit/604.4.7 (KHTML, like Gecko) Version/11.0.2 Safari/604.4.7',
-    }
-  }).toString();
-  torrentscraper(page, doc);
-  page.appendItem('', 'separator', {title: 'Поиск:'});
-  page.appendItem(PREFIX + ':search:' + unescape(title), 'directory', {
-    title: 'Найти в плагине',
-//    icon: '',
-    icon: LOGOARROW,
-  });
-  page.appendItem(PREFIX + ':trackersearch:' + unescape(title), 'directory', {
-    title: 'Найти на трекере',
-//    icon: '',
-    icon: LOGOARROW,
-  });
-  page.appendItem('search:' + unescape(title), 'directory', {
-    title: 'Найти в мовиан',
-//    icon: '',
-    icon: LOGOARROW,
-  });
-  page.appendItem('youtube:search:' + unescape(title), 'directory', {
-    title: 'Найти на YouTube',
-//    icon: '',
-    icon: LOGOARROW,
-  });
-  page.appendItem('yo:search:' + unescape(title), 'directory', {
-    title: 'Найти из Yohoho',
-//    icon: '',
-    icon: LOGOARROW,
-  });
-  page.loading = false;
-});
 function getKeys(response) {
   console.error('#######################################################################');
   console.error('#######################################################################');
@@ -1688,120 +1437,6 @@ function scrapeSourceSub(streams) {
   }
   return returnValue;
 };
-function torrentpage(page, doc) {
-  var doc = doc.match(/ <h1 class="h1[\s\S]*?<\/html>/g);
-  var re = /<a href="([\s\S]*?)" class="card-item">[\s\S]*?card-item-type[\s\S]*?">([\s\S]*?)<\/span><img src="([\s\S]*?)" alt="([\s\S]*?)"[\s\S]*?title="([\s\S]*?)"[\s\S]*?ci-param">([\s\S]*?)</g;
-  var match = re.exec(doc);
-  while (match) {
-    var url = BASE_TURL + match[1];
-//    page.appendItem(PREFIX + ':torrentpage:' + url + ':' + escape(match[4]) + ' (' + escape(match[6]) + ')', 'video', {
-    page.appendItem(PREFIX + ':torrentpage:' + url + ':' + escape(match[4]) + ' (' + escape(match[6]) + ')', service.list, {
-//      title: new showtime.RichText(match[4] + coloredStr(' (', orange) + coloredStr(match[6], orange) + coloredStr(')', orange)),
-      title: new RichText(match[4] + coloredStr(' (', orange) + coloredStr(match[6], orange) + coloredStr(')', orange)),
-//      title: match[4] + ' (' + match[6] + ')', 
-      icon: match[3],
-    });
-//    console.log(match[1]);
-    page.entries++;
-    match = re.exec(doc);
-  }
-};
-function torrentscraper(page, doc) {
-  var head = /<div class="si-cover">[\s\S]*?<img src="([\s\S]*?)"[\s\S]*?<h1 class="si-title">([\s\S]*?)<[\s\S]*?<div class="si-param">([\s\S]*?)<[\s\S]*?<div class="si-date">([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?/g;
-//  var head = /<div class="si-cover">[\s\S]*?<img src="([\s\S]*?)"[\s\S]*?<h1 class="si-title">([\s\S]*?)<[\s\S]*?<div class="si-param">([\s\S]*?)<[\s\S]*?<div class="si-date">([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?<li>([\s\S]*?)<[\s\S]*?dwn-list-none_collapser">([\s\S]*?)<[\s\S]*?<div class=\"dwn-links-list\">\n([\s\S]*?)\n/g;
-  var docref = doc.match(/<div class=\"dwn-links-list\">\n([\s\S]*?)\n/g).toString();
-  var fyefyedfy = /a href="([\s\S]*?)" class="dwn-links-item">([\s\S]*?)</g;
-//  console.log('torref[1]=' + torref[1]);
-  var desc = /<div class="si-story">([\s\S]*?)<[\s\S]*?/;
-//  var match2 = docref.exec(doc);
-  var match1 = head.exec(doc);
-//  console.log('docref: ' + docref[1]);
-  var torref = fyefyedfy.exec(docref);
-  console.log('docref: ' + torref[1]);
-  while (torref) {
-    var url = BASE_TURL + torref[1];
-//    var film = match1[9];
-//    if (/Скачать через торрент/.test(film)) {
-//      film = 'Фильм';
-//    }
-//    page.appendItem('torrent:browse:' + url, 'video', {
-    page.appendItem('torrent:browse:' + url, service.list, {
-//      title: new showtime.RichText(coloredStr(match1[2], orange) + ' (' + torref[2] + ')'),  
-      title: new RichText(coloredStr(match1[2], orange) + ' (' + torref[2] + ')'),  
-//      description: new showtime.RichText(match1[8]),
-      description: new RichText(match1[8]),
-      icon: match1[1],
-    });
-    page.entries++;
-    torref = fyefyedfy.exec(docref);
-  }
-  var actors = /жиссер[\s\S]*?(?:ктеры|ролях)+[<>:\/b ]{2,7}[\s\S]*?\B[А-я][\s\S]*?<br \/>/;
-  var actors1 = /([А-я \-\.]+(?: (([А-Я][а-я\-\.]*){1,3}(?:\(I*\))?)))/g;
-  var match2 = actors.exec(doc);
-  var error = false;
-  try {var match3 = actors1.exec(match2)}
-  catch (e) {var error = true}
-  var iconurl = /actor\/+([\d]+).jpg/;
-  var kinopoisk = 'https://www.kinopoisk.ru/index.php?kp_query=';
-  if (!error)
-  try {{
-    while (match3) {
-      var url = '/search/0/0/010/2/' + encodeURI(match3[1]);
-//      var kinopage = showtime.httpReq(kinopoisk + (match3[1]));
-      var kinopage = http.request(kinopoisk + (match3[1]));
-//      page.appendItem(PREFIX + ':trackerlist:' + url + ':' + encodeURI(match3[1]), 'video', {
-      page.appendItem(PREFIX + ':trackerlist:' + url + ':' + encodeURI(match3[1]), service.list, {
-//        title: new showtime.RichText(coloredStr(match3[1], orange)),
-        title: new RichText(coloredStr(match3[1], orange)),
-        icon: 'https://st.kp.yandex.net/images/sm_actor/' + iconurl.exec(kinopage)[1] + '.jpg',
-      });
-      page.entries++;
-      match3 = actors1.exec(match2);
-    }
-  }}
-  catch (e) {popup.notify(e,5)}
-  var re = /<tr class="[gai|tum]+"><td>([\s\S]*?)<\/td>[\s\S]*?href="([\s\S]*?)"[\s\S]*?<a href[\s\S]*?<a href="([\s\S]*?)">([\s\S]*?)<\/a>([\s\S]*?)<\/tr>/g;
-  var match = re.exec(doc);
-  while (match) {
-    if (match[5].match(/alt="C"/)) {
-      var end = match[5].match(/[\s\S]*?<td align="right">[\s\S]*?<td align="right">([\s\S]*?)<[\s\S]*?nbsp;([\s\S]*?)<\/span>[\s\S]*?nbsp;([\s\S]*?)<\/span>/);
-      var comments = match[5].match(/[\s\S]*?<td align="right">([\s\S]*?)</)[1];
-    }
-    else
-    var end = match[5].match(/[\s\S]*?<td align="right">([\s\S]*?)<[\s\S]*?nbsp;([\s\S]*?)<\/span>[\s\S]*?nbsp;([\s\S]*?)<\/span>/);
-    var url = BASE_TURL + match[3];
-    if (match[3].match(/http:\/\//))
-    url = match[3].match(/(\/download.*)/)[1];
-    page.appendItem(PREFIX + ':torrentpage:' + url, 'directory', {
-//    page.appendItem(PREFIX + ':torrentpage:' + url, service.list, {
-//      title: new showtime.RichText(coloredStr(match[1], orange) + ' ' + match[4] + coloredStr(end[2], green) + '/' + coloredStr(end[3], red) + colorStr(end[1], blue) + (comments ? colorStr(comments, orange) : '')),
-      title: new RichText(coloredStr(match[1], orange) + ' ' + match[4] + coloredStr(end[2], green) + '/' + coloredStr(end[3], red) + colorStr(end[1], blue) + (comments ? colorStr(comments, orange) : '')),
-    });
-    page.entries++;
-    match = re.exec(doc);
-  }
-};
-function trackersearch(page, doc) {
-//  var doc = doc.match(/<body>[\s\S]*?<\/html>/g);
-//  var re = /<a href="([\s\S]*?)" class="card-item">[\s\S]*?card-item-type[\s\S]*?">([\s\S]*?)<\/span><img src="([\s\S]*?)" alt="([\s\S]*?)"[\s\S]*?title="([\s\S]*?)"[\s\S]*?ci-param">([\s\S]*?)</g;
-  var re = /<a href="([\s\S]*?)" class="sr-item">[\s\S]*?<div class="sr-cover"><img src="([\s\S]*?)" alt="([\s\S]*?)"[\s\S]*?<div class="sr-param">([\s\S]*?)</g;
-  var match = re.exec(doc);
-  while (match) { 
-    var url = BASE_TURL + match[1];
-//    сonsole.log(url);
-//    page.appendItem(PREFIX + ':torrentpage:' + url + ':' + escape(match[3]) + ' (' + escape(match[4]) + ')', 'video', {
-    page.appendItem(PREFIX + ':torrentpage:' + url + ':' + escape(match[3]) + ' (' + escape(match[4]) + ')', service.list, {
-//      title: new showtime.RichText(match[3] + coloredStr(' (', orange) + coloredStr(match[4], orange) + coloredStr(')', orange)),
-      title: new RichText(match[3] + coloredStr(' (', orange) + coloredStr(match[4], orange) + coloredStr(')', orange)),
-//      title: match[4] + ' (' + match[6] + ')', 
-      icon: match[2],
-    });
-//    console.log(match[1]);
-    page.entries++;
-    match = re.exec(doc);
-  }
-};
-//function oprint(o) {print(showtime.JSONEncode(o, null, 4))};
 function oprint(o) {print(JSON.stringify(o, null, 4))};
 function d(sBase64) {return String(Duktape.dec('base64', sBase64))};
 var exist = function (x) {
