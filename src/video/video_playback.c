@@ -1017,9 +1017,9 @@ video_player_idle(void *aux)
 void
 video_playback_create(media_pipe_t *mp)
 {
-  hts_thread_create_detached("video player",  video_player_idle,
-                             mp_retain(mp),
-			     THREAD_PRIO_DEMUXER);
+  hts_thread_create_joinable("video player", &mp->mp_vp_thread,
+                             video_player_idle,
+                             mp_retain(mp), THREAD_PRIO_DEMUXER);
 }
 
 
@@ -1032,6 +1032,7 @@ video_playback_destroy(media_pipe_t *mp)
   event_t *e = event_create_type(EVENT_EXIT);
   mp_enqueue_event(mp, e);
   event_release(e);
+  hts_thread_join(&mp->mp_vp_thread);
 }
 
 

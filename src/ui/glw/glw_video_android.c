@@ -301,8 +301,9 @@ surface_set_codec(media_codec_t *mc, glw_video_t *gv,
   jobject surface = NULL;
 
   while(1) {
+    if(gv->w.glw_flags & GLW_DESTROYING)
+      return 0;
     surface = (*env)->CallObjectMethod(env, av->av_VideoRenderer, mid);
-
     if(surface)
       break;
     usleep(10000);

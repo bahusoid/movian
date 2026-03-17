@@ -227,6 +227,8 @@ typedef struct media_pipe {
   video_frame_deliver_t *mp_video_frame_deliver;
   set_video_codec_t *mp_set_video_codec;
 
+  hts_thread_t mp_vp_thread;  // Video player thread, joinable
+
   hts_mutex_t mp_overlay_mutex; // Also protects mp_spu_queue
   struct video_overlay_queue mp_overlay_queue;
   struct dvdspu_queue mp_spu_queue;
