@@ -379,8 +379,16 @@ Java_com_lonelycoder_mediaplayer_Core_coreInit(JNIEnv *env, jobject obj, jstring
   android_fs_settings_path = strdup(settings);
   android_fs_cache_path    = strdup(cachedir);
   android_fs_sdcard_path   = strdup(sdcard);
+#if CONFIG_SQLITE_VFS
   gconf.persistent_path    = strdup("persistent://");
   gconf.cache_path         = strdup("cache://");
+#else
+  /* Without the movian sqlite VFS, SQLite uses the standard unix VFS which
+   * cannot handle "persistent://" URLs.  Use the native paths directly so
+   * every POSIX-level operation (including sqlite3_open) works correctly. */
+  gconf.persistent_path    = strdup(settings);
+  gconf.cache_path         = strdup(cachedir);
+#endif
 
   uint8_t digest[16];
 
