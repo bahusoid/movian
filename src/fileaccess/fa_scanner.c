@@ -326,8 +326,10 @@ analyzer(scanner_t *s, int probe)
       fde->fde_probestatus = FDE_PROBED_FILENAME;
     }
 
-    if(fde->fde_probestatus == FDE_PROBED_FILENAME && probe)
+    if(fde->fde_probestatus == FDE_PROBED_FILENAME && probe) {
       deep_probe(fde, s);
+      prop_courier_poll(s->s_pc);
+    }
   }
 }
 
