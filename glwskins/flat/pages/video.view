@@ -71,9 +71,9 @@ $view.showSeekBar =
   $ui.pointerVisible ||
   $clone.showPlaydeck ||
   changed($self.media.seektime, 5, true) ||
-  changed($self.url, 5, true) ||
-  $self.media.playstatus == "pause";
-
+  changed($self.url, 5, true)
+//|| $self.media.playstatus == "pause";
+  ;
 widget(container_z, {
   clickable: true;
   onEvent(activate, {
