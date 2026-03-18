@@ -90,7 +90,8 @@ widget(popup, {
         $ui.moveMode = !$ui.moveMode;
         $clone.itemMenu = void;
       }, "skin://icons/ic_open_with_48px.svg",
-           false);
+      //!$ui.keyboard maybe only for keyboard mode?
+           $ui.touch);
 
       cloner($core.itemhooks, container_z, {
         hidden: !($self.itemtype == $args.type || $self.itemtype == void);
