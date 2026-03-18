@@ -104,8 +104,10 @@ widget(container_z, {
       onEvent(left,  deliverEvent($self.media.eventSink, "SeekReverse"));
       onEvent(right, deliverEvent($self.media.eventSink, "SeekForward"));
 
-      onEvent(up,    deliverEvent($self.media.eventSink, "VolumeUp"));
-      onEvent(down,  deliverEvent($self.media.eventSink, "VolumeDown"));
+      onEvent(up,    {$clone.showPlaydeck = 1;    focus("pause-btn");});
+      onEvent(down,  {$clone.showPlaydeck = 1;    focus("pause-btn");});
+      onEvent(activate,deliverEvent($self.media.eventSink, "PlayPause"));
+
       // Support remote actions that open the subtitle/audio OSD views
       onEvent(SubtitleTrackView, {
         $clone.osdpage = select($clone.osdpage == 100, 0, 100);
