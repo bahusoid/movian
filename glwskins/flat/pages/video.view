@@ -217,13 +217,6 @@ widget(container_z, {
                             focus("osd_subs");
                           }, true, "subtitles-btn");
 
-          widget(label, {
-             caption: $core.media.current.qualityLabel;
-             hidden: isVoid($core.media.current.qualityLabel);
-             color: 0.7;
-             size: 0.8em;
-          });
-
           PLAYDECK_BUTTON("skin://icons/ic_skip_previous_48px.svg",
                           _("Previous"),
                           deliverEvent($self.control, PreviousTrack),
@@ -260,6 +253,13 @@ widget(container_z, {
                             focus("osd_main");
                           }, true, "menu-btn",
                           $clone.osdpage > 0 && $clone.osdpage < 100);
+
+          widget(label, {
+             caption: $core.media.current.qualityLabel;
+             hidden: isVoid($core.media.current.qualityLabel);
+             color: 0.7;
+             size: 0.8em;
+          });
 
         });
       });
