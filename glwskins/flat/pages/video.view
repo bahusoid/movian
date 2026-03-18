@@ -244,7 +244,7 @@ widget(container_z, {
                           {
                             $clone.osdpage = select($clone.osdpage == 101, 0, 101);
                             focus("osd_audio");
-                          }, true, "audio-btn");
+                          }, !isVoid($self.media.audio.current), "audio-btn");
 
           PLAYDECK_BUTTON("skin://icons/ic_menu_48px.svg",
                           _("Settings"),
