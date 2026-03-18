@@ -38,7 +38,6 @@
 #include <stdio.h>
 
 LIST_HEAD(prop_proxy_imagereq_list, prop_proxy_imagereq);
-LIST_HEAD(prop_proxy_connection_list, prop_proxy_connection);
 
 /**
  *
@@ -66,7 +65,6 @@ struct prop_proxy_connection {
   atomic_t ppc_refcount;
   asyncio_fd_t *ppc_connection;
   char *ppc_url;
-  char ppc_hostname[256];
 
   prop_t *ppc_error;
   prop_t *ppc_closepage;
@@ -84,34 +82,11 @@ struct prop_proxy_connection {
   websocket_state_t ppc_ws;
 
   int ppc_port;
-  int ppc_connecting;
 
   hts_cond_t ppc_image_cond;
   struct prop_proxy_imagereq_list ppc_image_requests;
   atomic_t ppc_image_req_id_generator;
-
-  LIST_ENTRY(prop_proxy_connection) ppc_link;
 };
-
-static struct prop_proxy_connection_list prop_proxy_connections;
-
-static void ppc_connect(void *aux, int status, const void *data);
-
-/**
- *
- */
-static void
-ppc_trigger_connect(prop_proxy_connection_t *ppc)
-{
-  if(ppc->ppc_connection != NULL || ppc->ppc_connecting)
-    return;
-
-  if(ppc->ppc_hostname[0] == 0)
-    return;
-
-  ppc->ppc_connecting = 1;
-  asyncio_dns_lookup_host(ppc->ppc_hostname, ppc_connect, prop_proxy_retain(ppc));
-}
 
 
 /**
@@ -142,10 +117,8 @@ prop_proxy_retain(prop_proxy_connection_t *ppc)
 static void
 ppc_disconnect(prop_proxy_connection_t *ppc, int reconnect)
 {
-  if(ppc->ppc_connection != NULL) {
-    asyncio_del_fd(ppc->ppc_connection);
-    ppc->ppc_connection = NULL;
-  }
+  asyncio_del_fd(ppc->ppc_connection);
+  ppc->ppc_connection = NULL;
   ppc->ppc_websocket_open = 0;
 
   hts_mutex_lock(&prop_mutex);
@@ -157,9 +130,6 @@ ppc_disconnect(prop_proxy_connection_t *ppc, int reconnect)
 
   hts_cond_broadcast(&ppc->ppc_image_cond);
   hts_mutex_unlock(&prop_mutex);
-
-  if(reconnect)
-    ppc_trigger_connect(ppc);
 }
 
 
@@ -171,8 +141,6 @@ prop_proxy_release(prop_proxy_connection_t *ppc)
 {
   if(atomic_dec(&ppc->ppc_refcount))
     return;
-
-  LIST_REMOVE(ppc, ppc_link);
 
   if(ppc->ppc_connection != NULL)
     asyncio_run_task(ppc_del_fd, ppc->ppc_connection);
@@ -838,7 +806,6 @@ ppc_connect(void *aux, int status, const void *data)
 {
   prop_proxy_connection_t *ppc = aux;
   assert(ppc->ppc_connection == NULL);
-  ppc->ppc_connecting = 0;
 
   net_addr_t na;
   switch(status) {
@@ -905,48 +872,14 @@ prop_proxy_connect(const char *url, prop_t *status)
   if(ppc->ppc_port == -1)
     ppc->ppc_port = 42000;
 
-  snprintf(ppc->ppc_hostname, sizeof(ppc->ppc_hostname), "%s", hostname);
-
   ppc->ppc_url = strdup(url);
   ppc->ppc_error = prop_create_r(status, "error");
   ppc->ppc_closepage = prop_create_r(status, "close");
-
-  LIST_INSERT_HEAD(&prop_proxy_connections, ppc, ppc_link);
-  ppc_trigger_connect(ppc);
+  asyncio_dns_lookup_host(hostname, ppc_connect, prop_proxy_retain(ppc));
 
   ppc->ppc_root = prop_proxy_make(ppc, 0 /* global */, NULL, NULL, NULL);
   return ppc;
 }
-
-
-/**
- *
- */
-static void
-prop_proxy_network_change(const struct netif *ni)
-{
-  if(ni == NULL)
-    return;
-
-  prop_proxy_connection_t *ppc;
-  LIST_FOREACH(ppc, &prop_proxy_connections, ppc_link) {
-    if(ppc->ppc_connection == NULL)
-      ppc_trigger_connect(ppc);
-  }
-}
-
-
-/**
- *
- */
-static void
-prop_proxy_init(void)
-{
-  asyncio_register_for_network_changes(prop_proxy_network_change);
-}
-
-
-INITME(INIT_GROUP_ASYNCIO, prop_proxy_init, NULL, 0);
 
 
 /**
