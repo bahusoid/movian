@@ -30,6 +30,22 @@ coreAttach($self.model.remoteurl, $view.stppstatus, {
           });
         });
 
+        widget(container_z, {
+          width: 4em;
+
+          hidden: select($view.stppstatus.error, false, true);
+          GridItemHighlight();
+          focusable: 0.1;
+          onEvent(activate, {
+            fireEvent(event("ReloadData"));
+          });
+
+          icon({
+            source: "skin://icons/ic_refresh_48px.svg";
+            align: center;
+          });
+        });
+
         label({
           filterConstraintX: true;
           size: 1.2em;
