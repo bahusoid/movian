@@ -7,6 +7,8 @@ widget(container_y, {
   id: "osd_main";
   padding: [0,3em, 0, 0];
 
+  RegisterCloseOsdEvents("menu-btn");
+
   widget(list_y, {
 
     id: "sidebar";

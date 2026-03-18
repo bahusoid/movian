@@ -12,10 +12,7 @@ widget(container_y, {
     size: 1.5em;
   });
 
-  onEvent(back, {
-    $clone.osdpage = 0;
-    focus("audio-btn");
-  }, $clone.osdpage);
+  RegisterCloseOsdEvents("audio-btn");
 
   widget(container_x, {
     widget(list_y, {

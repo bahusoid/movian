@@ -112,17 +112,20 @@ widget(container_z, {
       onEvent(SubtitleTrackView, {
         $clone.osdpage = select($clone.osdpage == 100, 0, 100);
         $clone.showPlaydeck = 1;
+        $clone.hidePlaydeckOnOsdClose = 1;
         focus("osd_subs");
       });
 
       onEvent(AudioTrackView, {
         $clone.osdpage = select($clone.osdpage == 101, 0, 101);
         $clone.showPlaydeck = 1;
+        $clone.hidePlaydeckOnOsdClose = 1;
         focus("osd_audio");
       });
       onEvent(itemMenu,{
         $clone.osdpage = 1;
         $clone.showPlaydeck = 1;
+        $clone.hidePlaydeckOnOsdClose = 1;
         focus("osd_main");
         });
       bottomOverlayDisplacement: $clone.bottomOsdHeight;

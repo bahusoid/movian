@@ -235,3 +235,19 @@
   });
 }
 
+#define CloseOsd(EVENT, FOCUS)
+{
+  onEvent(EVENT, {
+    $clone.osdpage = 0;
+    $clone.showPlaydeck = select($clone.hidePlaydeckOnOsdClose, 0, $clone.showPlaydeck);
+    $clone.hidePlaydeckOnOsdClose = 0;
+    focus(FOCUS);
+  }, $clone.osdpage);
+}
+
+#define RegisterCloseOsdEvents(FOCUS)
+{
+    CloseOsd(back, FOCUS);
+    CloseOsd(left, FOCUS);
+}
+
