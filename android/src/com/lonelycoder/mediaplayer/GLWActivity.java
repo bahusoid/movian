@@ -110,6 +110,11 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     protected void onResume() {
         Log.d("Movian", "onResume");
         super.onResume();
+
+        // Wake-up from screen timeout can leave remote sessions disconnected.
+        // Force a network status refresh so native reconnect handlers can run.
+        Core.networkStatusChanged();
+
         if (mGLWView != null) {
             mGLWView.onResume();
         }
