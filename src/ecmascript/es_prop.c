@@ -1084,6 +1084,19 @@ es_prop_node_filter_del_pred(duk_context *ctx)
 }
 
 
+/**
+ * Follow symlinks to originator
+ */
+static int
+es_prop_follow_duk(duk_context *ctx)
+{
+  prop_t *p = es_stprop_get(ctx, 0);
+  prop_t *f = prop_follow(p);
+  es_push_native_obj(ctx, &es_native_prop, f);
+  return 1;
+}
+
+
 static const duk_function_list_entry fnlist_prop[] = {
 
   { "print",               es_prop_print_duk,             1 },
@@ -1123,7 +1136,7 @@ static const duk_function_list_entry fnlist_prop[] = {
   { "nodeFilterAddPred",   es_prop_node_filter_add_pred,  6 },
   { "nodeFilterDelPred",   es_prop_node_filter_del_pred,  2 },
 
-
+  { "follow",              es_prop_follow_duk,            1 },
 
   { NULL, NULL, 0}
 };
