@@ -13,8 +13,11 @@
   var lastPageTitle = null;
   var lastBrowsablePageUrl = null;
   var lastBrowsablePageTitle = null;
+  var prevBrowsablePageUrl = null;
+  var prevBrowsablePageTitle = null;
   var currentPageUrl = null;
   var currentPageTitle = null;
+  var currentPageType = null;
 
   var pendingFocus = null;
 
@@ -66,24 +69,23 @@
     return v !== '' ? v : (fallback !== undefined ? fallback : null);
   }
 
-  function isPlayerUrl(url) {
-    if (!url) return false;
-    return url.indexOf('videoparams:') === 0 ||
-           url.indexOf(':play:') !== -1 ||
-           url.indexOf(':play/') !== -1;
-  }
-
-  function isDirectMediaUrl(url) {
-    if (!url) return false;
-
-    // Common direct stream/file suffixes that should be treated as items, not pages.
-    return /\.(mkv|mp4|avi|mov|wmv|m4v|flv|ts|m2ts|webm|mp3|flac|aac|m4a|wav|ogg|opus|m3u8|mpd)(\?|#|$)/i.test(url);
-  }
-
-  function isBrowsablePageUrl(url) {
+  function isBrowsablePage(url, type) {
     if (!url) return false;
     if (url.indexOf(PREFIX) === 0) return false;
-    return !isPlayerUrl(url) && !isDirectMediaUrl(url);
+    if (url.indexOf('videoparams:') === 0) return false;
+    // model.type is 'video' when the player is active; anything else is browsable.
+    return type !== 'video';
+  }
+
+  function updateBrowsable(url, title) {
+    if (!url || url === lastBrowsablePageUrl) {
+      if (url && title) lastBrowsablePageTitle = title;
+      return;
+    }
+    prevBrowsablePageUrl = lastBrowsablePageUrl;
+    prevBrowsablePageTitle = lastBrowsablePageTitle;
+    lastBrowsablePageUrl = url;
+    lastBrowsablePageTitle = title;
   }
 
   function parseVideoParams(url) {
@@ -254,22 +256,27 @@
                ' active=' + isPendingActiveForPage(url));
     }
 
-    if (isBrowsablePageUrl(url)) {
+    if (isBrowsablePage(url, currentPageType)) {
       lastPageUrl = url;
-      lastBrowsablePageUrl = url;
-      if (currentPageTitle) {
-        lastPageTitle = currentPageTitle;
-        lastBrowsablePageTitle = currentPageTitle;
-      }
+      updateBrowsable(url, currentPageTitle);
     }
 
+  });
+
+  P.subscribeValue(P.global.navigators.current.currentpage.model.type, function(v) {
+    currentPageType = safeString(v, null);
+
+    // When we transition to a browsable page, update the last known browsable URL.
+    if (isBrowsablePage(currentPageUrl, currentPageType)) {
+      updateBrowsable(currentPageUrl, currentPageTitle);
+    }
   });
 
   P.subscribeValue(P.global.navigators.current.currentpage.model.metadata.title, function(v) {
     var title = safeString(v, null);
     currentPageTitle = title;
 
-    if (isBrowsablePageUrl(currentPageUrl) && title) {
+    if (isBrowsablePage(currentPageUrl, currentPageType) && title) {
       lastPageTitle = title;
       lastBrowsablePageTitle = title;
     }
@@ -305,15 +312,6 @@
   var scrobbler = new videoscrobbler.VideoScrobbler();
 
   scrobbler.onstart = function(data, prop, origin) {
-    var pageUrl = lastBrowsablePageUrl || lastPageUrl;
-
-    // Fallback only when current page looks like a real listing/details page.
-    if (!pageUrl && isBrowsablePageUrl(currentPageUrl)) {
-      pageUrl = currentPageUrl;
-    }
-
-    if (!pageUrl) return;
-
     var dataCanonical = safeString(data && data.canonical_url, null);
     var dataUrl = safeString(data && data.url, null);
     var originUrl = safeString(origin && origin.url, null);
@@ -325,15 +323,32 @@
       return;
     }
 
-    if (!pageUrl) {
-      return;
+    var pageUrl = lastBrowsablePageUrl || lastPageUrl;
+
+    // If the last browsable page IS the play route that triggered this video,
+    // it was an intermediate redirect page — use the previous browsable page.
+    if (pageUrl && itemCanonical && pageUrl === itemCanonical) {
+      pageUrl = prevBrowsablePageUrl || pageUrl;
     }
+
+    // Fallback only when current page looks like a real listing/details page.
+    if (!pageUrl && isBrowsablePage(currentPageUrl, currentPageType)) {
+      pageUrl = currentPageUrl;
+    }
+
+    if (!pageUrl) return;
 
     var itemTitle = safeString(data && data.title, null) ||
                     safeString(origin && origin.metadata && origin.metadata.title, null) ||
                     'Unknown item';
 
-    var pageTitle = lastBrowsablePageTitle || lastPageTitle || currentPageTitle || pageUrl;
+    var pageTitle;
+    if (pageUrl === lastBrowsablePageUrl) {
+      pageTitle = lastBrowsablePageTitle;
+    } else if (pageUrl === prevBrowsablePageUrl) {
+      pageTitle = prevBrowsablePageTitle;
+    }
+    pageTitle = pageTitle || lastPageTitle || currentPageTitle || pageUrl;
 
     debugLog('save entry page=' + safeString(pageUrl, '<none>') +
          ' item=' + safeString(itemCanonical || itemUrl, '<none>'));
@@ -393,7 +408,7 @@
              ' page=' + safeString(targetPageUrl, '<none>') +
              ' item=' + safeString(targetItemUrl, '<none>'));
 
-    if (targetPageUrl && isBrowsablePageUrl(targetPageUrl)) {
+    if (targetPageUrl && targetPageUrl.indexOf(PREFIX) !== 0) {
       armPendingFocus(entry);
       debugLog('redirect to page=' + targetPageUrl);
       page.redirect(targetPageUrl);
