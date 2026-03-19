@@ -22,7 +22,7 @@
   var pendingFocus = null;
 
   function debugLog(msg) {
-    console.log('History focus: ' + msg);
+    //console.log('History focus: ' + msg);
   }
 
   function debugDescribeNode(node) {
