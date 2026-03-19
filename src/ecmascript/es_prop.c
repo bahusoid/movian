@@ -263,6 +263,10 @@ es_prop_get_child_duk(duk_context *ctx)
 
   hts_mutex_lock(&prop_mutex);
 
+  // Follow symlinks to the originator
+  while(p->hp_originator != NULL)
+    p = p->hp_originator;
+
   if(p->hp_type == PROP_ZOMBIE) {
     hts_mutex_unlock(&prop_mutex);
     duk_error(ctx, ST_ERROR_PROP_ZOMBIE, NULL);
@@ -304,6 +308,9 @@ es_prop_enum_duk(duk_context *ctx)
 
   hts_mutex_lock(&prop_mutex);
 
+  // Follow symlinks to the originator
+  while(p->hp_originator != NULL)
+    p = p->hp_originator;
 
   if(p->hp_type != PROP_DIR) {
     hts_mutex_unlock(&prop_mutex);
