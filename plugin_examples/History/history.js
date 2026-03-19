@@ -18,6 +18,40 @@
 
   var pendingFocus = null;
 
+  function debugLog(msg) {
+    console.log('History focus: ' + msg);
+  }
+
+  function debugDescribeNode(node) {
+    if (!node) {
+      debugLog('node payload is <null>');
+      return;
+    }
+
+    try {
+      var keys = P.enumerate(node);
+      debugLog('node keys=' + (keys && keys.length ? keys.join(',') : '<none>'));
+    } catch (e1) {
+      debugLog('failed to enumerate node keys: ' + e1);
+    }
+
+    try {
+      P.print(node);
+    } catch (e2) {
+      debugLog('failed to print node tree: ' + e2);
+    }
+  }
+
+  function makeNodeProxy(node) {
+    if (!node) return null;
+    try {
+      return P.makeProp(node);
+    } catch (e) {
+      debugLog('failed to proxy node: ' + e);
+      return null;
+    }
+  }
+
   function safeString(v, fallback) {
     if (v === null || v === undefined) {
       return fallback !== undefined ? fallback : null;
@@ -124,6 +158,11 @@
   }
 
   function clearPendingFocus(reason) {
+    if (pendingFocus) {
+      debugLog('clear pending focus reason=' + safeString(reason, 'unknown') +
+               ' page=' + safeString(pendingFocus.pageUrl, '<none>') +
+               ' item=' + safeString(pendingFocus.itemCanonical || pendingFocus.itemUrl, '<none>'));
+    }
     pendingFocus = null;
   }
 
@@ -134,6 +173,9 @@
       itemUrl: entry.itemUrl || null,
       expiresAt: Date.now() + 10000
     };
+    debugLog('arm pending focus page=' + safeString(pendingFocus.pageUrl, '<none>') +
+             ' canonical=' + safeString(pendingFocus.itemCanonical, '<none>') +
+             ' url=' + safeString(pendingFocus.itemUrl, '<none>'));
   }
 
   function isPendingActiveForPage(url) {
@@ -145,64 +187,108 @@
     return safeString(url, '') === safeString(pendingFocus.pageUrl, '');
   }
 
-  function nodeMatchesPending(node) {
-    if (!pendingFocus || !node) return false;
-
-    var nodeUrl = safeString(node.url, null);
-    var nodeCanonical = canonicalFromUrl(nodeUrl);
-
-    if (pendingFocus.itemCanonical && nodeCanonical &&
-        pendingFocus.itemCanonical === nodeCanonical) {
-      return true;
-    }
-
-    if (pendingFocus.itemUrl && nodeUrl && pendingFocus.itemUrl === nodeUrl) {
-      return true;
-    }
-
-    return false;
-  }
-
-  function tryFocusNode(node) {
-    if (!node || !pendingFocus) return false;
-    if (!nodeMatchesPending(node)) return false;
-
+  function followProp(rawNode) {
     try {
-      P.select(node);
-      clearPendingFocus('matched');
-      return true;
+      return P.follow(rawNode);
     } catch (e) {
-      return false;
+      return rawNode;
     }
   }
 
-  function tryFocusFromCurrentNodes() {
-    if (!pendingFocus) return false;
-
-    var nodes;
+  function readRawProp(rawNode, name) {
     try {
-      nodes = P.global.navigators.current.currentpage.model.nodes;
+      var resolved = followProp(rawNode);
+      var child = P.getChild(resolved, name);
+      return child ? P.getValue(child) : null;
     } catch (e) {
-      return false;
+      return null;
     }
+  }
 
-    try {
-      var keys = P.enumerate(nodes);
-      for (var i = 0; i < keys.length; i++) {
-        var n = nodes[keys[i]];
-        if (tryFocusNode(n)) {
-          return true;
-        }
+  function readRawPropPath(rawNode, names) {
+    var cur = followProp(rawNode);
+    for (var i = 0; i < names.length; i++) {
+      try {
+        cur = P.getChild(cur, names[i]);
+      } catch (e) {
+        return null;
       }
-    } catch (e2) {
+      if (!cur) return null;
+    }
+    try {
+      return P.getValue(cur);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function nodeMatchesPending(node, rawNode) {
+    if (!pendingFocus || !rawNode) return false;
+
+    debugDescribeNode(rawNode);
+
+    var nodeTitle = safeString(readRawPropPath(rawNode, ['metadata', 'title']), null) ||
+                    safeString(readRawProp(rawNode, 'title'), null) ||
+                    '<no-title>';
+                    
+    var nodeType = safeString(readRawProp(rawNode, 'type'), null);
+    var nodeUrl = safeString(readRawProp(rawNode, 'url'), null);
+    var nodeCanonical = canonicalFromUrl(nodeUrl);
+    var targetCanonical = safeString(pendingFocus.itemCanonical, null);
+    var targetUrl = safeString(pendingFocus.itemUrl, null);
+
+    debugLog('inspect node title=' + nodeTitle +
+             ' url=' + safeString(nodeUrl, '<none>') +
+             ' type=' + safeString(nodeType, '<none>') +
+             ' canonical=' + safeString(nodeCanonical, '<none>') +
+             ' targetCanonical=' + safeString(targetCanonical, '<none>') +
+             ' targetUrl=' + safeString(targetUrl, '<none>'));
+
+    if (targetCanonical && nodeCanonical && targetCanonical === nodeCanonical) {
+      debugLog('matched node by canonical url=' + safeString(nodeUrl, '<none>'));
+      return true;
     }
 
+    if (targetUrl && nodeUrl && targetUrl === nodeUrl) {
+      debugLog('matched node by item url=' + safeString(nodeUrl, '<none>'));
+      return true;
+    }
+
+    debugLog('node did not match target');
+
     return false;
+  }
+
+  function markNodeAutofocus(rawNode) {
+    if (!rawNode || !pendingFocus) return false;
+
+    if (!nodeMatchesPending(null, rawNode)) return false;
+
+    try {
+      var resolved = followProp(rawNode);
+      var node = makeNodeProxy(resolved);
+      if (!node) return false;
+      // Let default page focus logic pick this item.
+      node.metadata.autofocus = true;
+      node.metadata.focusable = 1.5;
+      debugLog('applied autofocus to node url=' + safeString(readRawProp(rawNode, 'url'), '<none>'));
+      clearPendingFocus('marked');
+      return true;
+    } catch (e) {
+      debugLog('failed to apply autofocus: ' + e);
+      return false;
+    }
   }
 
   P.subscribeValue(P.global.navigators.current.currentpage.url, function(v) {
     var url = safeString(v, null);
     currentPageUrl = url;
+
+    if (pendingFocus) {
+      debugLog('page url changed current=' + safeString(url, '<none>') +
+               ' target=' + safeString(pendingFocus.pageUrl, '<none>') +
+               ' active=' + isPendingActiveForPage(url));
+    }
 
     if (isBrowsablePageUrl(url)) {
       lastPageUrl = url;
@@ -213,9 +299,6 @@
       }
     }
 
-    if (isPendingActiveForPage(url)) {
-      tryFocusFromCurrentNodes();
-    }
   });
 
   P.subscribeValue(P.global.navigators.current.currentpage.model.metadata.title, function(v) {
@@ -234,35 +317,26 @@
     }
 
     if (type === 'addchild') {
-      tryFocusNode(v1);
+      debugLog('node event type=addchild page=' + safeString(currentPageUrl, '<none>'));
+      markNodeAutofocus(v1);
       return;
     }
 
     if (type === 'addchildbefore') {
-      tryFocusNode(v1);
+      debugLog('node event type=addchildbefore page=' + safeString(currentPageUrl, '<none>'));
+      markNodeAutofocus(v1);
       return;
     }
 
     if ((type === 'addchilds' || type === 'addchildsbefore') && v1 && v1.length) {
+      debugLog('node event type=' + type + ' count=' + v1.length + ' page=' + safeString(currentPageUrl, '<none>'));
       for (var i = 0; i < v1.length; i++) {
-        if (tryFocusNode(v1[i])) {
+        if (markNodeAutofocus(v1[i])) {
           return;
         }
       }
     }
   }, { autoDestroy: false });
-
-  // Fallback timer: if page doesn't emit node events as expected, avoid stale pending state.
-  setInterval(function() {
-    if (!pendingFocus) return;
-    if (Date.now() > pendingFocus.expiresAt) {
-      clearPendingFocus('expire');
-      return;
-    }
-    if (currentPageUrl && isPendingActiveForPage(currentPageUrl)) {
-      tryFocusFromCurrentNodes();
-    }
-  }, 300);
 
   var scrobbler = new videoscrobbler.VideoScrobbler();
 
@@ -296,6 +370,9 @@
                     'Unknown item';
 
     var pageTitle = lastBrowsablePageTitle || lastPageTitle || currentPageTitle || pageUrl;
+
+    debugLog('save entry page=' + safeString(pageUrl, '<none>') +
+         ' item=' + safeString(itemCanonical || itemUrl, '<none>'));
 
     saveEntry({
       itemTitle: itemTitle,
@@ -348,13 +425,19 @@
     var targetPageUrl = safeString(entry.pageUrl, null);
     var targetItemUrl = safeString(entry.itemUrl, null);
 
+    debugLog('open history idx=' + idx +
+             ' page=' + safeString(targetPageUrl, '<none>') +
+             ' item=' + safeString(targetItemUrl, '<none>'));
+
     if (targetPageUrl && isBrowsablePageUrl(targetPageUrl)) {
       armPendingFocus(entry);
+      debugLog('redirect to page=' + targetPageUrl);
       page.redirect(targetPageUrl);
       return;
     }
 
     if (targetItemUrl) {
+      debugLog('redirect directly to item=' + targetItemUrl);
       page.redirect(targetItemUrl);
       return;
     }
