@@ -11,13 +11,12 @@
 
   var lastPageUrl = null;
   var lastPageTitle = null;
-  var lastBrowsablePageUrl = null;
-  var lastBrowsablePageTitle = null;
-  var prevBrowsablePageUrl = null;
-  var prevBrowsablePageTitle = null;
+  var browseStack = [];  // [{url, title, canonical}, ...] — recent browsable pages
+  var MAX_BROWSE_STACK = 5;
   var currentPageUrl = null;
   var currentPageTitle = null;
   var currentPageType = null;
+  var currentPageCanonical = null;
 
   var pendingFocus = null;
 
@@ -78,14 +77,30 @@
   }
 
   function updateBrowsable(url, title) {
-    if (!url || url === lastBrowsablePageUrl) {
-      if (url && title) lastBrowsablePageTitle = title;
+    if (!url) return;
+    var top = browseStack.length > 0 ? browseStack[browseStack.length - 1] : null;
+    if (top && top.url === url) {
+      if (title) top.title = title;
+      if (currentPageCanonical) top.canonical = currentPageCanonical;
       return;
     }
-    prevBrowsablePageUrl = lastBrowsablePageUrl;
-    prevBrowsablePageTitle = lastBrowsablePageTitle;
-    lastBrowsablePageUrl = url;
-    lastBrowsablePageTitle = title;
+    browseStack.push({ url: url, title: title, canonical: currentPageCanonical });
+    if (browseStack.length > MAX_BROWSE_STACK) {
+      browseStack.shift();
+    }
+  }
+
+  // Walk the stack backwards to find the first page whose URL or canonical
+  // is not the item's own canonical URL (i.e. skip intermediate redirect pages).
+  function findBrowsablePageFor(itemCanonical) {
+    for (var i = browseStack.length - 1; i >= 0; i--) {
+      var entry = browseStack[i];
+      if (!itemCanonical ||
+          (entry.url !== itemCanonical && entry.canonical !== itemCanonical)) {
+        return entry;
+      }
+    }
+    return browseStack.length > 0 ? browseStack[browseStack.length - 1] : null;
   }
 
   function parseVideoParams(url) {
@@ -173,7 +188,6 @@
       pageUrl: entry.pageUrl,
       itemCanonical: entry.itemCanonical || null,
       itemUrl: entry.itemUrl || null,
-      expiresAt: Date.now() + 10000
     };
     debugLog('arm pending focus page=' + safeString(pendingFocus.pageUrl, '<none>') +
              ' canonical=' + safeString(pendingFocus.itemCanonical, '<none>') +
@@ -182,10 +196,7 @@
 
   function isPendingActiveForPage(url) {
     if (!pendingFocus) return false;
-    if (Date.now() > pendingFocus.expiresAt) {
-      clearPendingFocus('timeout');
-      return false;
-    }
+
     return safeString(url, '') === safeString(pendingFocus.pageUrl, '');
   }
 
@@ -199,7 +210,11 @@
                     '<no-title>';
                     
     var nodeType = safeString(node.type, null);
+    var nodeMetaCanonUrl = safeString(node.metadata && node.metadata.canonical_url, null);
     var nodeUrl = safeString(node.url, null);
+    if (nodeMetaCanonUrl !== null && nodeMetaCanonUrl !== 'null') 
+        nodeUrl = nodeMetaCanonUrl;
+
     var nodeCanonical = canonicalFromUrl(nodeUrl);
     var targetCanonical = safeString(pendingFocus.itemCanonical, null);
     var targetUrl = safeString(pendingFocus.itemUrl, null);
@@ -234,7 +249,7 @@
     if (!nodeMatchesPending(node, rawNode)) return false;
 
     try {
-      // Let default page focus logic pick this item.
+      // Let default page focus logic pick this item.   
       node.metadata.autofocus = true;
       node.metadata.focusable = 1.5;
       debugLog('applied autofocus to node url=' + safeString(node.url, '<none>'));
@@ -249,11 +264,16 @@
   P.subscribeValue(P.global.navigators.current.currentpage.url, function(v) {
     var url = safeString(v, null);
     currentPageUrl = url;
+    if(!url)
+        return;
 
     if (pendingFocus) {
-      debugLog('page url changed current=' + safeString(url, '<none>') +
+        if(!isPendingActiveForPage(url))
+            pendingFocus = null;
+
+      debugLog('page url changed current=' + url +
                ' target=' + safeString(pendingFocus.pageUrl, '<none>') +
-               ' active=' + isPendingActiveForPage(url));
+               ' active=' + pendingFocus !== null);
     }
 
     if (isBrowsablePage(url, currentPageType)) {
@@ -272,13 +292,26 @@
     }
   });
 
+  P.subscribeValue(P.global.navigators.current.currentpage.model.metadata.canonical_url, function(v) {
+    currentPageCanonical = safeString(v, null);
+
+    // Update the top stack entry if it matches the current page.
+    var top = browseStack.length > 0 ? browseStack[browseStack.length - 1] : null;
+    if (top && top.url === currentPageUrl && currentPageCanonical) {
+      top.canonical = currentPageCanonical;
+    }
+  });
+
   P.subscribeValue(P.global.navigators.current.currentpage.model.metadata.title, function(v) {
     var title = safeString(v, null);
     currentPageTitle = title;
 
     if (isBrowsablePage(currentPageUrl, currentPageType) && title) {
       lastPageTitle = title;
-      lastBrowsablePageTitle = title;
+      var top = browseStack.length > 0 ? browseStack[browseStack.length - 1] : null;
+      if (top && top.url === currentPageUrl) {
+        top.title = title;
+      }
     }
   });
 
@@ -323,13 +356,8 @@
       return;
     }
 
-    var pageUrl = lastBrowsablePageUrl || lastPageUrl;
-
-    // If the last browsable page IS the play route that triggered this video,
-    // it was an intermediate redirect page — use the previous browsable page.
-    if (pageUrl && itemCanonical && pageUrl === itemCanonical) {
-      pageUrl = prevBrowsablePageUrl || pageUrl;
-    }
+    var found = findBrowsablePageFor(itemCanonical);
+    var pageUrl = found ? found.url : lastPageUrl;
 
     // Fallback only when current page looks like a real listing/details page.
     if (!pageUrl && isBrowsablePage(currentPageUrl, currentPageType)) {
@@ -342,13 +370,7 @@
                     safeString(origin && origin.metadata && origin.metadata.title, null) ||
                     'Unknown item';
 
-    var pageTitle;
-    if (pageUrl === lastBrowsablePageUrl) {
-      pageTitle = lastBrowsablePageTitle;
-    } else if (pageUrl === prevBrowsablePageUrl) {
-      pageTitle = prevBrowsablePageTitle;
-    }
-    pageTitle = pageTitle || lastPageTitle || currentPageTitle || pageUrl;
+    var pageTitle = (found && found.title) || lastPageTitle || currentPageTitle || pageUrl;
 
     debugLog('save entry page=' + safeString(pageUrl, '<none>') +
          ' item=' + safeString(itemCanonical || itemUrl, '<none>'));
