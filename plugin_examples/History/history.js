@@ -154,7 +154,7 @@
   function titleForEntry(entry) {
     var item = entry.itemTitle || 'Unknown item';
     var page = entry.pageTitle || entry.pageUrl || 'Unknown page';
-    return item + '|' + page;
+    return item + ' | ' + page;
   }
 
   function clearPendingFocus(reason) {
@@ -187,62 +187,27 @@
     return safeString(url, '') === safeString(pendingFocus.pageUrl, '');
   }
 
-  function followProp(rawNode) {
-    try {
-      return P.follow(rawNode);
-    } catch (e) {
-      return rawNode;
-    }
-  }
-
-  function readRawProp(rawNode, name) {
-    try {
-      var resolved = followProp(rawNode);
-      var child = P.getChild(resolved, name);
-      return child ? P.getValue(child) : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function readRawPropPath(rawNode, names) {
-    var cur = followProp(rawNode);
-    for (var i = 0; i < names.length; i++) {
-      try {
-        cur = P.getChild(cur, names[i]);
-      } catch (e) {
-        return null;
-      }
-      if (!cur) return null;
-    }
-    try {
-      return P.getValue(cur);
-    } catch (e) {
-      return null;
-    }
-  }
-
   function nodeMatchesPending(node, rawNode) {
-    if (!pendingFocus || !rawNode) return false;
+    if (!pendingFocus || !node) return false;
 
-    debugDescribeNode(rawNode);
+    //debugDescribeNode(rawNode || node);
 
-    var nodeTitle = safeString(readRawPropPath(rawNode, ['metadata', 'title']), null) ||
-                    safeString(readRawProp(rawNode, 'title'), null) ||
+    var nodeTitle = safeString(node.metadata && node.metadata.title, null) ||
+                    safeString(node.title, null) ||
                     '<no-title>';
                     
-    var nodeType = safeString(readRawProp(rawNode, 'type'), null);
-    var nodeUrl = safeString(readRawProp(rawNode, 'url'), null);
+    var nodeType = safeString(node.type, null);
+    var nodeUrl = safeString(node.url, null);
     var nodeCanonical = canonicalFromUrl(nodeUrl);
     var targetCanonical = safeString(pendingFocus.itemCanonical, null);
     var targetUrl = safeString(pendingFocus.itemUrl, null);
 
     debugLog('inspect node title=' + nodeTitle +
-             ' url=' + safeString(nodeUrl, '<none>') +
-             ' type=' + safeString(nodeType, '<none>') +
-             ' canonical=' + safeString(nodeCanonical, '<none>') +
-             ' targetCanonical=' + safeString(targetCanonical, '<none>') +
-             ' targetUrl=' + safeString(targetUrl, '<none>'));
+             ' url=' + nodeUrl +
+             ' type=' + nodeType +
+             ' canonical=' + nodeCanonical +
+             ' targetCanonical=' + targetCanonical +
+             ' targetUrl=' + targetUrl);
 
     if (targetCanonical && nodeCanonical && targetCanonical === nodeCanonical) {
       debugLog('matched node by canonical url=' + safeString(nodeUrl, '<none>'));
@@ -262,16 +227,15 @@
   function markNodeAutofocus(rawNode) {
     if (!rawNode || !pendingFocus) return false;
 
-    if (!nodeMatchesPending(null, rawNode)) return false;
+    var node = makeNodeProxy(rawNode);
+    if (!node) return false;
+    if (!nodeMatchesPending(node, rawNode)) return false;
 
     try {
-      var resolved = followProp(rawNode);
-      var node = makeNodeProxy(resolved);
-      if (!node) return false;
       // Let default page focus logic pick this item.
       node.metadata.autofocus = true;
       node.metadata.focusable = 1.5;
-      debugLog('applied autofocus to node url=' + safeString(readRawProp(rawNode, 'url'), '<none>'));
+      debugLog('applied autofocus to node url=' + safeString(node.url, '<none>'));
       clearPendingFocus('marked');
       return true;
     } catch (e) {
