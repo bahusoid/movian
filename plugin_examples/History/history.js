@@ -177,8 +177,8 @@
   function clearPendingFocus(reason) {
     if (pendingFocus) {
       debugLog('clear pending focus reason=' + safeString(reason, 'unknown') +
-               ' page=' + safeString(pendingFocus.pageUrl, '<none>') +
-               ' item=' + safeString(pendingFocus.itemCanonical || pendingFocus.itemUrl, '<none>'));
+               '\npage=' + safeString(pendingFocus.pageUrl, '<none>') +
+               '\nitem=' + safeString(pendingFocus.itemCanonical || pendingFocus.itemUrl, '<none>'));
     }
     pendingFocus = null;
   }
@@ -190,8 +190,8 @@
       itemUrl: entry.itemUrl || null,
     };
     debugLog('arm pending focus page=' + safeString(pendingFocus.pageUrl, '<none>') +
-             ' canonical=' + safeString(pendingFocus.itemCanonical, '<none>') +
-             ' url=' + safeString(pendingFocus.itemUrl, '<none>'));
+             '\ncanonical=' + safeString(pendingFocus.itemCanonical, '<none>') +
+             '\nurl=' + safeString(pendingFocus.itemUrl, '<none>'));
   }
 
   function isPendingActiveForPage(url) {
@@ -220,11 +220,11 @@
     var targetUrl = safeString(pendingFocus.itemUrl, null);
 
     debugLog('inspect node title=' + nodeTitle +
-             ' url=' + nodeUrl +
-             ' type=' + nodeType +
-             ' canonical=' + nodeCanonical +
-             ' targetCanonical=' + targetCanonical +
-             ' targetUrl=' + targetUrl);
+             '\n url=' + nodeUrl +
+             '\n type=' + nodeType +
+             '\n canonical=' + nodeCanonical +
+             '\n targetCanonical=' + targetCanonical +
+             '\n targetUrl=' + targetUrl);
 
     if (targetCanonical && nodeCanonical && targetCanonical === nodeCanonical) {
       debugLog('matched node by canonical url=' + safeString(nodeUrl, '<none>'));
