@@ -1759,6 +1759,8 @@ hls_play(hls_t *h, media_pipe_t *mp, char *errbuf, size_t errlen,
 
   mp_event_set_callback(mp, hls_event_callback, h);
 
+  htsmsg_t *vpi = video_playback_info_create(va);
+
   int64_t start = playinfo_get_restartpos(canonical_url,
                                           va->title, va->resume_mode) * 1000;
   if(start) {
@@ -1767,6 +1769,8 @@ hls_play(hls_t *h, media_pipe_t *mp, char *errbuf, size_t errlen,
     mp->mp_seek_base = start;
     hls_seek(h, start);
   }
+
+  video_playback_info_invoke(VPI_START, vpi, mp->mp_prop_root, va->origin);
 
   h->h_primary.hd_current = hls_select_default_variant(&h->h_primary);
   h->h_audio.  hd_current = hls_select_default_variant(&h->h_audio);
@@ -1873,6 +1877,9 @@ hls_play(hls_t *h, media_pipe_t *mp, char *errbuf, size_t errlen,
 			      0);
     }
   }
+  video_playback_info_invoke(VPI_STOP, vpi, mp->mp_prop_root, va->origin);
+  htsmsg_release(vpi);
+
   // Shutdown
 
   mp_event_set_callback(mp, NULL, NULL);
