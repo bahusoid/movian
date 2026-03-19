@@ -385,7 +385,7 @@
     });
   };
 
-  plugin.createService('History', PREFIX + 'start', 'video', true);
+  plugin.createService('History', PREFIX + 'start', 'video', true, Plugin.path + 'icon.png');
 
   plugin.addURI(PREFIX + 'start', function(page) {
     page.type = 'directory';
