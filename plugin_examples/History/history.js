@@ -9,6 +9,24 @@
 
   var store = plugin.createStore('history_store');
 
+  var settings = plugin.createSettings('History', null, 'History plugin settings');
+  var debug = false;
+  settings.createBool('debug', 'Debug', false, function(v) { debug = v; });
+  settings.createAction('clearHistory', 'Clear History', function() {
+    try {
+      if(!popup.message('Clear all history entries?', true, true))
+        return;
+
+      store[STORE_KEY] = null;
+      historyUpdatedStamp = Date.now();
+      browseStack = [];
+      pendingFocus = null;
+      debugLog('history cleared by user');
+    } catch (e) {
+      debugLog('failed to clear history: ' + e);
+    }
+  });
+
   var lastPageUrl = null;
   var lastPageTitle = null;
   var browseStack = [];  // [{url, title, canonical}, ...] — recent browsable pages
@@ -25,6 +43,7 @@
   var lastHistoryStamp = 0;
 
   function debugLog(msg) {
+    if (!debug) return;
     console.log('History focus: ' + msg);
   }
 
@@ -527,18 +546,11 @@ function getNavigatorEventSink() {
 
   plugin.addURI(historyPageUrl, function(page) {
   
-    // Remember current in-memory timestamp and subscribe to navigator URL changes.
+    // Remember current in-memory timestamp
     // When user returns to this page (back action) and entries were updated,
     // redirect to the same URI to force reloading the page contents.
     lastHistoryStamp = historyUpdatedStamp;
 
-    debugLog("history page opened, url=" + safeString(page.url, '<none>') +
-  "\n historyPageUrl= " +historyPageUrl +
-  "\n currentPageUrl= " + currentPageUrl +
-  "\n isSame=" + (currentPageUrl === historyPageUrl ? "true" : "false") +
-  "\n historyUpdatedStamp=" + historyUpdatedStamp +
-  "\n lastHistoryStamp=" + lastHistoryStamp);
- 
     page.type = 'directory';
     page.metadata.title = 'History';
 
