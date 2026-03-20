@@ -12,6 +12,8 @@
   var settings = plugin.createSettings('History', null, 'History plugin settings');
   var debug = false;
   settings.createBool('debug', 'Debug', false, function(v) { debug = v; });
+  var filterByPage = false;
+  settings.createBool('filterByPage', 'Filter By Page', false, function(v) { filterByPage = v; });
   settings.createAction('clearHistory', 'Clear History', function() {
     try {
       if(!popup.message('Clear all history entries?', true, true))
@@ -175,10 +177,21 @@
     var list = readEntries();
     var key = makeKey(entry);
 
+    if (filterByPage) {
+      var writeIdx = 0;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].pageUrl !== entry.pageUrl) {
+          if (writeIdx !== i) list[writeIdx] = list[i];
+          writeIdx++;
+        }
+      }
+      list.length = writeIdx;
+    } else {
     for (var i = 0; i < list.length; i++) {
       if (makeKey(list[i]) === key) {
         list.splice(i, 1);
         break;
+        }
       }
     }
 
@@ -341,12 +354,6 @@ function getNavigatorEventSink() {
       '\n updated=' + safeString(url, '<none>') +
       '\n lastPage=' + safeString(lastPageUrl, '<none>') +
       '\n pendingFocus=' + (pendingFocus ? 'yes' : 'no'));
-    debugLog(debug && "historyPageUrl= " +historyPageUrl +
-  "\n currentPageUrl= " + currentPageUrl +
-  "\n isSame=" + (url === historyPageUrl ? "true" : "false") +
-  "\n historyUpdatedStamp=" + historyUpdatedStamp +
-  "\n lastHistoryStamp=" + lastHistoryStamp +
-  "\n timeStampUpdated" + (historyUpdatedStamp !== lastHistoryStamp ? "true" : "false"));
 
     if (pendingFocus) {
         if(!isPendingActiveForPage(url))
