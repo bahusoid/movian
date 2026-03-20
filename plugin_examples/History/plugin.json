@@ -3,9 +3,10 @@
   "apiversion": 1,
   "id": "History",
   "file": "history.js",
+  "icon": "icon.png",
   "showtimeVersion": "5",
   "version": "1.0",
-  "author": "Movian",
+  "author": "Roman Artiukhin (bahusoid)",
   "title": "History",
   "synopsis": "Remembers last played places and restores focus",
   "category": "video"
