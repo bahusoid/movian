@@ -21,7 +21,7 @@
   var pendingFocus = null;
 
   function debugLog(msg) {
-    //console.log('History focus: ' + msg);
+    console.log('History focus: ' + msg);
   }
 
   function debugDescribeNode(node) {
@@ -261,11 +261,42 @@
     }
   }
 
-  P.subscribeValue(P.global.navigators.current.currentpage.url, function(v) {
+  // Debug subscription: monitor currentpage changes in detail (Android/Linux comparison)
+  function dumpCurrentPageState(prefix) {
+    try {
+      var nav = P.global.navigators.current;
+      if (!nav) {
+        debugLog(prefix + ' nav.current missing');
+        return;
+      }
+      var cp = nav.currentpage;
+      if (!cp) {
+        debugLog(prefix + ' currentpage missing');
+        return;
+      }
+
+      var curUrl = safeString(cp.url, '<none>');
+      var curModel = cp.model || {};
+      var curType = safeString(curModel.type, '<none>');
+      var curTitle = safeString(curModel.metadata && curModel.metadata.title, '<none>');
+      var curCanonical = safeString(curModel.metadata && curModel.metadata.canonical_url, '<none>');
+
+      debugLog(prefix + ' currentpage { url=' + curUrl + ', type=' + curType + ', title=' + curTitle + ', canonical=' + curCanonical + ' }');
+    } catch (e) {
+      debugLog(prefix + ' dump error: ' + e);
+    }
+  }
+
+  
+
+  function onCurrentPageUrlUpdate(v) {
+   // dumpCurrentPageState('url update');
     var url = safeString(v, null);
     currentPageUrl = url;
-    if(!url)
-        return;
+    debugLog('current page url'+
+      '\n updated=' + safeString(url, '<none>') +
+      '\n lastPage=' + safeString(lastPageUrl, '<none>') +
+      '\n pendingFocus=' + (pendingFocus ? 'yes' : 'no'));
 
     if (pendingFocus) {
         if(!isPendingActiveForPage(url))
@@ -280,31 +311,36 @@
       lastPageUrl = url;
       updateBrowsable(url, currentPageTitle);
     }
+  }
 
-  });
-
-  P.subscribeValue(P.global.navigators.current.currentpage.model.type, function(v) {
+  function onCurrentPageTypeUpdate(v) {
+    //dumpCurrentPageState('type update');
     currentPageType = safeString(v, null);
 
+    debugLog('current page type ' + safeString(currentPageType, '<none>'));
     // When we transition to a browsable page, update the last known browsable URL.
     if (isBrowsablePage(currentPageUrl, currentPageType)) {
       updateBrowsable(currentPageUrl, currentPageTitle);
     }
-  });
+  }
 
-  P.subscribeValue(P.global.navigators.current.currentpage.model.metadata.canonical_url, function(v) {
+  function onCurrentPageCanonicalUpdate(v) {
+   // dumpCurrentPageState('canonical_url update');
     currentPageCanonical = safeString(v, null);
 
+    debugLog('current page canonical url ' + safeString(currentPageCanonical, '<none>'));
     // Update the top stack entry if it matches the current page.
     var top = browseStack.length > 0 ? browseStack[browseStack.length - 1] : null;
     if (top && top.url === currentPageUrl && currentPageCanonical) {
       top.canonical = currentPageCanonical;
     }
-  });
+  }
 
-  P.subscribeValue(P.global.navigators.current.currentpage.model.metadata.title, function(v) {
+  function onCurrentPageTitleUpdate(v) {
+    //dumpCurrentPageState('title update');
     var title = safeString(v, null);
     currentPageTitle = title;
+    debugLog('current page title ' + safeString(title, '<none>'));
 
     if (isBrowsablePage(currentPageUrl, currentPageType) && title) {
       lastPageTitle = title;
@@ -313,7 +349,7 @@
         top.title = title;
       }
     }
-  });
+  }
 
   P.subscribe(P.global.navigators.current.currentpage.model.nodes, function(type, v1) {
     if (!pendingFocus || !currentPageUrl || !isPendingActiveForPage(currentPageUrl)) {
@@ -342,6 +378,43 @@
     }
   }, { autoDestroy: false });
 
+  // Parent subscribe that reads properties and forwards them to handlers
+  // (works on Android where per-value subscriptions may not fire).
+  P.subscribe(P.global.navigators.current.currentpage, function(type, value) {
+    //debugLog('currentpage event type=' + type + ' value=' + (value !== undefined ? String(value) : '<undef>'));
+    //dumpCurrentPageState('event');
+
+    try {
+      var nav = P.global.navigators.current;
+
+      var cp = nav.currentpage;
+      if (!cp) return;
+
+      // if(cp.url)
+      //   debugLog('currentpage url=' + safeString(cp.url, '<none>'));
+
+      if(cp.url &&  currentPageUrl != safeString(cp.url))
+        onCurrentPageUrlUpdate(cp.url);
+
+      var model = cp.model || {};
+      // if(model.type)
+      //   debugLog('currentpage model.type=' + safeString(model.type, '<none>'));
+
+      if(model.type && currentPageType != safeString(model.type))
+        onCurrentPageTypeUpdate(model.type);
+
+      var metadata = model.metadata || {};
+      if(currentPageCanonical != safeString(metadata.canonical_url))
+        onCurrentPageCanonicalUpdate(metadata.canonical_url);
+
+      if(currentPageTitle != safeString(metadata.title))
+        onCurrentPageTitleUpdate(metadata.title);
+
+    } catch (e) {
+      debugLog('parent subscribe handler error: ' + e);
+    }
+  }, { autoDestroy: false });
+
   var scrobbler = new videoscrobbler.VideoScrobbler();
 
   scrobbler.onstart = function(data, prop, origin) {
@@ -365,15 +438,40 @@
     }
 
     if (!pageUrl) return;
+    debugLog("data title=" + safeString(data && data.title, '<none>'));
+    // debugDescribeNode(data);
+    // debugLog("origin");
+    // debugDescribeNode(origin);
 
-    var itemTitle = safeString(data && data.title, null) ||
-                    safeString(origin && origin.metadata && origin.metadata.title, null) ||
-                    'Unknown item';
+    // var attempts = [];
+    // attempts.push({ src: 'data.title', val: safeString(data && data.title, null) });
+    // attempts.push({ src: 'data.filename', val: safeString(data && data.filename, null) });
+    // attempts.push({ src: 'data.label', val: safeString(data && data.label, null) });
+    // attempts.push({ src: 'data.metadata.title', val: safeString(data && data.metadata && data.metadata.title, null) });
+    // attempts.push({ src: 'data.metadata.name', val: safeString(data && data.metadata && data.metadata.name, null) });
+    // attempts.push({ src: 'data.metadata.filename', val: safeString(data && data.metadata && data.metadata.filename, null) });
+    // attempts.push({ src: 'data.metadata.episode.title', val: safeString(data && data.metadata && data.metadata.episode && data.metadata.episode.title, null) });
+    // attempts.push({ src: 'origin.title', val: safeString(origin && origin.title, null) });
+    // attempts.push({ src: 'origin.metadata.title', val: safeString(origin && origin.metadata && origin.metadata.title, null) });
+    // attempts.push({ src: 'origin.metadata.name', val: safeString(origin && origin.metadata && origin.metadata.name, null) });
+    // attempts.push({ src: 'origin.metadata.filename', val: safeString(origin && origin.metadata && origin.metadata.filename, null) });
+
+    // var itemTitle = 'Unknown item';
+    // var logLines = [];
+    // for (var ti = 0; ti < attempts.length; ti++) {
+    //   var a = attempts[ti];
+    //   logLines.push(a.src + '=' + safeString(a.val, '<null>'));
+    // }
+    // debugLog('title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
+    
+    itemTitle =safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
+
 
     var pageTitle = (found && found.title) || lastPageTitle || currentPageTitle || pageUrl;
 
     debugLog('save entry page=' + safeString(pageUrl, '<none>') +
-         ' item=' + safeString(itemCanonical || itemUrl, '<none>'));
+         '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
+        '\n title=' + itemTitle);
 
     saveEntry({
       itemTitle: itemTitle,
