@@ -19,6 +19,10 @@
   var currentPageCanonical = null;
 
   var pendingFocus = null;
+    // In-memory stamp to signal history updates
+  var historyUpdatedStamp = 0;
+  const historyPageUrl = PREFIX + 'start';
+  var lastHistoryStamp = 0;
 
   function debugLog(msg) {
     console.log('History focus: ' + msg);
@@ -166,6 +170,8 @@
     }
 
     saveEntries(list);
+    // Touch an in-memory timestamp so pages can detect changes and refresh themselves
+    historyUpdatedStamp = Date.now();
   }
 
   function titleForEntry(entry) {
@@ -288,7 +294,26 @@
   }
 
   
-
+function getNavigatorEventSink() {
+    try {
+        var navigators = prop.global.navigators;
+        if (!navigators) {
+            log.e('[NAV] prop.global.navigators not found');
+            return null;
+        }
+        if (navigators.nodes) {
+            var nav = navigators.nodes[0];
+            if (nav && nav.eventSink) {
+                return nav.eventSink;
+            }
+        }
+        log.e('[NAV] navigator.eventSink not found');
+        return null;
+    } catch (e) {
+        log.e('[NAV] Error getting navigator eventSink: ' + e);
+        return null;
+    }
+}
   function onCurrentPageUrlUpdate(v) {
    // dumpCurrentPageState('url update');
     var url = safeString(v, null);
@@ -297,6 +322,12 @@
       '\n updated=' + safeString(url, '<none>') +
       '\n lastPage=' + safeString(lastPageUrl, '<none>') +
       '\n pendingFocus=' + (pendingFocus ? 'yes' : 'no'));
+    debugLog("historyPageUrl= " +historyPageUrl +
+  "\n currentPageUrl= " + currentPageUrl +
+  "\n isSame=" + (url === historyPageUrl ? "true" : "false") +
+  "\n historyUpdatedStamp=" + historyUpdatedStamp +
+  "\n lastHistoryStamp=" + lastHistoryStamp +
+  "\n timeStampUpdated" + (historyUpdatedStamp !== lastHistoryStamp ? "true" : "false"));
 
     if (pendingFocus) {
         if(!isPendingActiveForPage(url))
@@ -311,7 +342,16 @@
       lastPageUrl = url;
       updateBrowsable(url, currentPageTitle);
     }
+    else {
+      if (url === historyPageUrl) {
+        if (historyUpdatedStamp !== lastHistoryStamp) {
+          debugLog('history page refresh triggered, reloading page, evenSink = ', P.global.navigators.current.eventSink);
+          prop.sendEvent(P.global.navigators.current.currentpage.eventSink, 'redirect', historyPageUrl);
+        }
+      }
+    }
   }
+
 
   function onCurrentPageTypeUpdate(v) {
     //dumpCurrentPageState('type update');
@@ -485,7 +525,20 @@
 
   plugin.createService('History', PREFIX + 'start', 'video', true, Plugin.path + 'icon.png');
 
-  plugin.addURI(PREFIX + 'start', function(page) {
+  plugin.addURI(historyPageUrl, function(page) {
+  
+    // Remember current in-memory timestamp and subscribe to navigator URL changes.
+    // When user returns to this page (back action) and entries were updated,
+    // redirect to the same URI to force reloading the page contents.
+    lastHistoryStamp = historyUpdatedStamp;
+
+    debugLog("history page opened, url=" + safeString(page.url, '<none>') +
+  "\n historyPageUrl= " +historyPageUrl +
+  "\n currentPageUrl= " + currentPageUrl +
+  "\n isSame=" + (currentPageUrl === historyPageUrl ? "true" : "false") +
+  "\n historyUpdatedStamp=" + historyUpdatedStamp +
+  "\n lastHistoryStamp=" + lastHistoryStamp);
+ 
     page.type = 'directory';
     page.metadata.title = 'History';
 
@@ -507,7 +560,7 @@
         title: titleForEntry(list[i])
       });
     }
-
+ 
     page.loading = false;
   });
 
