@@ -21,9 +21,9 @@
       historyUpdatedStamp = Date.now();
       browseStack = [];
       pendingFocus = null;
-      debugLog('history cleared by user');
+      debugLog(debug && 'history cleared by user');
     } catch (e) {
-      debugLog('failed to clear history: ' + e);
+      debugLog(debug && 'failed to clear history: ' + e);
     }
   });
 
@@ -49,21 +49,21 @@
 
   function debugDescribeNode(node) {
     if (!node) {
-      debugLog('node payload is <null>');
+      debugLog(debug && 'node payload is <null>');
       return;
     }
 
     try {
       var keys = P.enumerate(node);
-      debugLog('node keys=' + (keys && keys.length ? keys.join(',') : '<none>'));
+      debugLog(debug && 'node keys=' + (keys && keys.length ? keys.join(',') : '<none>'));
     } catch (e1) {
-      debugLog('failed to enumerate node keys: ' + e1);
+      debugLog(debug && 'failed to enumerate node keys: ' + e1);
     }
 
     try {
       P.print(node);
     } catch (e2) {
-      debugLog('failed to print node tree: ' + e2);
+      debugLog(debug && 'failed to print node tree: ' + e2);
     }
   }
 
@@ -72,7 +72,7 @@
     try {
       return P.makeProp(node);
     } catch (e) {
-      debugLog('failed to proxy node: ' + e);
+      debugLog(debug && 'failed to proxy node: ' + e);
       return null;
     }
   }
@@ -201,7 +201,7 @@
 
   function clearPendingFocus(reason) {
     if (pendingFocus) {
-      debugLog('clear pending focus reason=' + safeString(reason, 'unknown') +
+      debugLog(debug && 'clear pending focus reason=' + safeString(reason, 'unknown') +
                '\npage=' + safeString(pendingFocus.pageUrl, '<none>') +
                '\nitem=' + safeString(pendingFocus.itemCanonical || pendingFocus.itemUrl, '<none>'));
     }
@@ -214,7 +214,7 @@
       itemCanonical: entry.itemCanonical || null,
       itemUrl: entry.itemUrl || null,
     };
-    debugLog('arm pending focus page=' + safeString(pendingFocus.pageUrl, '<none>') +
+    debugLog(debug && 'arm pending focus page=' + safeString(pendingFocus.pageUrl, '<none>') +
              '\ncanonical=' + safeString(pendingFocus.itemCanonical, '<none>') +
              '\nurl=' + safeString(pendingFocus.itemUrl, '<none>'));
   }
@@ -244,7 +244,7 @@
     var targetCanonical = safeString(pendingFocus.itemCanonical, null);
     var targetUrl = safeString(pendingFocus.itemUrl, null);
 
-    debugLog('inspect node title=' + nodeTitle +
+    debugLog(debug && 'inspect node title=' + nodeTitle +
              '\n url=' + nodeUrl +
              '\n type=' + nodeType +
              '\n canonical=' + nodeCanonical +
@@ -252,16 +252,16 @@
              '\n targetUrl=' + targetUrl);
 
     if (targetCanonical && nodeCanonical && targetCanonical === nodeCanonical) {
-      debugLog('matched node by canonical url=' + safeString(nodeUrl, '<none>'));
+      debugLog(debug && 'matched node by canonical url=' + safeString(nodeUrl, '<none>'));
       return true;
     }
 
     if (targetUrl && nodeUrl && targetUrl === nodeUrl) {
-      debugLog('matched node by item url=' + safeString(nodeUrl, '<none>'));
+      debugLog(debug && 'matched node by item url=' + safeString(nodeUrl, '<none>'));
       return true;
     }
 
-    debugLog('node did not match target');
+    debugLog(debug && 'node did not match target');
 
     return false;
   }
@@ -277,11 +277,11 @@
       // Let default page focus logic pick this item.   
       node.metadata.autofocus = true;
       node.metadata.focusable = 1.5;
-      debugLog('applied autofocus to node url=' + safeString(node.url, '<none>'));
+      debugLog(debug && 'applied autofocus to node url=' + safeString(node.url, '<none>'));
       clearPendingFocus('marked');
       return true;
     } catch (e) {
-      debugLog('failed to apply autofocus: ' + e);
+      debugLog(debug && 'failed to apply autofocus: ' + e);
       return false;
     }
   }
@@ -291,12 +291,12 @@
     try {
       var nav = P.global.navigators.current;
       if (!nav) {
-        debugLog(prefix + ' nav.current missing');
+        debugLog(debug && prefix + ' nav.current missing');
         return;
       }
       var cp = nav.currentpage;
       if (!cp) {
-        debugLog(prefix + ' currentpage missing');
+        debugLog(debug && prefix + ' currentpage missing');
         return;
       }
 
@@ -306,9 +306,9 @@
       var curTitle = safeString(curModel.metadata && curModel.metadata.title, '<none>');
       var curCanonical = safeString(curModel.metadata && curModel.metadata.canonical_url, '<none>');
 
-      debugLog(prefix + ' currentpage { url=' + curUrl + ', type=' + curType + ', title=' + curTitle + ', canonical=' + curCanonical + ' }');
+      debugLog(debug && prefix + ' currentpage { url=' + curUrl + ', type=' + curType + ', title=' + curTitle + ', canonical=' + curCanonical + ' }');
     } catch (e) {
-      debugLog(prefix + ' dump error: ' + e);
+      debugLog(debug && prefix + ' dump error: ' + e);
     }
   }
 
@@ -337,11 +337,11 @@ function getNavigatorEventSink() {
    // dumpCurrentPageState('url update');
     var url = safeString(v, null);
     currentPageUrl = url;
-    debugLog('current page url'+
+    debugLog(debug && 'current page url'+
       '\n updated=' + safeString(url, '<none>') +
       '\n lastPage=' + safeString(lastPageUrl, '<none>') +
       '\n pendingFocus=' + (pendingFocus ? 'yes' : 'no'));
-    debugLog("historyPageUrl= " +historyPageUrl +
+    debugLog(debug && "historyPageUrl= " +historyPageUrl +
   "\n currentPageUrl= " + currentPageUrl +
   "\n isSame=" + (url === historyPageUrl ? "true" : "false") +
   "\n historyUpdatedStamp=" + historyUpdatedStamp +
@@ -352,7 +352,7 @@ function getNavigatorEventSink() {
         if(!isPendingActiveForPage(url))
             pendingFocus = null;
 
-      debugLog('page url changed current=' + url +
+      debugLog(debug && 'page url changed current=' + url +
                ' target=' + safeString(pendingFocus.pageUrl, '<none>') +
                ' active=' + pendingFocus !== null);
     }
@@ -364,7 +364,7 @@ function getNavigatorEventSink() {
     else {
       if (url === historyPageUrl) {
         if (historyUpdatedStamp !== lastHistoryStamp) {
-          debugLog('history page refresh triggered, reloading page, evenSink = ', P.global.navigators.current.eventSink);
+          debugLog(debug && 'history page refresh triggered, reloading page, evenSink = ', P.global.navigators.current.eventSink);
           prop.sendEvent(P.global.navigators.current.currentpage.eventSink, 'redirect', historyPageUrl);
         }
       }
@@ -376,7 +376,7 @@ function getNavigatorEventSink() {
     //dumpCurrentPageState('type update');
     currentPageType = safeString(v, null);
 
-    debugLog('current page type ' + safeString(currentPageType, '<none>'));
+    debugLog(debug && 'current page type ' + safeString(currentPageType, '<none>'));
     // When we transition to a browsable page, update the last known browsable URL.
     if (isBrowsablePage(currentPageUrl, currentPageType)) {
       updateBrowsable(currentPageUrl, currentPageTitle);
@@ -387,7 +387,7 @@ function getNavigatorEventSink() {
    // dumpCurrentPageState('canonical_url update');
     currentPageCanonical = safeString(v, null);
 
-    debugLog('current page canonical url ' + safeString(currentPageCanonical, '<none>'));
+    debugLog(debug && 'current page canonical url ' + safeString(currentPageCanonical, '<none>'));
     // Update the top stack entry if it matches the current page.
     var top = browseStack.length > 0 ? browseStack[browseStack.length - 1] : null;
     if (top && top.url === currentPageUrl && currentPageCanonical) {
@@ -399,7 +399,7 @@ function getNavigatorEventSink() {
     //dumpCurrentPageState('title update');
     var title = safeString(v, null);
     currentPageTitle = title;
-    debugLog('current page title ' + safeString(title, '<none>'));
+    debugLog(debug && 'current page title ' + safeString(title, '<none>'));
 
     if (isBrowsablePage(currentPageUrl, currentPageType) && title) {
       lastPageTitle = title;
@@ -416,19 +416,19 @@ function getNavigatorEventSink() {
     }
 
     if (type === 'addchild') {
-      debugLog('node event type=addchild page=' + safeString(currentPageUrl, '<none>'));
+      debugLog(debug && 'node event type=addchild page=' + safeString(currentPageUrl, '<none>'));
       markNodeAutofocus(v1);
       return;
     }
 
     if (type === 'addchildbefore') {
-      debugLog('node event type=addchildbefore page=' + safeString(currentPageUrl, '<none>'));
+      debugLog(debug && 'node event type=addchildbefore page=' + safeString(currentPageUrl, '<none>'));
       markNodeAutofocus(v1);
       return;
     }
 
     if ((type === 'addchilds' || type === 'addchildsbefore') && v1 && v1.length) {
-      debugLog('node event type=' + type + ' count=' + v1.length + ' page=' + safeString(currentPageUrl, '<none>'));
+      debugLog(debug && 'node event type=' + type + ' count=' + v1.length + ' page=' + safeString(currentPageUrl, '<none>'));
       for (var i = 0; i < v1.length; i++) {
         if (markNodeAutofocus(v1[i])) {
           return;
@@ -440,7 +440,7 @@ function getNavigatorEventSink() {
   // Parent subscribe that reads properties and forwards them to handlers
   // (works on Android where per-value subscriptions may not fire).
   P.subscribe(P.global.navigators.current.currentpage, function(type, value) {
-    //debugLog('currentpage event type=' + type + ' value=' + (value !== undefined ? String(value) : '<undef>'));
+    //debugLog(debug && 'currentpage event type=' + type + ' value=' + (value !== undefined ? String(value) : '<undef>'));
     //dumpCurrentPageState('event');
 
     try {
@@ -450,14 +450,14 @@ function getNavigatorEventSink() {
       if (!cp) return;
 
       // if(cp.url)
-      //   debugLog('currentpage url=' + safeString(cp.url, '<none>'));
+      //   debugLog(debug && 'currentpage url=' + safeString(cp.url, '<none>'));
 
       if(cp.url &&  currentPageUrl != safeString(cp.url))
         onCurrentPageUrlUpdate(cp.url);
 
       var model = cp.model || {};
       // if(model.type)
-      //   debugLog('currentpage model.type=' + safeString(model.type, '<none>'));
+      //   debugLog(debug && 'currentpage model.type=' + safeString(model.type, '<none>'));
 
       if(model.type && currentPageType != safeString(model.type))
         onCurrentPageTypeUpdate(model.type);
@@ -470,7 +470,7 @@ function getNavigatorEventSink() {
         onCurrentPageTitleUpdate(metadata.title);
 
     } catch (e) {
-      debugLog('parent subscribe handler error: ' + e);
+      debugLog(debug && 'parent subscribe handler error: ' + e);
     }
   }, { autoDestroy: false });
 
@@ -497,9 +497,9 @@ function getNavigatorEventSink() {
     }
 
     if (!pageUrl) return;
-    debugLog("data title=" + safeString(data && data.title, '<none>'));
+    debugLog(debug && "data title=" + safeString(data && data.title, '<none>'));
     // debugDescribeNode(data);
-    // debugLog("origin");
+    // debugLog(debug && "origin");
     // debugDescribeNode(origin);
 
     // var attempts = [];
@@ -521,14 +521,14 @@ function getNavigatorEventSink() {
     //   var a = attempts[ti];
     //   logLines.push(a.src + '=' + safeString(a.val, '<null>'));
     // }
-    // debugLog('title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
+    // debugLog(debug && 'title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
     
     itemTitle =safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
 
 
     var pageTitle = (found && found.title) || lastPageTitle || currentPageTitle || pageUrl;
 
-    debugLog('save entry page=' + safeString(pageUrl, '<none>') +
+    debugLog(debug && 'save entry page=' + safeString(pageUrl, '<none>') +
          '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
         '\n title=' + itemTitle);
 
@@ -589,19 +589,19 @@ function getNavigatorEventSink() {
     var targetPageUrl = safeString(entry.pageUrl, null);
     var targetItemUrl = safeString(entry.itemUrl, null);
 
-    debugLog('open history idx=' + idx +
+    debugLog(debug && 'open history idx=' + idx +
              ' page=' + safeString(targetPageUrl, '<none>') +
              ' item=' + safeString(targetItemUrl, '<none>'));
 
     if (targetPageUrl && targetPageUrl.indexOf(PREFIX) !== 0) {
       armPendingFocus(entry);
-      debugLog('redirect to page=' + targetPageUrl);
+      debugLog(debug && 'redirect to page=' + targetPageUrl);
       page.redirect(targetPageUrl);
       return;
     }
 
     if (targetItemUrl) {
-      debugLog('redirect directly to item=' + targetItemUrl);
+      debugLog(debug && 'redirect directly to item=' + targetItemUrl);
       page.redirect(targetItemUrl);
       return;
     }
