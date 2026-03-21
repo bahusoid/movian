@@ -37,7 +37,7 @@
   var currentPageTitle = null;
   var currentPageType = null;
   var currentPageCanonical = null;
-
+  var nodesSubscriptionActive = false;
   var pendingFocus = null;
     // In-memory stamp to signal history updates
   var historyUpdatedStamp = 0;
@@ -213,10 +213,11 @@
   }
 
   function clearPendingFocus(reason) {
-    if (pendingFocus) {
+    var pf = pendingFocus;
+    if (pf) {
       debugLog(debug && 'clear pending focus reason=' + safeString(reason, 'unknown') +
-               '\npage=' + safeString(pendingFocus.pageUrl, '<none>') +
-               '\nitem=' + safeString(pendingFocus.itemCanonical || pendingFocus.itemUrl, '<none>'));
+               '\npage=' + safeString(pf.pageUrl, '<none>') +
+               '\nitem=' + safeString(pf.itemCanonical || pf.itemUrl, '<none>'));
     }
     pendingFocus = null;
   }
@@ -227,19 +228,22 @@
       itemCanonical: entry.itemCanonical || null,
       itemUrl: entry.itemUrl || null,
     };
-    debugLog(debug && 'arm pending focus page=' + safeString(pendingFocus.pageUrl, '<none>') +
-             '\ncanonical=' + safeString(pendingFocus.itemCanonical, '<none>') +
-             '\nurl=' + safeString(pendingFocus.itemUrl, '<none>'));
+    var pf = pendingFocus;
+    debugLog(debug && 'arm pending focus page=' + safeString(pf.pageUrl, '<none>') +
+             '\ncanonical=' + safeString(pf.itemCanonical, '<none>') +
+             '\nurl=' + safeString(pf.itemUrl, '<none>'));
   }
 
   function isPendingActiveForPage(url) {
-    if (!pendingFocus) return false;
+    var pf = pendingFocus;
+    if (!pf) return false;
 
-    return safeString(url, '') === safeString(pendingFocus.pageUrl, '');
+    return safeString(url, '') === safeString(pf.pageUrl, '');
   }
 
   function nodeMatchesPending(node, rawNode) {
-    if (!pendingFocus || !node) return false;
+    var pf = pendingFocus;
+    if (!pf || !node) return false;
 
     //debugDescribeNode(rawNode || node);
 
@@ -254,8 +258,8 @@
         nodeUrl = nodeMetaCanonUrl;
 
     var nodeCanonical = canonicalFromUrl(nodeUrl);
-    var targetCanonical = safeString(pendingFocus.itemCanonical, null);
-    var targetUrl = safeString(pendingFocus.itemUrl, null);
+    var targetCanonical = safeString(pf.itemCanonical, null);
+    var targetUrl = safeString(pf.itemUrl, null);
 
     debugLog(debug && 'inspect node title=' + nodeTitle +
              '\n url=' + nodeUrl +
@@ -280,7 +284,8 @@
   }
 
   function markNodeAutofocus(rawNode) {
-    if (!rawNode || !pendingFocus) return false;
+    var pf = pendingFocus;
+    if (!rawNode || !pf) return false;
 
     var node = makeNodeProxy(rawNode);
     if (!node) return false;
@@ -350,19 +355,14 @@ function getNavigatorEventSink() {
    // dumpCurrentPageState('url update');
     var url = safeString(v, null);
     currentPageUrl = url;
+    var pf = pendingFocus;
     debugLog(debug && 'current page url'+
       '\n updated=' + safeString(url, '<none>') +
       '\n lastPage=' + safeString(lastPageUrl, '<none>') +
-      '\n pendingFocus=' + (pendingFocus ? 'yes' : 'no'));
+      '\n pendingFocus=' + (pf ? 'yes' : 'no'));
 
-    if (pendingFocus) {
-        if(!isPendingActiveForPage(url))
-            pendingFocus = null;
-
-      debugLog(debug && 'page url changed current=' + url +
-               ' target=' + safeString(pendingFocus.pageUrl, '<none>') +
-               ' active=' + pendingFocus !== null);
-    }
+      if(!isPendingActiveForPage(url))
+          pendingFocus = null;
 
     if (isBrowsablePage(url, currentPageType)) {
       lastPageUrl = url;
@@ -417,8 +417,17 @@ function getNavigatorEventSink() {
     }
   }
 
-  P.subscribe(P.global.navigators.current.currentpage.model.nodes, function(type, v1) {
-    if (!pendingFocus || !currentPageUrl || !isPendingActiveForPage(currentPageUrl)) {
+
+function onPageModelNodeEvent(type, v1) {
+    debugLog(debug && 'node event type=' + type);
+    if(type === "destroyed")
+    {
+      nodesSubscriptionActive = false;
+      return;
+    }
+
+    var pf = pendingFocus;
+    if (!pf || !currentPageUrl || !isPendingActiveForPage(currentPageUrl)) {
       return;
     }
 
@@ -442,7 +451,20 @@ function getNavigatorEventSink() {
         }
       }
     }
-  }, { autoDestroy: false });
+  }
+
+  function subscribeToPageModelNodes()
+  {
+    debugLog(debug && 'subscribe to page model nodes');
+    nodesSubscriptionActive = true;
+    try{
+    prop.subscribe(prop.global.navigators.current.currentpage.model.nodes, onPageModelNodeEvent, { autoDestroy: false });
+    }
+    catch(e)    {
+      debugLog(debug && 'failed to subscribe to page model nodes: ' + e);
+      nodesSubscriptionActive = false;
+    }
+  }
 
   // Parent subscribe that reads properties and forwards them to handlers
   // (works on Android where per-value subscriptions may not fire).
@@ -456,10 +478,16 @@ function getNavigatorEventSink() {
       var cp = nav.currentpage;
       if (!cp) return;
 
+      var pageUrl = safeString(cp.url);
+      if(!nodesSubscriptionActive  && pageUrl && isPendingActiveForPage(pageUrl))
+      {
+        subscribeToPageModelNodes();
+      }
+
       // if(cp.url)
       //   debugLog(debug && 'currentpage url=' + safeString(cp.url, '<none>'));
 
-      if(cp.url &&  currentPageUrl != safeString(cp.url))
+      if(pageUrl &&  currentPageUrl != pageUrl)
         onCurrentPageUrlUpdate(cp.url);
 
       var model = cp.model || {};
