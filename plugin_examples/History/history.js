@@ -4,7 +4,7 @@
   var STORE_KEY = 'entries';
   var MAX_ENTRIES = 100;
 
-  var P = require('movian/prop');
+  var prop = require('movian/prop');
   var videoscrobbler = require('movian/videoscrobbler');
 
   var store = plugin.createStore('history_store');
@@ -56,14 +56,14 @@
     }
 
     try {
-      var keys = P.enumerate(node);
+      var keys = prop.enumerate(node);
       debugLog(debug && 'node keys=' + (keys && keys.length ? keys.join(',') : '<none>'));
     } catch (e1) {
       debugLog(debug && 'failed to enumerate node keys: ' + e1);
     }
 
     try {
-      P.print(node);
+      prop.print(node);
     } catch (e2) {
       debugLog(debug && 'failed to print node tree: ' + e2);
     }
@@ -72,7 +72,7 @@
   function makeNodeProxy(node) {
     if (!node) return null;
     try {
-      return P.makeProp(node);
+      return prop.makeProp(node);
     } catch (e) {
       debugLog(debug && 'failed to proxy node: ' + e);
       return null;
@@ -80,7 +80,7 @@
   }
 
   function safeString(v, fallback) {
-    if (v === null || v === undefined) {
+    if (v == null) {
       return fallback !== undefined ? fallback : null;
     }
     try {
@@ -90,7 +90,7 @@
     } catch (e) {
     }
     v = String(v);
-    return v !== '' ? v : (fallback !== undefined ? fallback : null);
+    return (v !== '' && v !== 'null') ? v : (fallback !== undefined ? fallback : null);
   }
 
   function isBrowsablePage(url, type) {
@@ -307,7 +307,7 @@
   // Debug subscription: monitor currentpage changes in detail (Android/Linux comparison)
   function dumpCurrentPageState(prefix) {
     try {
-      var nav = P.global.navigators.current;
+      var nav = prop.global.navigators.current;
       if (!nav) {
         debugLog(debug && prefix + ' nav.current missing');
         return;
@@ -329,28 +329,6 @@
       debugLog(debug && prefix + ' dump error: ' + e);
     }
   }
-
-  
-function getNavigatorEventSink() {
-    try {
-        var navigators = prop.global.navigators;
-        if (!navigators) {
-            log.e('[NAV] prop.global.navigators not found');
-            return null;
-        }
-        if (navigators.nodes) {
-            var nav = navigators.nodes[0];
-            if (nav && nav.eventSink) {
-                return nav.eventSink;
-            }
-        }
-        log.e('[NAV] navigator.eventSink not found');
-        return null;
-    } catch (e) {
-        log.e('[NAV] Error getting navigator eventSink: ' + e);
-        return null;
-    }
-}
   function onCurrentPageUrlUpdate(v) {
    // dumpCurrentPageState('url update');
     var url = safeString(v, null);
@@ -371,8 +349,8 @@ function getNavigatorEventSink() {
     else {
       if (url === historyPageUrl) {
         if (historyUpdatedStamp !== lastHistoryStamp) {
-          debugLog(debug && 'history page refresh triggered, reloading page, evenSink = ', P.global.navigators.current.eventSink);
-          prop.sendEvent(P.global.navigators.current.currentpage.eventSink, 'redirect', historyPageUrl);
+          debugLog(debug && 'history page refresh triggered, reloading page, evenSink = ', prop.global.navigators.current.eventSink);
+          prop.sendEvent(prop.global.navigators.current.currentpage.eventSink, 'redirect', historyPageUrl);
         }
       }
     }
@@ -468,12 +446,12 @@ function onPageModelNodeEvent(type, v1) {
 
   // Parent subscribe that reads properties and forwards them to handlers
   // (works on Android where per-value subscriptions may not fire).
-  P.subscribe(P.global.navigators.current.currentpage, function(type, value) {
+  prop.subscribe(prop.global.navigators.current.currentpage, function(type, value) {
     //debugLog(debug && 'currentpage event type=' + type + ' value=' + (value !== undefined ? String(value) : '<undef>'));
     //dumpCurrentPageState('event');
 
     try {
-      var nav = P.global.navigators.current;
+      var nav = prop.global.navigators.current;
 
       var cp = nav.currentpage;
       if (!cp) return;
