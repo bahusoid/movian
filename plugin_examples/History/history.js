@@ -23,9 +23,9 @@
       historyUpdatedStamp = Date.now();
       browseStack = [];
       pendingFocus = null;
-      debugLog(debug && 'history cleared by user');
+      log(debug && 'history cleared by user');
     } catch (e) {
-      debugLog(debug && 'failed to clear history: ' + e);
+      log(debug && 'failed to clear history: ' + e);
     }
   });
 
@@ -44,28 +44,28 @@
   const historyPageUrl = PREFIX + 'start';
   var lastHistoryStamp = 0;
 
-  function debugLog(msg) {
+  function log(msg) {
     if (!debug) return;
-    console.log('History focus: ' + msg);
+    console.log('History: ' + msg);
   }
 
   function debugDescribeNode(node) {
     if (!node) {
-      debugLog(debug && 'node payload is <null>');
+      log(debug && 'node payload is <null>');
       return;
     }
 
     try {
       var keys = prop.enumerate(node);
-      debugLog(debug && 'node keys=' + (keys && keys.length ? keys.join(',') : '<none>'));
+      log(debug && 'node keys=' + (keys && keys.length ? keys.join(',') : '<none>'));
     } catch (e1) {
-      debugLog(debug && 'failed to enumerate node keys: ' + e1);
+      log(debug && 'failed to enumerate node keys: ' + e1);
     }
 
     try {
       prop.print(node);
     } catch (e2) {
-      debugLog(debug && 'failed to print node tree: ' + e2);
+      log(debug && 'failed to print node tree: ' + e2);
     }
   }
 
@@ -74,7 +74,7 @@
     try {
       return prop.makeProp(node);
     } catch (e) {
-      debugLog(debug && 'failed to proxy node: ' + e);
+      log(debug && 'failed to proxy node: ' + e);
       return null;
     }
   }
@@ -215,7 +215,7 @@
   function clearPendingFocus(reason) {
     var pf = pendingFocus;
     if (pf) {
-      debugLog(debug && 'clear pending focus reason=' + safeString(reason, 'unknown') +
+      log(debug && 'clear pending focus reason=' + safeString(reason, 'unknown') +
                '\npage=' + safeString(pf.pageUrl, '<none>') +
                '\nitem=' + safeString(pf.itemCanonical || pf.itemUrl, '<none>'));
     }
@@ -229,7 +229,7 @@
       itemUrl: entry.itemUrl || null,
     };
     var pf = pendingFocus;
-    debugLog(debug && 'arm pending focus page=' + safeString(pf.pageUrl, '<none>') +
+    log(debug && 'arm pending focus page=' + safeString(pf.pageUrl, '<none>') +
              '\ncanonical=' + safeString(pf.itemCanonical, '<none>') +
              '\nurl=' + safeString(pf.itemUrl, '<none>'));
   }
@@ -261,7 +261,7 @@
     var targetCanonical = safeString(pf.itemCanonical, null);
     var targetUrl = safeString(pf.itemUrl, null);
 
-    debugLog(debug && 'inspect node title=' + nodeTitle +
+    log(debug && 'inspect node title=' + nodeTitle +
              '\n url=' + nodeUrl +
              '\n type=' + nodeType +
              '\n canonical=' + nodeCanonical +
@@ -269,16 +269,16 @@
              '\n targetUrl=' + targetUrl);
 
     if (targetCanonical && nodeCanonical && targetCanonical === nodeCanonical) {
-      debugLog(debug && 'matched node by canonical url=' + safeString(nodeUrl, '<none>'));
+      log(debug && 'matched node by canonical url=' + safeString(nodeUrl, '<none>'));
       return true;
     }
 
     if (targetUrl && nodeUrl && targetUrl === nodeUrl) {
-      debugLog(debug && 'matched node by item url=' + safeString(nodeUrl, '<none>'));
+      log(debug && 'matched node by item url=' + safeString(nodeUrl, '<none>'));
       return true;
     }
 
-    debugLog(debug && 'node did not match target');
+    log(debug && 'node did not match target');
 
     return false;
   }
@@ -295,11 +295,11 @@
       // Let default page focus logic pick this item.   
       node.metadata.autofocus = true;
       node.metadata.focusable = 2;
-      debugLog(debug && 'applied autofocus to node url=' + safeString(node.url, '<none>'));
+      log(debug && 'applied autofocus to node url=' + safeString(node.url, '<none>'));
       clearPendingFocus('marked');
       return true;
     } catch (e) {
-      debugLog(debug && 'failed to apply autofocus: ' + e);
+      log(debug && 'failed to apply autofocus: ' + e);
       return false;
     }
   }
@@ -309,12 +309,12 @@
     try {
       var nav = prop.global.navigators.current;
       if (!nav) {
-        debugLog(debug && prefix + ' nav.current missing');
+        log(debug && prefix + ' nav.current missing');
         return;
       }
       var cp = nav.currentpage;
       if (!cp) {
-        debugLog(debug && prefix + ' currentpage missing');
+        log(debug && prefix + ' currentpage missing');
         return;
       }
 
@@ -324,9 +324,9 @@
       var curTitle = safeString(curModel.metadata && curModel.metadata.title, '<none>');
       var curCanonical = safeString(curModel.metadata && curModel.metadata.canonical_url, '<none>');
 
-      debugLog(debug && prefix + ' currentpage { url=' + curUrl + ', type=' + curType + ', title=' + curTitle + ', canonical=' + curCanonical + ' }');
+      log(debug && prefix + ' currentpage { url=' + curUrl + ', type=' + curType + ', title=' + curTitle + ', canonical=' + curCanonical + ' }');
     } catch (e) {
-      debugLog(debug && prefix + ' dump error: ' + e);
+      log(debug && prefix + ' dump error: ' + e);
     }
   }
   function onCurrentPageUrlUpdate(v) {
@@ -334,7 +334,7 @@
     var url = safeString(v, null);
     currentPageUrl = url;
     var pf = pendingFocus;
-    debugLog(debug && 'current page url'+
+    log(debug && 'current page url'+
       '\n updated=' + safeString(url, '<none>') +
       '\n lastPage=' + safeString(lastPageUrl, '<none>') +
       '\n pendingFocus=' + (pf ? 'yes' : 'no'));
@@ -349,19 +349,18 @@
     else {
       if (url === historyPageUrl) {
         if (historyUpdatedStamp !== lastHistoryStamp) {
-          debugLog(debug && 'history page refresh triggered, reloading page, evenSink = ', prop.global.navigators.current.eventSink);
+          log(debug && 'history page refresh triggered, reloading page, evenSink = ', prop.global.navigators.current.eventSink);
           prop.sendEvent(prop.global.navigators.current.currentpage.eventSink, 'redirect', historyPageUrl);
         }
       }
     }
   }
 
-
   function onCurrentPageTypeUpdate(v) {
     //dumpCurrentPageState('type update');
     currentPageType = safeString(v, null);
 
-    debugLog(debug && 'current page type ' + safeString(currentPageType, '<none>'));
+    log(debug && 'current page type ' + safeString(currentPageType, '<none>'));
     // When we transition to a browsable page, update the last known browsable URL.
     if (isBrowsablePage(currentPageUrl, currentPageType)) {
       updateBrowsable(currentPageUrl, currentPageTitle);
@@ -372,7 +371,7 @@
    // dumpCurrentPageState('canonical_url update');
     currentPageCanonical = safeString(v, null);
 
-    debugLog(debug && 'current page canonical url ' + safeString(currentPageCanonical, '<none>'));
+    log(debug && 'current page canonical url ' + safeString(currentPageCanonical, '<none>'));
     // Update the top stack entry if it matches the current page.
     var top = browseStack.length > 0 ? browseStack[browseStack.length - 1] : null;
     if (top && top.url === currentPageUrl && currentPageCanonical) {
@@ -384,7 +383,7 @@
     //dumpCurrentPageState('title update');
     var title = safeString(v, null);
     currentPageTitle = title;
-    debugLog(debug && 'current page title ' + safeString(title, '<none>'));
+    log(debug && 'current page title ' + safeString(title, '<none>'));
 
     if (isBrowsablePage(currentPageUrl, currentPageType) && title) {
       lastPageTitle = title;
@@ -397,7 +396,7 @@
 
 
 function onPageModelNodeEvent(type, v1) {
-    debugLog(debug && 'node event type=' + type);
+    log(debug && 'node event type=' + type);
     if(type === "destroyed")
     {
       nodesSubscriptionActive = false;
@@ -410,19 +409,19 @@ function onPageModelNodeEvent(type, v1) {
     }
 
     if (type === 'addchild') {
-      debugLog(debug && 'node event type=addchild page=' + safeString(currentPageUrl, '<none>'));
+      log(debug && 'node event type=addchild page=' + safeString(currentPageUrl, '<none>'));
       markNodeAutofocus(v1);
       return;
     }
 
     if (type === 'addchildbefore') {
-      debugLog(debug && 'node event type=addchildbefore page=' + safeString(currentPageUrl, '<none>'));
+      log(debug && 'node event type=addchildbefore page=' + safeString(currentPageUrl, '<none>'));
       markNodeAutofocus(v1);
       return;
     }
 
     if ((type === 'addchilds' || type === 'addchildsbefore') && v1 && v1.length) {
-      debugLog(debug && 'node event type=' + type + ' count=' + v1.length + ' page=' + safeString(currentPageUrl, '<none>'));
+      log(debug && 'node event type=' + type + ' count=' + v1.length + ' page=' + safeString(currentPageUrl, '<none>'));
       for (var i = 0; i < v1.length; i++) {
         if (markNodeAutofocus(v1[i])) {
           return;
@@ -433,13 +432,13 @@ function onPageModelNodeEvent(type, v1) {
 
   function subscribeToPageModelNodes()
   {
-    debugLog(debug && 'subscribe to page model nodes');
+    log(debug && 'subscribe to page model nodes');
     nodesSubscriptionActive = true;
     try{
     prop.subscribe(prop.global.navigators.current.currentpage.model.nodes, onPageModelNodeEvent, { autoDestroy: false });
     }
     catch(e)    {
-      debugLog(debug && 'failed to subscribe to page model nodes: ' + e);
+      log(debug && 'failed to subscribe to page model nodes: ' + e);
       nodesSubscriptionActive = false;
     }
   }
@@ -447,7 +446,7 @@ function onPageModelNodeEvent(type, v1) {
   // Parent subscribe that reads properties and forwards them to handlers
   // (works on Android where per-value subscriptions may not fire).
   prop.subscribe(prop.global.navigators.current.currentpage, function(type, value) {
-    //debugLog(debug && 'currentpage event type=' + type + ' value=' + (value !== undefined ? String(value) : '<undef>'));
+    //log(debug && 'currentpage event type=' + type + ' value=' + (value !== undefined ? String(value) : '<undef>'));
     //dumpCurrentPageState('event');
 
     try {
@@ -462,16 +461,10 @@ function onPageModelNodeEvent(type, v1) {
         subscribeToPageModelNodes();
       }
 
-      // if(cp.url)
-      //   debugLog(debug && 'currentpage url=' + safeString(cp.url, '<none>'));
-
       if(pageUrl &&  currentPageUrl != pageUrl)
         onCurrentPageUrlUpdate(cp.url);
 
       var model = cp.model || {};
-      // if(model.type)
-      //   debugLog(debug && 'currentpage model.type=' + safeString(model.type, '<none>'));
-
       if(model.type && currentPageType != safeString(model.type))
         onCurrentPageTypeUpdate(model.type);
 
@@ -483,7 +476,7 @@ function onPageModelNodeEvent(type, v1) {
         onCurrentPageTitleUpdate(metadata.title);
 
     } catch (e) {
-      debugLog(debug && 'parent subscribe handler error: ' + e);
+      log(debug && 'parent subscribe handler error: ' + e);
     }
   }, { autoDestroy: false });
 
@@ -510,9 +503,9 @@ function onPageModelNodeEvent(type, v1) {
     }
 
     if (!pageUrl) return;
-    debugLog(debug && "data title=" + safeString(data && data.title, '<none>'));
+    log(debug && "data title=" + safeString(data && data.title, '<none>'));
     // debugDescribeNode(data);
-    // debugLog(debug && "origin");
+    // log(debug && "origin");
     // debugDescribeNode(origin);
 /*
     if(debug) {
@@ -548,17 +541,14 @@ function onPageModelNodeEvent(type, v1) {
         var a = attempts[ti];
         logLines.push(a.src + '=' + safeString(a.val, '<null>'));
       }
-      debugLog(debug && 'title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
+      log(debug && 'title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
     }
 */
-    itemTitle =safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
-
+    itemTitle = safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
 
     var pageTitle = (found && found.title) || lastPageTitle || currentPageTitle || pageUrl;
 
-    debugLog(debug && 'save entry page=' + safeString(pageUrl, '<none>') +
-         '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
-    debugLog(debug && 'save entry pageUrl=' + safeString(pageUrl, '<none>') +
+    log(debug && 'save entry pageUrl=' + safeString(pageUrl, '<none>') +
         '\n pageTitle=' + safeString(pageTitle, '<none>') +
         '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
         '\n title=' + itemTitle);
@@ -620,19 +610,19 @@ function onPageModelNodeEvent(type, v1) {
     var targetPageUrl = safeString(entry.pageUrl, null);
     var targetItemUrl = safeString(entry.itemUrl, null);
 
-    debugLog(debug && 'open history idx=' + idx +
+    log(debug && 'open history idx=' + idx +
              ' page=' + safeString(targetPageUrl, '<none>') +
              ' item=' + safeString(targetItemUrl, '<none>'));
 
     if (targetPageUrl && targetPageUrl.indexOf(PREFIX) !== 0) {
       armPendingFocus(entry);
-      debugLog(debug && 'redirect to page=' + targetPageUrl);
+      log(debug && 'redirect to page=' + targetPageUrl);
       page.redirect(targetPageUrl);
       return;
     }
 
     if (targetItemUrl) {
-      debugLog(debug && 'redirect directly to item=' + targetItemUrl);
+      log(debug && 'redirect directly to item=' + targetItemUrl);
       page.redirect(targetItemUrl);
       return;
     }
