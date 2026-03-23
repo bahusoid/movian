@@ -514,28 +514,43 @@ function onPageModelNodeEvent(type, v1) {
     // debugDescribeNode(data);
     // debugLog(debug && "origin");
     // debugDescribeNode(origin);
-
-    // var attempts = [];
-    // attempts.push({ src: 'data.title', val: safeString(data && data.title, null) });
-    // attempts.push({ src: 'data.filename', val: safeString(data && data.filename, null) });
-    // attempts.push({ src: 'data.label', val: safeString(data && data.label, null) });
-    // attempts.push({ src: 'data.metadata.title', val: safeString(data && data.metadata && data.metadata.title, null) });
-    // attempts.push({ src: 'data.metadata.name', val: safeString(data && data.metadata && data.metadata.name, null) });
-    // attempts.push({ src: 'data.metadata.filename', val: safeString(data && data.metadata && data.metadata.filename, null) });
-    // attempts.push({ src: 'data.metadata.episode.title', val: safeString(data && data.metadata && data.metadata.episode && data.metadata.episode.title, null) });
-    // attempts.push({ src: 'origin.title', val: safeString(origin && origin.title, null) });
-    // attempts.push({ src: 'origin.metadata.title', val: safeString(origin && origin.metadata && origin.metadata.title, null) });
-    // attempts.push({ src: 'origin.metadata.name', val: safeString(origin && origin.metadata && origin.metadata.name, null) });
-    // attempts.push({ src: 'origin.metadata.filename', val: safeString(origin && origin.metadata && origin.metadata.filename, null) });
-
-    // var itemTitle = 'Unknown item';
-    // var logLines = [];
-    // for (var ti = 0; ti < attempts.length; ti++) {
-    //   var a = attempts[ti];
-    //   logLines.push(a.src + '=' + safeString(a.val, '<null>'));
-    // }
-    // debugLog(debug && 'title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
-    
+/*
+    if(debug) {
+      var attempts = [];
+      attempts.push({src: 'data.title', val: safeString(data && data.title, null)});
+      attempts.push({src: 'data.filename', val: safeString(data && data.filename, null)});
+      attempts.push({src: 'data.label', val: safeString(data && data.label, null)});
+      attempts.push({src: 'data.metadata.title', val: safeString(data && data.metadata && data.metadata.title, null)});
+      attempts.push({src: 'data.metadata.name', val: safeString(data && data.metadata && data.metadata.name, null)});
+      attempts.push({
+        src: 'data.metadata.filename',
+        val: safeString(data && data.metadata && data.metadata.filename, null)
+      });
+      attempts.push({
+        src: 'data.metadata.episode.title',
+        val: safeString(data && data.metadata && data.metadata.episode && data.metadata.episode.title, null)
+      });
+      attempts.push({src: 'origin.title', val: safeString(origin && origin.title, null)});
+      attempts.push({
+        src: 'origin.metadata.title',
+        val: safeString(origin && origin.metadata && origin.metadata.title, null)
+      });
+      attempts.push({
+        src: 'origin.metadata.name',
+        val: safeString(origin && origin.metadata && origin.metadata.name, null)
+      });
+      attempts.push({
+        src: 'origin.metadata.filename',
+        val: safeString(origin && origin.metadata && origin.metadata.filename, null)
+      });
+      var logLines = [];
+      for (var ti = 0; ti < attempts.length; ti++) {
+        var a = attempts[ti];
+        logLines.push(a.src + '=' + safeString(a.val, '<null>'));
+      }
+      debugLog(debug && 'title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
+    }
+*/
     itemTitle =safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
 
 
@@ -543,6 +558,9 @@ function onPageModelNodeEvent(type, v1) {
 
     debugLog(debug && 'save entry page=' + safeString(pageUrl, '<none>') +
          '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
+    debugLog(debug && 'save entry pageUrl=' + safeString(pageUrl, '<none>') +
+        '\n pageTitle=' + safeString(pageTitle, '<none>') +
+        '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
         '\n title=' + itemTitle);
 
     saveEntry({
