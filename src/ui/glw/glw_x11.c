@@ -870,6 +870,8 @@ static const struct {
   { XF86XK_AudioStop,     0,    ACTION_STOP},
   { XF86XK_Eject,         0,    ACTION_EJECT},
   { XF86XK_AudioRecord,   0,    ACTION_RECORD},
+  { XK_a,                    0, ACTION_SELECT_AUDIO_TRACK },
+  { XK_s,                    0, ACTION_SELECT_SUBTITLE_TRACK },
 
   { XF86XK_AudioNext,     0,    ACTION_SKIP_FORWARD},
   { XF86XK_AudioPrev,     0,    ACTION_SKIP_BACKWARD},
@@ -994,7 +996,7 @@ gl_keypress(glw_x11_t *gx11, XEvent *event)
     e = event_create(EVENT_MAKE_SCREENSHOT, sizeof(event_t));
   }
 
-  if(e == NULL) {
+  if(e == NULL || (g_gx11->fullwindow)) {
 
     for(i = 0; i < sizeof(keysym2action) / sizeof(*keysym2action); i++) {
 
@@ -1004,13 +1006,13 @@ gl_keypress(glw_x11_t *gx11, XEvent *event)
 	av[0] = keysym2action[i].action1;
 	av[1] = keysym2action[i].action2;
 	av[2] = keysym2action[i].action3;
+    int j = 1;
+    while (av[j] != ACTION_NONE)
+    {
+        ++j;
+    }
+    e = event_create_action_multi(av, j);
 
-	if(keysym2action[i].action3 != ACTION_NONE)
-	  e = event_create_action_multi(av, 3);
-        else if(keysym2action[i].action2 != ACTION_NONE)
-	  e = event_create_action_multi(av, 2);
-	else
-	  e = event_create_action_multi(av, 1);
 	break;
       }
     }
@@ -1078,7 +1080,6 @@ glw_x11_in_fullwindow(void *opaque, int v)
   glw_x11_t *gx11 = opaque;
   gx11->fullwindow = v;
 }
-
 
 /**
  *
