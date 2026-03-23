@@ -294,7 +294,7 @@
     try {
       // Let default page focus logic pick this item.   
       node.metadata.autofocus = true;
-      node.metadata.focusable = 1.5;
+      node.metadata.focusable = 2;
       debugLog(debug && 'applied autofocus to node url=' + safeString(node.url, '<none>'));
       clearPendingFocus('marked');
       return true;
