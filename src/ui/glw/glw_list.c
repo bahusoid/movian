@@ -518,8 +518,11 @@ glw_list_callback(glw_t *w, void *opaque, glw_signal_t signal, void *extra)
   default:
     break;
 
-  case GLW_SIGNAL_FOCUS_CHILD_INTERACTIVE:
   case GLW_SIGNAL_FOCUS_CHILD_AUTOMATIC:
+    if (!glw_is_focused(w))
+      break;
+  // Fall through
+  case GLW_SIGNAL_FOCUS_CHILD_INTERACTIVE:
     scroll_to_me(l, extra);
     l->gsc.suggest_cnt = 0;
     w->glw_flags &= ~GLW_FLOATING_FOCUS;
