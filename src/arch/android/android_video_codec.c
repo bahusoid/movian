@@ -184,7 +184,7 @@ drain_output(android_video_codec_t *avc, video_decoder_t *vd)
           }
         }
         AMediaCodec_releaseOutputBuffer(avc->codec, idx, 1);
-        
+        //fi->fi_update_pts_only = 0; //Can we skip syncing?
         fi.fi_type = 'SURF';
         if (avc->out_width > 0 && avc->out_height > 0) {
             fi.fi_dar_num = avc->out_width;
