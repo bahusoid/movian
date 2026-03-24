@@ -237,6 +237,7 @@ swthread(void *aux)
   plugins_load_all();
 #endif
 
+
   upgrade_init();
 
   usage_start();

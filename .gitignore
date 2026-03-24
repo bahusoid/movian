@@ -18,3 +18,8 @@ android/Showtime/libs/
 project.xcworkspace/
 xcuserdata/
 InfoPlist.h
+plugin_examples/HDRezka.TV.MOD/HDRezka.TV.MOD*.zip
+external_scripts/*
+temppy/*
+.idea/*
+walking-as/*
