@@ -361,6 +361,19 @@ Java_com_lonelycoder_mediaplayer_Core_coreInit(JNIEnv *env, jobject obj, jstring
   trace_arch(TRACE_INFO, "Core", initmsg);
 
   gconf.trace_level = TRACE_DEBUG;
+
+#ifdef DEBUG
+  /* Allow enabling GLW tracing on Android via a system property so
+   * developers can turn it on with adb without rebuilding. Usage:
+   *   adb shell setprop movian.debug_glw 1
+   * Then restart the app. */
+  char dbgprop[PROP_VALUE_MAX];
+  if(__system_property_get("movian.debug_glw", dbgprop) > 0) {
+    if(dbgprop[0] == '1')
+      gconf.debug_glw = 1;
+  }
+#endif
+
   gconf.time_format_system = time_24hrs ? TIME_FORMAT_24 : TIME_FORMAT_12;
 
   struct timeval tv;
