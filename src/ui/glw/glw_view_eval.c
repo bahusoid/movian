@@ -38,6 +38,7 @@
 #include "glw_text_bitmap.h"
 #include "prop/prop_window.h"
 #include "glw_texture.h"
+#include "glw.h"
 
 LIST_HEAD(clone_list, glw_clone);
 TAILQ_HEAD(vectorizer_element_queue, vectorizer_element);
@@ -7036,10 +7037,15 @@ glwf_focus(glw_view_eval_context_t *ec, struct token *self,
     glw_t *w = glw_find_neighbour(ec->w, rstr_get(a->t_rstring));
     w = glw_get_focusable_child(w);
     if(w != NULL) {
+      TRACE(TRACE_DEBUG, "GLW", "FocusMethod: Resolved focus target '%s' -> %s",
+            rstr_get(a->t_rstring), w->glw_class->gc_get_text != NULL ? w->glw_class->gc_get_text(w) : "");
+
       glw_focus_set(gr, w, GLW_FOCUS_SET_INTERACTIVE,
                     "FocusMethod");
     } else {
       rstr_set(&gr->gr_pending_focus, a->t_rstring);
+      TRACE(TRACE_DEBUG, "GLW", "FocusMethod: Pending focus set to '%s' at widget %s",
+            rstr_get(a->t_rstring), glw_get_name(ec->w));
     }
   }
   return 0;
