@@ -464,7 +464,7 @@ glw_array_callback(glw_t *w, void *opaque, glw_signal_t signal, void *extra)
     scroll_to_me(a, extra);
     a->gsc.suggest_cnt = 0;
     w->glw_flags &= ~GLW_FLOATING_FOCUS;
-    return 0;
+    break;
 
   case GLW_SIGNAL_CHILD_DESTROYED:
     if(a->gsc.scroll_to_me == extra)
