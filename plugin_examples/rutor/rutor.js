@@ -229,28 +229,20 @@ new page.Route(plugin.id + ":start", function(page) {
         title: 'Поиск на ' + service.baseURL
     });
 
-    html = http.request(service.baseURL + '/top').toString();
+    var searchHtml = http.request(service.baseURL + '/search/').toString();
+    var sel = searchHtml.match(/<select[^>]*(?:id="category_id"|name="category")[^>]*>([\s\S]*?)<\/select>/);
+    if (sel) {
+        var optRe = /<option\s+value="([^"]*)">([\s\S]*?)<\/option>/g;
+        var m;
+        while ((m = optRe.exec(sel[1]))) {
+            var val = m[1];
+            if(val == '0')
+                continue; // Skip "All categories" entry
 
-    page.appendItem(plugin.id + ":categories:", 'directory', {
-        title: 'Категории'
-    });
-
-    var doc = html.match(/<div id="index">([\s\S]*?)<!-- bottom banner -->/);
-    if (doc) {
-        var re = /<h2>([\s\S]*?)<\/h2>([\s\S]*?)<\/table>/g;
-        var match = re.exec(doc[1]);
-        while (match) {
-            page.appendItem("", "separator", {
-                title: new RichText(match[1])
+            var name = m[2].replace(/<[^>]+>/g, '').trim();
+            page.appendItem(plugin.id + ':browse:/browse/0/' + val + '/0/2:' + escape(name), 'directory', {
+                title: name
             });
-            scraper(page, match[2]);
-            var more = match[1].match(/<a href=([\s\S]*?)>([\s\S]*?)<\/a>/);
-            if (more) {
-                page.appendItem(plugin.id + ':browse:' + more[1] + ':' + escape(more[2]), 'directory', {
-                    title: 'Больше ►'
-                });                   
-            }
-            match = re.exec(doc[1]);
         }
     }
     page.loading = false;
@@ -264,7 +256,7 @@ function search(page, query) {
     function loader() {
         if (!tryToSearch) return false;
         page.loading = true;
-	var doc = http.request(service.baseURL + "/search/"+ fromPage +"/0/000/0/" + query.replace(/\s/g, '\+')).toString();
+	var doc = http.request(service.baseURL + "/search/"+ fromPage +"/0/000/2/" + query.replace(/\s/g, '\+')).toString();
 	page.loading = false;
         scraper(page, doc);
 	if (!doc.match(/downgif/)) return tryToSearch = false;

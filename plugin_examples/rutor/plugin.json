@@ -1,15 +1,14 @@
 {
-	"description": "<p>Rutor.info :: Свободный торрент трекер<p>fixed torrentURL, rev.29.03.2023",
-	"author": "lprot (mod by prudyus)", 
-	"homepage": "http://github.com/lprot/movian-plugin-rutor",
-	"title": "Rutor",
-	"synopsis": "Rutor.info :: Свободный торрент трекер",
-	"version": "0.3.4",
-        "file": "rutor.js",
+	"description": "Топ раздачи с Rutor.info",
+	"author": "lprot (mod by prudyus) (bahusoid mod)",
+	"title": "Rutor Top",
+	"synopsis": "Rutor.info :: Топ раздачи",
+	"version": "0.3.4-top.1",
+	"file": "rutor.js",
 	"showtimeVersion": "4.8",
 	"type": "ecmascript",
 	"icon": "logo.png",
-	"id": "rutor",
+	"id": "rutor.top",
 	"category": "video",
-        "apiversion": 2
+	"apiversion": 2
 }
