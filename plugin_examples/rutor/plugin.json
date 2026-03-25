@@ -3,12 +3,13 @@
 	"author": "lprot (mod by prudyus) (bahusoid mod)",
 	"title": "Rutor Top",
 	"synopsis": "Rutor.info :: Топ раздачи",
-	"version": "0.3.4-top.1",
+	"version": "0.3.4-top.2",
 	"file": "rutor.js",
 	"showtimeVersion": "4.8",
 	"type": "ecmascript",
 	"icon": "logo.png",
 	"id": "rutor.top",
 	"category": "video",
+	"homepage": "https://4pda.to/forum/index.php?showtopic=669064&view=findpost&p=142563446",
 	"apiversion": 2
 }

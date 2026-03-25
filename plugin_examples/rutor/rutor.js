@@ -184,7 +184,7 @@ function scraper(page, doc, section) {
 }
 
 new page.Route(plugin.id + ":browse:(.*):(.*)", function(page, url, title) {
-    setPageHeader(page, plugin.synopsis + ' / ' + unescape(title));
+    setPageHeader(page, unescape(title) + ' :: ' + plugin.synopsis);
     page.loading = true;
     page.entries = 0;
     var tryToSearch = true;
@@ -204,24 +204,14 @@ new page.Route(plugin.id + ":browse:(.*):(.*)", function(page, url, title) {
 });
 
 var html = 0;
-new page.Route(plugin.id + ":categories", function(page) {
-    setPageHeader(page, plugin.title + ' - Категории');
-    page.loading = true;
-    if (!html) 
-        html = http.request(service.baseURL + '/top').toString();
-    var re = /Самые популярные торренты в категории <a href=([\s\S]*?)>([\s\S]*?)<\/a>/g;
-    var match = re.exec(html);
-    while (match) {
-        var name = match[2].replace(/"/g, '').trim();
-        page.appendItem(plugin.id + ':browse:' + match[1] + ':' + escape(name), 'directory', {
-            title: name
-        });
-        match = re.exec(html);
-    }
-    page.loading = false;
-});
 
 new page.Route(plugin.id + ":start", function(page) {
+    function appendCategory(val, name) {
+        page.appendItem(plugin.id + ':browse:/browse/0/' + val + '/0/2:' + escape(name), 'directory', {
+            title: name
+        });
+    }
+
     setPageHeader(page, plugin.synopsis);
     page.loading = true;
 
@@ -231,6 +221,8 @@ new page.Route(plugin.id + ":start", function(page) {
 
     var searchHtml = http.request(service.baseURL + '/search/').toString();
     var sel = searchHtml.match(/<select[^>]*(?:id="category_id"|name="category")[^>]*>([\s\S]*?)<\/select>/);
+
+    sel = false;
     if (sel) {
         var optRe = /<option\s+value="([^"]*)">([\s\S]*?)<\/option>/g;
         var m;
@@ -240,9 +232,33 @@ new page.Route(plugin.id + ":start", function(page) {
                 continue; // Skip "All categories" entry
 
             var name = m[2].replace(/<[^>]+>/g, '').trim();
-            page.appendItem(plugin.id + ':browse:/browse/0/' + val + '/0/2:' + escape(name), 'directory', {
-                title: name
-            });
+            appendCategory(val, name);
+        }
+    } else {
+        console.log("Failed to parse categories from search page, using fallback categories");
+        // Just in case it's unlikely category id is changed.
+        var fallbackCategories = [
+            {v: '1', name: 'Зарубежные фильмы'},
+            {v: '5', name: 'Наши фильмы'},
+            {v: '12', name: 'Научно-популярные фильмы'},
+            {v: '4', name: 'Зарубежные сериалы'},
+            {v: '16', name: 'Наши сериалы'},
+            {v: '6', name: 'Телевизор'},
+            {v: '7', name: 'Мультипликация'},
+            {v: '10', name: 'Аниме'},
+            {v: '2', name: 'Музыка'},
+            {v: '8', name: 'Игры'},
+            {v: '9', name: 'Софт'},
+            {v: '13', name: 'Спорт и Здоровье'},
+            {v: '15', name: 'Юмор'},
+            {v: '14', name: 'Хозяйство и Быт'},
+            {v: '11', name: 'Книги'},
+            {v: '3', name: 'Другое'},
+            {v: '17', name: 'Иностранные релизы'}
+        ];
+        for (var i = 0; i < fallbackCategories.length; i++) {
+            var cat = fallbackCategories[i];
+            appendCategory(cat.v, cat.name);
         }
     }
     page.loading = false;
