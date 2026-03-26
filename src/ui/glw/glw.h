@@ -936,7 +936,6 @@ typedef struct glw_root {
 
   struct glw *gr_current_focus;
   struct glw *gr_last_focus;
-  int gr_last_focus_auto;
   int gr_delayed_focus_leave;
   prop_t *gr_last_focused_interactive;
   prop_t *gr_pointer_visible;

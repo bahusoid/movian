@@ -1347,8 +1347,7 @@ check_autofocus_limit(glw_t *n, glw_t *o)
   return limit;
 }
 
-
-static inline int should_focus(glw_root_t *gr, int how, glw_t* x, float weight)
+static inline int should_focus(int how, glw_t* x, float weight)
 {
   if (how == GLW_FOCUS_SET_INTERACTIVE)
     return 1;
@@ -1359,26 +1358,24 @@ static inline int should_focus(glw_root_t *gr, int how, glw_t* x, float weight)
   if (y == NULL || weight > y->glw_focus_weight)
     return 1;
 
-  if (weight != y->glw_focus_weight)
-    return 0;
-
-   if (gr->gr_last_focus_auto &&
-     //is it inserted before the currently focused entry?
-     x->glw_parent->glw_focused  && x == TAILQ_PREV(x->glw_parent->glw_focused, glw_queue, glw_parent_link))
-    return 1;
-
-  /* Handle floating focus
-   *
-   * Floating focus is when the first widget of a child currently
-   * has focus and we insert an entry with equal focus weight before
-   * it.
-   *
-   * This allows the focus to "stay" at the first entry even if we
-   * insert entries in random order
-   */
-  return p->glw_flags & GLW_FLOATING_FOCUS &&
-    (x == TAILQ_FIRST(&p->glw_childs) ||
-     how == GLW_FOCUS_SET_AUTOMATIC_FF);
+  if (weight == y->glw_focus_weight && p->glw_flags & GLW_FLOATING_FOCUS)
+  {
+    /* Handle floating focus
+     *
+     * Floating focus is when the first widget of a child currently
+     * has focus and we insert an entry with equal focus weight before
+     * it.
+     *
+     * This allows the focus to "stay" at the first entry even if we
+     * insert entries in random order
+     */
+    return
+      how == GLW_FOCUS_SET_AUTOMATIC_FF ||
+      x == TAILQ_FIRST(&p->glw_childs) ||
+      // Is it inserted before the currently focused entry?
+      p->glw_focused == TAILQ_NEXT(x, glw_parent_link);
+  }
+  return 0;
 }
 
 /**
@@ -1423,7 +1420,7 @@ glw_focus_set(glw_root_t *gr, glw_t *w, int how, const char *whom)
       }
       if(x->glw_parent->glw_focused != x) {
         /* Path switches */
-        if (should_focus(gr, how, x,  weight)) {
+        if (should_focus(how, x, weight)) {
           x->glw_parent->glw_focused = x;
 #if 0
           printf("Signal %s child %p focused %d %f %f\n",
@@ -1469,8 +1466,6 @@ glw_focus_set(glw_root_t *gr, glw_t *w, int how, const char *whom)
 #endif
 
     gr->gr_last_focus = w;
-    // Can gr->gr_last_focused_interactive be used instead?? Is it reseted for new page?
-    gr->gr_last_focus_auto = how == GLW_FOCUS_SET_AUTOMATIC || how == GLW_FOCUS_SET_AUTOMATIC_FF;
 
     glw_path_modify(w, GLW_IN_FOCUS_PATH, 0, NULL);
 
