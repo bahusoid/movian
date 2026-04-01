@@ -418,6 +418,9 @@ tvdb_query_by_episode(void *db, const char *item_url,
   int64_t itemid = METADATA_TEMPORARY_ERROR;
 
   if(tags != NULL) {
+    const char *id = htsmsg_get_str(tags, "id");
+    if (id == NULL || strcmp(id, "0") == 0)
+        goto out;
 
     const char *se = htsmsg_get_str(tags, "SeasonNumber");
 
@@ -425,7 +428,7 @@ tvdb_query_by_episode(void *db, const char *item_url,
       goto out;
 
     int season = atoi(se);
-	
+
     season_t *ses = NULL;
     int64_t season_vid = find_season(db, &seasons, series_id, season, qtype,
 				     series_vid, &ses);
