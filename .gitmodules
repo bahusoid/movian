@@ -1,7 +1,6 @@
 [submodule "ext/libav"]
 	path = ext/libav
 	url = https://github.com/FFmpeg/FFmpeg.git
-	branch = movian-master
 [submodule "ext/rtmpdump"]
 	path = ext/rtmpdump
 	url = https://github.com/czz/rtmpdump.git
