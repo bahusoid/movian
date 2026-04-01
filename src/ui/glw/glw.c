@@ -573,11 +573,6 @@ glw_create(glw_root_t *gr, const glw_class_t *class,
       TAILQ_INSERT_BEFORE(before, w, glw_parent_link);
     else
       TAILQ_INSERT_TAIL(&parent->glw_childs, w, glw_parent_link);
-    glw_t *c = NULL;
-    if (before)
-      c = TAILQ_PREV(before, glw_queue, glw_parent_link);
-    TRACE(TRACE_DEBUG, "GLW", "glw_create: widget %s prev %s",
-        get_addr_str(w), get_addr_str(c));
 
     glw_signal0(parent, GLW_SIGNAL_CHILD_CREATED, w);
   }
