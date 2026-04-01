@@ -501,12 +501,7 @@ rtmpdump_setup() {
     fi
 
     update_ext_submodule rtmpdump
-    
-    # Apply fix for OpenSSL version check bug in dh.h
-    if [ -f ext/rtmpdump-dh-fix.patch ]; then
-        echo "Applying rtmpdump dh.h fix..."
-        (cd ext/rtmpdump && git checkout librtmp/dh.h && patch -p1 < ../rtmpdump-dh-fix.patch) || true
-    fi
+
 }
 
 
