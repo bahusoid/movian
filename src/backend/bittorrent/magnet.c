@@ -33,6 +33,23 @@
 
 // http://www.bittorrent.org/beps/bep_0009.html
 
+/* Public fallback trackers injected when a magnet link has none */
+static const char *fallback_trackers[] = {
+  "udp://tracker.opentrackr.org:1337/announce",
+  "udp://open.tracker.cl:1337/announce",
+  "udp://tracker.openbittorrent.com:6969/announce",
+  "udp://tracker.torrent.eu.org:451/announce",
+  "udp://open.stealth.si:80/announce",
+  "udp://tracker.tiny-vps.com:6969/announce",
+  "udp://tracker.pomf.se:80/announce",
+  "udp://explodie.org:6969/announce",
+  "udp://tracker.dler.org:6969/announce",
+  "udp://tracker.internetwarriors.net:1337/announce",
+  "udp://ipv4.tracker.harry.lu:80/announce",
+  "udp://retracker.lanta-net.ru:2710/announce",
+  NULL
+};
+
 
 static void
 magnet_trace(const torrent_t *t, const char *msg, ...)
@@ -125,9 +142,11 @@ magnet_parse(struct http_header_list *list, char *errbuf, size_t errlen)
   }
 
   if(num_trackers == 0) {
-    snprintf(errbuf, errlen, "Trackerless torrents is not supported");
-    return NULL;
+    TRACE(TRACE_DEBUG, "MAGNET",
+          "No trackers in magnet link, will inject %d public fallbacks",
+          (int)(sizeof(fallback_trackers)/sizeof(fallback_trackers[0])) - 1);
   }
+
   TRACE(TRACE_DEBUG, "MAGNET", "Opening magnet for hash %s -- %s",
 	hash, dn ?: "<unknown name>");
 
@@ -141,6 +160,15 @@ magnet_parse(struct http_header_list *list, char *errbuf, size_t errlen)
         tracker_add_torrent(tr, to);
     }
   }
+
+  if(num_trackers == 0) {
+    for(int i = 0; fallback_trackers[i] != NULL; i++) {
+      tracker_t *tr = tracker_create(fallback_trackers[i]);
+      if(tr != NULL)
+        tracker_add_torrent(tr, to);
+    }
+  }
+
   return to;
 }
 
