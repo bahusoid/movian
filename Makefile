@@ -88,6 +88,7 @@ SRCS += src/main.c \
 	src/settings.c \
 	src/service.c \
 	src/notifications.c \
+	src/misc/optionpicker.c \
 	src/upgrade.c \
 	src/blobcache_file.c \
 	src/i18n.c \

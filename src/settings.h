@@ -148,6 +148,7 @@ prop_t *setting_add_option(setting_t *s, const char *id,
                            const char *title, int sel);
 
 void setting_set(setting_t *s, int type, ...);
+void setting_set_string(setting_t *s, const char *str);
 
 void setting_reset(setting_t *s);
 

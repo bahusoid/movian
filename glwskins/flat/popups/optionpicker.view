@@ -1,0 +1,79 @@
+#import "common.view"
+
+onEvent(cancel,  deliverEvent($self.eventSink));
+onEvent(back,    deliverEvent($self.eventSink));
+onEvent(navOpen, deliverEvent($self.eventSink));
+
+widget(popup, {
+
+  widget(container_z, {
+    filterConstraintX: true;
+
+    PopupBackdrop();
+
+    widget(container_y, {
+      padding: 1em;
+      spacing: 0.5em;
+
+      widget(label, {
+        caption: $self.title;
+        align: center;
+        size: 1.2em;
+      });
+
+      widget(container_z, {
+        widget(quad, { color: 0; alpha: 0.8; });
+
+        widget(list_y, {
+          navWrap: true;
+          padding: 0.5em;
+
+          widget(container_z, {
+            focusable: 0.1;
+            GridItemHighlight();
+            onEvent(activate, event("Back"));
+
+            widget(container_x, {
+              padding: [0.5em, 0.25em];
+              spacing: 1em;
+              widget(icon, {
+                source: "skin://icons/ic_close_48px.svg";
+              });
+              widget(label, {
+                caption: _("Close");
+                filterConstraintX: true;
+              });
+            });
+          });
+
+          widget(quad, {
+            height: 5;
+            padding: [0, 2];
+            color: 0.3;
+          });
+
+          cloner($self.nodes, container_z, {
+            focusable: 1.0;
+            GridItemHighlight();
+            onEvent(activate, navOpen($self.value));
+
+            widget(container_x, {
+              padding: [0.5em, 0.25em];
+              spacing: 1em;
+              widget(icon, {
+                source: select($self.icon, $self.icon,
+                               "skin://icons/ic_extension_48px.svg");
+              });
+              widget(label, {
+                caption: $self.title;
+                filterConstraintX: true;
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
+

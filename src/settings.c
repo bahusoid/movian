@@ -1189,6 +1189,15 @@ setting_add_option(setting_t *s, const char *id,
  *
  */
 void
+setting_set_string(setting_t *s, const char *str)
+{
+  if(s->s_type != SETTING_STRING)
+    return;
+  prop_set_string(s->s_val, str);
+}
+
+
+void
 setting_set(setting_t *s, int type, ...)
 {
   if(s->s_type != type)

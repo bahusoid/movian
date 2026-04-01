@@ -27,6 +27,8 @@
 #include "main.h"
 #include "settings.h"
 #include "runcontrol.h"
+#include "service.h"
+#include "misc/optionpicker.h"
 
 static int standby_delay;
 static int64_t last_activity;
@@ -34,6 +36,7 @@ static int active_media;
 static callout_t autostandby_timer;
 
 static char *startup_url;
+static setting_t *startup_url_s;
 
 static prop_sub_t *sleeptime_sub;
 static prop_t *sleeptime_prop;
@@ -238,6 +241,69 @@ set_ssh_server(void *opaque, int on)
 
 
 /**
+ * Populate the option picker with startup services
+ */
+static void
+populate_startup_services(prop_t *nodes, void *opaque)
+{
+  hts_mutex_lock(&service_mutex);
+  service_t *sv;
+  LIST_FOREACH(sv, &services, s_link) {
+    if(!sv->s_url || !strchr(sv->s_url, ':'))
+      continue;
+
+    rstr_t *title = prop_get_string(sv->s_root, "title", NULL);
+    if (rstr_get(title) == NULL)
+    {
+      rstr_release(title);
+      continue;
+    }
+
+    // filter by plugin
+    // rstr_t *origin = prop_get_string(sv->s_root, "origin", NULL);
+    // int is_app = origin != NULL && !strcmp(rstr_get(origin), "app");
+    // rstr_release(origin);
+    // if (!is_app)
+    //   continue;
+
+    prop_t *item = prop_create_root(NULL);
+    rstr_t *icon  = prop_get_string(sv->s_root, "icon",  NULL);
+    prop_set(item, "title", PROP_SET_STRING, rstr_get(title));
+    prop_set(item, "value", PROP_SET_STRING, sv->s_url);
+    prop_set(item, "icon",  PROP_SET_RSTRING, icon);
+    rstr_release(title);
+    rstr_release(icon);
+    if(prop_set_parent(item, nodes))
+      prop_destroy(item);
+  }
+  hts_mutex_unlock(&service_mutex);
+}
+
+
+/**
+ * Called when user selects a plugin from the picker
+ */
+static void
+on_plugin_selected(rstr_t *value, void *opaque)
+{
+  if(value != NULL)
+    setting_set_string(startup_url_s, rstr_get(value));
+}
+
+
+/**
+ *
+ */
+static void
+do_select_startup_service(void *opaque, prop_event_t event, ...)
+{
+  optionpicker_pick_async("Select startup page",
+                          populate_startup_services, NULL,
+                          on_plugin_selected, NULL);
+}
+
+
+/**
  *
  */
 static void
@@ -296,11 +362,15 @@ runcontrol_init(void)
 
   prop_t *dir = setting_get_dir("general:runcontrol");
 
+  startup_url_s =
   setting_create(SETTING_STRING, dir, SETTINGS_INITIAL_UPDATE,
                  SETTING_TITLE(_p("Startup page")),
                  SETTING_CALLBACK(set_startup_url, NULL),
                  SETTING_STORE("runcontrol", "startup_url"),
                  NULL);
+
+  settings_create_action(dir, _p("Select startup page"), NULL,
+                         do_select_startup_service, NULL, 0, NULL);
 
   if(!(gconf.can_standby ||
        gconf.can_poweroff ||
