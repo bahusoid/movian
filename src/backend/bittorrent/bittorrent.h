@@ -53,6 +53,7 @@ LIST_HEAD(torrent_sendreq_list, torrent_sendreq);
 TAILQ_HEAD(torrent_sendreq_queue, torrent_sendreq);
 LIST_HEAD(piece_peer_list, piece_peer);
 LIST_HEAD(metainfo_request_list, metainfo_request);
+LIST_HEAD(blocked_range_list, blocked_range);
 
 /**
  * Top-performing peer address saved when a peer is fully removed,
@@ -63,6 +64,21 @@ typedef struct good_seed {
   net_addr_t gs_addr;
   int64_t    gs_score;   /* bytes_received / max(1, block_delay) */
 } good_seed_t;
+
+/**
+ * Per-torrent record of a /24 IPv4 subnet that appears to be blocked.
+ * After BLOCK_FAIL_THRESHOLD consecutive failures the range is suppressed
+ * for BLOCK_DURATION_SEC seconds.
+ */
+#define BLOCK_FAIL_THRESHOLD 10
+#define BLOCK_DURATION_SEC   1800   /* 30 minutes */
+
+typedef struct blocked_range {
+  LIST_ENTRY(blocked_range) br_link;
+  uint8_t  br_prefix[3];      /* first three octets of IPv4 /24 */
+  int      br_fail_count;
+  int64_t  br_blocked_until;  /* async_current_time() deadline; 0 = counting */
+} blocked_range_t;
 
 typedef struct bt_global {
   int btg_max_peers_global;
@@ -490,6 +506,12 @@ typedef struct torrent {
   /** Second timestamp of last forced tracker re-announce. */
   int to_last_keepalive_announce;
 
+  /**
+   * Per-torrent /24 subnet block list. Ranges with too many consecutive
+   * failures are suppressed for BLOCK_DURATION_SEC seconds.
+   */
+  struct blocked_range_list to_blocked_ranges;
+
 } torrent_t;
 
 
@@ -675,3 +697,7 @@ void torrent_wakeup_for_metadata_requests(void);
 
 void torrent_save_good_seed(torrent_t *to, const net_addr_t *addr,
                              int64_t score);
+
+void torrent_record_peer_failure(torrent_t *to, const net_addr_t *addr);
+
+int  torrent_is_addr_blocked(torrent_t *to, const net_addr_t *addr);

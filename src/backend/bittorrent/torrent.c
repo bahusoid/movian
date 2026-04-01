@@ -377,6 +377,13 @@ torrent_destroy(torrent_t *to)
   free(to->to_cachefile_piece_map);
   free(to->to_cachefile_piece_map_inv);
   free(to->to_piece_hashes);
+
+  blocked_range_t *br;
+  while((br = LIST_FIRST(&to->to_blocked_ranges)) != NULL) {
+    LIST_REMOVE(br, br_link);
+    free(br);
+  }
+
   free(to->to_title);
   free(to);
 }
@@ -527,6 +534,72 @@ torrent_save_good_seed(torrent_t *to, const net_addr_t *addr, int64_t score)
       to->to_good_seeds[worst].gs_score = score;
     }
   }
+}
+
+
+/**
+ * Record a connection failure; block /24 after BLOCK_FAIL_THRESHOLD hits.
+ */
+void
+torrent_record_peer_failure(torrent_t *to, const net_addr_t *addr)
+{
+  if(addr->na_family != 4)
+    return;
+
+  const uint8_t *ip = addr->na_addr;
+
+  blocked_range_t *br;
+  LIST_FOREACH(br, &to->to_blocked_ranges, br_link) {
+    if(!memcmp(br->br_prefix, ip, 3))
+      break;
+  }
+
+  if(br == NULL) {
+    br = calloc(1, sizeof(blocked_range_t));
+    memcpy(br->br_prefix, ip, 3);
+    LIST_INSERT_HEAD(&to->to_blocked_ranges, br, br_link);
+  }
+
+  if(br->br_blocked_until)
+    return;
+
+  br->br_fail_count++;
+  if(br->br_fail_count >= BLOCK_FAIL_THRESHOLD) {
+    br->br_blocked_until = async_current_time() +
+                           (int64_t)BLOCK_DURATION_SEC * 1000000LL;
+    TRACE(TRACE_DEBUG, "BITTORRENT",
+          "%s: Blocking /24 subnet %d.%d.%d.0 for %d min",
+          to->to_title, ip[0], ip[1], ip[2], BLOCK_DURATION_SEC / 60);
+  }
+}
+
+
+/**
+ * Return 1 if addr is within an active block range.
+ */
+int
+torrent_is_addr_blocked(torrent_t *to, const net_addr_t *addr)
+{
+  if(addr->na_family != 4)
+    return 0;
+
+  const uint8_t *ip = addr->na_addr;
+
+  blocked_range_t *br;
+  LIST_FOREACH(br, &to->to_blocked_ranges, br_link) {
+    if(!memcmp(br->br_prefix, ip, 3)) {
+      if(br->br_blocked_until == 0)
+        return 0;
+      int64_t now = async_current_time();
+      if(now < br->br_blocked_until)
+        return 1;
+      /* Block expired - reset */
+      br->br_blocked_until = 0;
+      br->br_fail_count = 0;
+      return 0;
+    }
+  }
+  return 0;
 }
 
 

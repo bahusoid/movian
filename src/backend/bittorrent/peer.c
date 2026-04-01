@@ -389,6 +389,7 @@ peer_shutdown(peer_t *p, int next_state, int resched)
   case PEER_STATE_CONNECT_FAIL:
     p->p_fail_time = async_current_time();
     p->p_connect_fail++;
+    torrent_record_peer_failure(to, &p->p_addr);
     if(p->p_connect_fail == 5)
       goto destroy;
     TAILQ_INSERT_TAIL(&to->to_connect_failed_peers, p, p_queue_link);
@@ -1373,6 +1374,9 @@ peer_choke(peer_t *p, int choke)
 void
 peer_add(torrent_t *to, const net_addr_t *na)
 {
+  if(torrent_is_addr_blocked(to, na))
+    return;
+
   peer_t *p;
   LIST_FOREACH(p, &to->to_peers, p_link)
     if(!net_addr_cmp(&p->p_addr, na))
