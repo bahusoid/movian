@@ -496,6 +496,39 @@ torrent_receive_block(torrent_block_t *tb, const void *buf,
 }
 
 
+/**
+ * Save a high-performing peer address for re-use on next connection attempt.
+ */
+void
+torrent_save_good_seed(torrent_t *to, const net_addr_t *addr, int64_t score)
+{
+  if(score <= 0)
+    return;
+
+  for(int i = 0; i < to->to_good_seeds_count; i++) {
+    if(!net_addr_cmp(&to->to_good_seeds[i].gs_addr, addr)) {
+      to->to_good_seeds[i].gs_score = score;
+      return;
+    }
+  }
+
+  if(to->to_good_seeds_count < TORRENT_GOOD_SEEDS_MAX) {
+    to->to_good_seeds[to->to_good_seeds_count].gs_addr  = *addr;
+    to->to_good_seeds[to->to_good_seeds_count].gs_score = score;
+    to->to_good_seeds_count++;
+  } else {
+    int worst = 0;
+    for(int i = 1; i < TORRENT_GOOD_SEEDS_MAX; i++) {
+      if(to->to_good_seeds[i].gs_score < to->to_good_seeds[worst].gs_score)
+        worst = i;
+    }
+    if(score > to->to_good_seeds[worst].gs_score) {
+      to->to_good_seeds[worst].gs_addr  = *addr;
+      to->to_good_seeds[worst].gs_score = score;
+    }
+  }
+}
+
 
 /**
  *
@@ -506,6 +539,19 @@ torrent_attempt_more_peers(torrent_t *to)
   if(to->to_active_peers  >= btg.btg_max_peers_torrent ||
      btg.btg_active_peers >= btg.btg_max_peers_global)
     return;
+
+  /* Try the highest-scoring previously-seen peer first */
+  if(to->to_good_seeds_count > 0) {
+    int best = 0;
+    for(int i = 1; i < to->to_good_seeds_count; i++) {
+      if(to->to_good_seeds[i].gs_score > to->to_good_seeds[best].gs_score)
+        best = i;
+    }
+    net_addr_t addr = to->to_good_seeds[best].gs_addr;
+    to->to_good_seeds[best] = to->to_good_seeds[--to->to_good_seeds_count];
+    peer_add(to, &addr);
+    return;
+  }
 
   peer_t *p;
 
@@ -1614,6 +1660,14 @@ torrent_periodic_one(torrent_t *to, int second)
     to->to_last_unchoke_check = second;
     torrent_unchoke_peers(to);
   }
+
+  /* Re-announce every 4 min when we have fewer peers than half the limit */
+  if(to->to_last_keepalive_announce + 240 < second &&
+     to->to_active_peers < btg.btg_max_peers_torrent / 2) {
+    to->to_last_keepalive_announce = second;
+    torrent_announce_all(to);
+  }
+
   torrent_serve_sendreqs(to);
 }
 

@@ -54,6 +54,16 @@ TAILQ_HEAD(torrent_sendreq_queue, torrent_sendreq);
 LIST_HEAD(piece_peer_list, piece_peer);
 LIST_HEAD(metainfo_request_list, metainfo_request);
 
+/**
+ * Top-performing peer address saved when a peer is fully removed,
+ * so it can be prioritised when we next need peers.
+ */
+#define TORRENT_GOOD_SEEDS_MAX 20
+typedef struct good_seed {
+  net_addr_t gs_addr;
+  int64_t    gs_score;   /* bytes_received / max(1, block_delay) */
+} good_seed_t;
+
 typedef struct bt_global {
   int btg_max_peers_global;
   int btg_max_peers_torrent;
@@ -232,6 +242,12 @@ typedef struct peer {
   uint64_t p_bytes_sent;
 
   int p_block_delay;
+
+  /**
+   * Composite performance score: bytes_received / max(1, block_delay).
+   * Updated after each received block. Used to re-prioritise good peers.
+   */
+  int64_t p_score;
 
   int p_bd[10];
 
@@ -464,6 +480,16 @@ typedef struct torrent {
   int64_t to_output_rate_refill_time;
   int to_output_rate_tokens;
 
+  /**
+   * Addresses of highest-scoring peers that have been fully removed.
+   * Re-added first next time we need more peers.
+   */
+  good_seed_t to_good_seeds[TORRENT_GOOD_SEEDS_MAX];
+  int         to_good_seeds_count;
+
+  /** Second timestamp of last forced tracker re-announce. */
+  int to_last_keepalive_announce;
+
 } torrent_t;
 
 
@@ -646,3 +672,6 @@ torrent_t *magnet_open(const char *url0, char *errbuf, size_t errlen);
 void peer_send_metainfo_request(peer_t *p, metainfo_request_t *mr);
 
 void torrent_wakeup_for_metadata_requests(void);
+
+void torrent_save_good_seed(torrent_t *to, const net_addr_t *addr,
+                             int64_t score);

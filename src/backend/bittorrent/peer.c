@@ -404,6 +404,8 @@ peer_shutdown(peer_t *p, int next_state, int resched)
 
   case PEER_STATE_DESTROYED:
   destroy:
+    if(p->p_score > 0)
+      torrent_save_good_seed(to, &p->p_addr, p->p_score);
     LIST_REMOVE(p, p_link);
     free(p->p_name);
     to->to_num_peers--;
@@ -723,6 +725,9 @@ recv_piece(peer_t *p, const uint8_t *buf, size_t len)
     peer_cancel_orphaned_requests(p, tr);
   }
   p->p_maxq = 10;
+
+  /* Update composite performance score */
+  p->p_score = (int64_t)p->p_bytes_received / MAX(1, p->p_block_delay);
 
   assert(tr->tr_qdepth < 10);
   if(p->p_bd[tr->tr_qdepth]) {
