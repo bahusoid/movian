@@ -33,6 +33,8 @@ static int64_t last_activity;
 static int active_media;
 static callout_t autostandby_timer;
 
+static char *startup_url;
+
 static prop_sub_t *sleeptime_sub;
 static prop_t *sleeptime_prop;
 static int sleeptime;
@@ -239,6 +241,18 @@ set_ssh_server(void *opaque, int on)
  *
  */
 static void
+set_startup_url(void *opaque, const char *str)
+{
+  mystrset(&startup_url, str && *str ? str : NULL);
+  if(gconf.initial_url == NULL)
+    gconf.initial_url = startup_url;
+}
+
+
+/**
+ *
+ */
+static void
 runcontrol_global_eventsink(void *opaque, event_t *e)
 {
   if(event_is_action(e, ACTION_QUIT)) {
@@ -280,6 +294,14 @@ runcontrol_init(void)
   prop_set(rc, "canRestart",   PROP_SET_INT,  !!gconf.can_restart);
   prop_set(rc, "canExit",      PROP_SET_INT,   !gconf.can_not_exit);
 
+  prop_t *dir = setting_get_dir("general:runcontrol");
+
+  setting_create(SETTING_STRING, dir, SETTINGS_INITIAL_UPDATE,
+                 SETTING_TITLE(_p("Startup page")),
+                 SETTING_CALLBACK(set_startup_url, NULL),
+                 SETTING_STORE("runcontrol", "startup_url"),
+                 NULL);
+
   if(!(gconf.can_standby ||
        gconf.can_poweroff ||
        gconf.can_logout ||
@@ -288,7 +310,6 @@ runcontrol_init(void)
        !gconf.can_not_exit))
     return;
 
-  prop_t *dir = setting_get_dir("general:runcontrol");
 
   if(gconf.can_standby) {
     init_autostandby();
