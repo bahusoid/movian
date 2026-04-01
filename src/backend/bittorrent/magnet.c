@@ -1,4 +1,4 @@
-/*
+  /*
  *  Copyright (C) 2007-2015 Lonelycoder AB
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -27,13 +27,18 @@
 #include "misc/str.h"
 #include "networking/http.h"
 #include "htsmsg/htsmsg.h"
+#include "fileaccess/http_client.h"
 
 #include "bittorrent.h"
 #include "bencode.h"
 
 // http://www.bittorrent.org/beps/bep_0009.html
 
-/* Public fallback trackers injected when a magnet link has none */
+#define TRACKER_LIST_URL_NEWTRACKON  "https://newtrackon.com/api/stable"
+#define TRACKER_LIST_URL_NGOSANG     "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt"
+#define TRACKER_CACHE_TTL  (24 * 3600LL)   /* seconds */
+
+/* Hardcoded fallback used when the online fetch fails */
 static const char *fallback_trackers[] = {
   "udp://tracker.opentrackr.org:1337/announce",
   "udp://open.tracker.cl:1337/announce",
@@ -49,6 +54,126 @@ static const char *fallback_trackers[] = {
   "udp://retracker.lanta-net.ru:2710/announce",
   NULL
 };
+
+/*
+ * Dynamically fetched tracker list (updated every TRACKER_CACHE_TTL seconds).
+ * Access only WITHOUT bittorrent_mutex (updated from outside the lock).
+ */
+static char   **g_fetched_trackers;    /* NULL-terminated array of strdup'd URLs */
+static int64_t  g_trackers_fetch_time; /* arch_get_ts() / 1e6, seconds */
+
+/**
+ * Parse the newtrackon response (URLs separated by \n or \n\n) into a
+ * NULL-terminated array of freshly allocated strings.
+ */
+static char **
+parse_tracker_list(const char *body)
+{
+  int cap = 32, n = 0;
+  char **arr = malloc(cap * sizeof(char *));
+  if(!arr)
+    return NULL;
+
+  const char *p = body;
+  while(*p) {
+    /* skip blank lines / whitespace */
+    while(*p == '\r' || *p == '\n' || *p == ' ')
+      p++;
+    if(!*p)
+      break;
+    const char *end = p;
+    while(*end && *end != '\r' && *end != '\n')
+      end++;
+    if(end > p) {
+      if(n + 1 >= cap) {
+        cap *= 2;
+        arr = realloc(arr, cap * sizeof(char *));
+        if(!arr)
+          return NULL;
+      }
+      arr[n++] = strndup(p, end - p);
+    }
+    p = end;
+  }
+  arr[n] = NULL;
+  return arr;
+}
+
+static void
+free_tracker_list(char **list)
+{
+  if(!list)
+    return;
+  for(int i = 0; list[i]; i++)
+    free(list[i]);
+  free(list);
+}
+
+/**
+ * Try fetching a tracker list from the given URL.
+ * Returns a parsed NULL-terminated list, or NULL on failure.
+ * Called WITHOUT bittorrent_mutex held.
+ */
+static char **
+fetch_tracker_list_from(const char *url)
+{
+  buf_t *b = NULL;
+  char errbuf[256];
+
+  int r = http_req(url,
+                   HTTP_RESULT_PTR(&b),
+                   HTTP_ERRBUF(errbuf, sizeof(errbuf)),
+                   HTTP_CONNECT_TIMEOUT(10000),
+                   HTTP_READ_TIMEOUT(15000),
+                   NULL);
+
+  if(r || b == NULL) {
+    TRACE(TRACE_INFO, "MAGNET",
+          "Failed to fetch tracker list from %s: %s", url, errbuf);
+    return NULL;
+  }
+
+  char **list = parse_tracker_list(buf_cstr(b));
+  buf_release(b);
+
+  if(list == NULL || list[0] == NULL) {
+    TRACE(TRACE_INFO, "MAGNET", "Empty tracker list from %s", url);
+    free_tracker_list(list);
+    return NULL;
+  }
+
+  int count = 0;
+  for(int i = 0; list[i]; i++)
+    count++;
+
+  TRACE(TRACE_INFO, "MAGNET", "Fetched %d public trackers from %s",
+        count, url);
+  return list;
+}
+
+/**
+ * Refresh the cached public tracker list.
+ * Tries newtrackon first, then ngosang as fallback.
+ * Called WITHOUT bittorrent_mutex held.
+ */
+static void
+magnet_refresh_public_trackers(void)
+{
+  char **list = fetch_tracker_list_from(TRACKER_LIST_URL_NEWTRACKON);
+
+  if(list == NULL)
+    list = fetch_tracker_list_from(TRACKER_LIST_URL_NGOSANG);
+
+  if(list == NULL) {
+    TRACE(TRACE_INFO, "MAGNET",
+          "All tracker sources failed, will use hardcoded fallback");
+    return;
+  }
+
+  free_tracker_list(g_fetched_trackers);
+  g_fetched_trackers = list;
+  g_trackers_fetch_time = arch_get_ts() / 1000000LL;
+}
 
 
 static void
@@ -143,8 +268,7 @@ magnet_parse(struct http_header_list *list, char *errbuf, size_t errlen)
 
   if(num_trackers == 0) {
     TRACE(TRACE_DEBUG, "MAGNET",
-          "No trackers in magnet link, will inject %d public fallbacks",
-          (int)(sizeof(fallback_trackers)/sizeof(fallback_trackers[0])) - 1);
+          "No trackers in magnet link, will inject public fallbacks");
   }
 
   TRACE(TRACE_DEBUG, "MAGNET", "Opening magnet for hash %s -- %s",
@@ -162,10 +286,30 @@ magnet_parse(struct http_header_list *list, char *errbuf, size_t errlen)
   }
 
   if(num_trackers == 0) {
-    for(int i = 0; fallback_trackers[i] != NULL; i++) {
-      tracker_t *tr = tracker_create(fallback_trackers[i]);
-      if(tr != NULL)
-        tracker_add_torrent(tr, to);
+    /* Use dynamically fetched list; fall back to hardcoded if unavailable */
+    char **dynamic = g_fetched_trackers;
+    if(dynamic != NULL && dynamic[0] != NULL) {
+      int count = 0;
+      for(int i = 0; dynamic[i]; i++) {
+        tracker_t *tr = tracker_create(dynamic[i]);
+        if(tr != NULL) {
+          tracker_add_torrent(tr, to);
+          count++;
+        }
+      }
+      TRACE(TRACE_DEBUG, "MAGNET",
+            "Injected %d public trackers (from newtrackon)", count);
+    } else {
+      int count = 0;
+      for(int i = 0; fallback_trackers[i] != NULL; i++) {
+        tracker_t *tr = tracker_create(fallback_trackers[i]);
+        if(tr != NULL) {
+          tracker_add_torrent(tr, to);
+          count++;
+        }
+      }
+      TRACE(TRACE_DEBUG, "MAGNET",
+            "Injected %d public trackers (hardcoded fallback)", count);
     }
   }
 
@@ -397,6 +541,15 @@ magnet_open(const char *url0, char *errbuf, size_t errlen)
 {
   if(*url0 == '?')
     url0++;
+
+  /* Refresh public tracker list if stale (called without bittorrent_mutex) */
+  int64_t now_sec = arch_get_ts() / 1000000LL;
+  if(g_fetched_trackers == NULL ||
+     now_sec - g_trackers_fetch_time > TRACKER_CACHE_TTL) {
+    hts_mutex_unlock(&bittorrent_mutex);
+    magnet_refresh_public_trackers();
+    hts_mutex_lock(&bittorrent_mutex);
+  }
 
   char *url = mystrdupa(url0);
 

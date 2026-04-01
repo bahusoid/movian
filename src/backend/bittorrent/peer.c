@@ -139,7 +139,7 @@ peer_state_txt(unsigned int state)
 static void
 peer_arm_ka_timer(peer_t *p)
 {
-  asyncio_timer_arm_delta_sec(&p->p_ka_send_timer, 60);
+  asyncio_timer_arm_delta_sec(&p->p_ka_send_timer, 30);
 }
 
 

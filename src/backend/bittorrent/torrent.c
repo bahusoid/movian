@@ -1111,6 +1111,10 @@ find_optimal_peer(torrent_t *to, const torrent_piece_t *tp)
     } else {
 
       score = p->p_block_delay;
+      /* Penalise wasteful peers proportionally to their waste ratio */
+      if(p->p_num_requests > 0)
+        score += (int)((int64_t)p->p_block_delay * p->p_num_waste /
+                       (p->p_num_requests * 2 + 1));
     }
 
     if(best == NULL || score < best_score) {
