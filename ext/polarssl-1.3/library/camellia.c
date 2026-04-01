@@ -35,9 +35,9 @@
 #if defined(POLARSSL_CAMELLIA_C)
 
 #include "polarssl/camellia.h"
+#include <string.h>
 
 #if defined(POLARSSL_SELF_TEST)
-#include <string.h>
 #if defined(POLARSSL_PLATFORM_C)
 #include "polarssl/platform.h"
 #else
