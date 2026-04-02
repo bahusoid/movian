@@ -223,7 +223,7 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
 
     const int margin = gtb->gtb_margin;
     const int visible_width = rc->rc_width - gtb->gtb_padding[0] - gtb->gtb_padding[2];
-    const int full_text_width = tex_width - 2 * margin;  // text pixels without margin
+    const int full_text_width = tex_width - 2 * margin;  // text pixels without margin (advance-based)
 
     if(full_text_width > visible_width) {
       // Text is wider than the widget — need scrolling
@@ -232,23 +232,24 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
 
       if(i < ti->ti_charposlen) {
         cursor_pixel_x = ti->ti_charpos[i * 2];
-      } else if(ti->ti_charposlen > 0) {
-        cursor_pixel_x = ti->ti_charpos[2 * ti->ti_charposlen - 1];
       } else {
-        cursor_pixel_x = 0;
+        // Cursor is past all rendered chars: use advance-based end so it sits
+        // after the last glyph's advance, not just its bitmap right edge.
+        cursor_pixel_x = full_text_width;
       }
 
       int new_scroll_x = gtb->gtb_scroll_x;
 
+      // Use >= so cursor exactly at the boundary still gets 1px of room
       if(cursor_pixel_x < new_scroll_x) {
         new_scroll_x = cursor_pixel_x;
-      } else if(cursor_pixel_x > new_scroll_x + visible_width) {
-        new_scroll_x = cursor_pixel_x - visible_width;
+      } else if(cursor_pixel_x >= new_scroll_x + visible_width) {
+        new_scroll_x = cursor_pixel_x - visible_width + 1;
       }
 
       if(new_scroll_x < 0)
         new_scroll_x = 0;
-      int max_scroll = full_text_width - visible_width;
+      int max_scroll = full_text_width - visible_width + 1;
       if(new_scroll_x > max_scroll)
         new_scroll_x = max_scroll;
 
@@ -406,10 +407,9 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
 
       if(i < ti->ti_charposlen) {
 	cursor_pixel_x = ti->ti_charpos[i*2];
-      } else if(ti->ti_charposlen > 0) {
-	cursor_pixel_x = ti->ti_charpos[2 * ti->ti_charposlen - 1];
       } else {
-        cursor_pixel_x = 0;
+        // Use advance-based end (same as scroll pre-computation)
+        cursor_pixel_x = tex_width - 2 * gtb->gtb_margin;
       }
 
     } else {
@@ -958,26 +958,43 @@ glw_text_bitmap_event(glw_t *w, event_t *e)
     return 1;
 
   } else if(event_is_action(e, ACTION_LEFT)) {
-
+    gtb->gtb_selection_start = -1; // Clear selection
     // Move cursor left without selection
     if(gtb->gtb_edit_ptr > 0) {
-      gtb->gtb_selection_start = -1; // Clear selection
       gtb->gtb_edit_ptr--;
       gtb->gtb_update_cursor = 1;
     }
     return 1;
 
-  } else if(event_is_action(e, ACTION_RIGHT)) {
+  }
+  else if(event_is_action(e, ACTION_TOP)) {
+    gtb->gtb_selection_start = -1; // Clear selection
+    // Move cursor to end without selection
+    if(gtb->gtb_edit_ptr > 0) {
 
+      gtb->gtb_edit_ptr = 0;
+      gtb->gtb_update_cursor = 1;
+    }
+    return 1;
+  }  else if(event_is_action(e, ACTION_RIGHT)) {
+    gtb->gtb_selection_start = -1; // Clear selection
     // Move cursor right without selection
     if(gtb->gtb_edit_ptr < gtb->gtb_uc_len) {
-      gtb->gtb_selection_start = -1; // Clear selection
       gtb->gtb_edit_ptr++;
       gtb->gtb_update_cursor = 1;
     }
     return 1;
-
-  } else if(event_is_action(e, ACTION_MOVE_LEFT)) {
+  }
+  else if(event_is_action(e, ACTION_BOTTOM)) {
+    gtb->gtb_selection_start = -1; // Clear selection
+    // Move cursor to end without selection
+    if(gtb->gtb_edit_ptr < gtb->gtb_uc_len) {
+      gtb->gtb_edit_ptr = gtb->gtb_uc_len;
+      gtb->gtb_update_cursor = 1;
+    }
+    return 1;
+  }
+  else if(event_is_action(e, ACTION_MOVE_LEFT)) {
 
     // Shift+Left: Extend/create selection to the left
     if(gtb->gtb_edit_ptr > 0) {
@@ -1060,10 +1077,8 @@ glw_text_bitmap_pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
   if(gpe->type != GLW_POINTER_LEFT_PRESS)
     return 0;
   
-  // If widget is not focused, put cursor at end
+  // If widget is not focused
   if(!glw_is_focused(w)) {
-    gtb->gtb_edit_ptr = gtb->gtb_uc_len;
-    gtb->gtb_selection_start = -1;
     gtb->gtb_update_cursor = 1;
     return 0;
   }
@@ -1090,7 +1105,25 @@ glw_text_bitmap_pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
   click_x -= gtb->gtb_padding[0];
   click_x += gtb->gtb_scroll_x;
 
-  // Find closest character boundary (left or right edge of each character)
+  const int full_text_width = glw_tex_width(&gtb->gtb_texture) - 2 * gtb->gtb_margin;
+
+  // If clicking past end or in right margin, snap to end immediately
+  if(click_x >= full_text_width) {
+    gtb->gtb_edit_ptr = gtb->gtb_uc_len;
+    gtb->gtb_selection_start = -1;
+    gtb->gtb_update_cursor = 1;
+    return 0;
+  }
+
+  // If clicking before start or in left margin, snap to beginning
+  if(click_x <= 0) {
+    gtb->gtb_edit_ptr = 0;
+    gtb->gtb_selection_start = -1;
+    gtb->gtb_update_cursor = 1;
+    return 0;
+  }
+
+  // Find closest character boundary (left edge of each character)
   int best_pos = 0;
   int best_dist = INT_MAX;
   
@@ -1100,11 +1133,9 @@ glw_text_bitmap_pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
     if(i < ti->ti_charposlen) {
       // Left edge of character i
       char_x = ti->ti_charpos[i * 2];
-    } else if(ti->ti_charposlen > 0) {
-      // Position after last character (right edge of last char)
-      char_x = ti->ti_charpos[(ti->ti_charposlen - 1) * 2 + 1];
     } else {
-      char_x = 0;
+      // Position after last character: advance-based end
+      char_x = full_text_width;
     }
     
     int dist = abs(char_x - click_x);
