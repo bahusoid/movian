@@ -1,15 +1,16 @@
-(function(plugin) {
+var PREFIX = 'history:';
+var STORE_KEY = 'entries';
+var MAX_ENTRIES = 100;
 
-  var PREFIX = 'history:';
-  var STORE_KEY = 'entries';
-  var MAX_ENTRIES = 100;
+var prop = require('movian/prop');
+var videoscrobbler = require('movian/videoscrobbler');
 
-  var prop = require('movian/prop');
-  var videoscrobbler = require('movian/videoscrobbler');
-
-  var store = plugin.createStore('history_store');
-
-  var settings = plugin.createSettings('History', null, 'History plugin settings');
+var store = require('movian/store').create('history_store');
+var settingsModule = require('movian/settings');
+var settings = new settingsModule.globalSettings(Plugin.id, 'History', null, 'History plugin settings');
+var popup = require('native/popup');
+var page = require('movian/page');
+var service = require('movian/service');
   var debug = false;
   settings.createBool('debug', 'Debug', false, function(v) { debug = v; });
   var filterByPage = false;
@@ -563,10 +564,10 @@ function onPageModelNodeEvent(type, v1) {
     });
   };
 
-  plugin.createService('History', PREFIX + 'start', 'video', true, Plugin.path + 'icon.png');
+service.create('History', PREFIX + 'start', 'video', true, Plugin.path + 'icon.png');
 
-  plugin.addURI(historyPageUrl, function(page) {
-  
+new page.Route(historyPageUrl, function(page) {
+
     // Remember current in-memory timestamp
     // When user returns to this page (back action) and entries were updated,
     // redirect to the same URI to force reloading the page contents.
@@ -582,7 +583,7 @@ function onPageModelNodeEvent(type, v1) {
         title: 'No history yet'
       });
       page.appendPassiveItem('label', null, {
-        title: 'Play a video from any plugin to create entries'
+        title: 'Play a video from any source to create entries'
       });
       page.loading = false;
       return;
@@ -597,7 +598,7 @@ function onPageModelNodeEvent(type, v1) {
     page.loading = false;
   });
 
-  plugin.addURI(PREFIX + 'open:(\\d+)', function(page, idxStr) {
+new page.Route(PREFIX + 'open:(\\d+)', function(page, idxStr) {
     var idx = parseInt(idxStr, 10);
     var list = readEntries();
     var entry = list[idx];
@@ -630,4 +631,3 @@ function onPageModelNodeEvent(type, v1) {
     page.error('Entry has no valid URL');
   });
 
-})(this);

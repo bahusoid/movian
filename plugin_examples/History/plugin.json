@@ -1,6 +1,6 @@
 {
   "type": "ecmascript",
-  "apiversion": 1,
+  "apiversion": 2,
   "id": "History",
   "file": "history.js",
   "icon": "icon.png",
