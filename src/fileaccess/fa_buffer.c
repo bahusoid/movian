@@ -355,6 +355,12 @@ fab_seek(fa_handle_t *handle, int64_t pos, int whence, int lazy)
       return -1;
   }
 
+  // Reset cached EOF position when seeking past (or to) it.
+  // The underlying source may have more data at this position
+  // (e.g. after the demuxer jumps past a corrupt cue entry range).
+  if(bf->bf_size != -1 && np >= bf->bf_size)
+    bf->bf_size = -1;
+
   bf->bf_fpos = np;
   return np;
 }
@@ -432,8 +438,13 @@ fab_read(fa_handle_t *handle, void *buf, size_t size)
       return -1;
   }
 
-  if(bf->bf_size != -1 && bf->bf_fpos + size > bf->bf_size)
-    size = bf->bf_size - bf->bf_fpos;
+  if(bf->bf_size != -1) {
+    int64_t avail = bf->bf_size - bf->bf_fpos;
+    if(avail <= 0)
+      return 0;  /* At or past EOF */
+    if((int64_t)size > avail)
+      size = (size_t)avail;
+  }
 
   size_t rval = 0;
   while(size > 0) {
