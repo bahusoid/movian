@@ -170,7 +170,8 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
                   int resume_mode,
                   const char *title,
                   htsmsg_t *vpi,
-                  prop_t *origin)
+                  prop_t *origin,
+                  int64_t start_time_ms)
 {
   media_buf_t *mb = NULL;
   media_queue_t *mq = NULL;
@@ -189,12 +190,19 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
   mp->mp_audio.mq_seektarget = AV_NOPTS_VALUE;
   int64_t start = 0;
   if(mp->mp_flags & MP_CAN_SEEK) {
-    start = playinfo_get_restartpos(canonical_url, title, resume_mode) * 1000;
+    if(start_time_ms >= 0) {
+      start = start_time_ms * 1000LL;
+      TRACE(TRACE_DEBUG, "Video", "Starting at forced position %.2fs (from videoparams startTime)",
+            start / 1000000.0);
+    } else {
+      start = playinfo_get_restartpos(canonical_url, title, resume_mode) * 1000;
+      if(start)
+        TRACE(TRACE_DEBUG, "Video", "Attempting to resume from %.2fs",
+              start / 1000000.0f);
+    }
     if(start) {
-      TRACE(TRACE_DEBUG, "VIDEO", "Attempting to resume from %.2f seconds",
-            start / 1000000.0f);
       mp->mp_seek_base = start;
-      video_seek(fctx, mp, &mb, start, "restart position");
+      video_seek(fctx, mp, &mb, start, "start position");
     }
   }
 
@@ -892,7 +900,7 @@ be_file_playvideo_fh(const char *url, media_pipe_t *mp,
   e = video_player_loop(fctx, cwvec, mp, va.flags, errbuf, errlen,
 			va.canonical_url, freetype_context, si, ci,
 			cwvec_size, fh, va.resume_mode, va.title, vpi,
-                        va.origin);
+                        va.origin, va.start_time_ms);
 
   video_playback_info_invoke(VPI_STOP, vpi, mp->mp_prop_root, va.origin);
   htsmsg_release(vpi);

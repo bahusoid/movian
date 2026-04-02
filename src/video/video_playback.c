@@ -182,6 +182,7 @@ play_video(const char *url, struct media_pipe *mp,
   memset(&va, 0, sizeof(va));
   va.episode = -1;
   va.season = -1;
+  va.start_time_ms = -1;
   va.origin = origin;
   va.priority = priority;
   va.resume_mode = resume_mode;
@@ -321,6 +322,13 @@ play_video(const char *url, struct media_pipe *mp,
 
     if((str = htsmsg_get_str(m, "imdbid")) != NULL)
       va.imdb = str;
+
+    double startTimeSec = 0;
+    if(!htsmsg_get_dbl(m, "startTime", &startTimeSec) && startTimeSec >= 0) {
+      va.start_time_ms = (int64_t)(startTimeSec * 1000.0);
+      TRACE(TRACE_DEBUG, "Video", "videoparams startTime=%.3fs (%"PRId64"ms)",
+            startTimeSec, va.start_time_ms);
+    }
 
 
     // Request Headers - allocate dynamically to persist through backend_play_video
