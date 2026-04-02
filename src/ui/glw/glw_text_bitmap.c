@@ -475,9 +475,17 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
           right_pos = left_pos;
         }
         
-        // Account for horizontal scroll
+        // Account for horizontal scroll and clamp to visible area
         left_pos  = left_pos  - gtb->gtb_scroll_x + gtb->gtb_padding[0];
         right_pos = right_pos - gtb->gtb_scroll_x + gtb->gtb_padding[0];
+
+        const int vis_left  = gtb->gtb_padding[0];
+        const int vis_right = rc->rc_width - gtb->gtb_padding[2];
+        left_pos  = MAX(left_pos,  vis_left);
+        right_pos = MIN(right_pos, vis_right);
+
+        if(left_pos >= right_pos)
+          goto skip_selection;
 
         float x1 = -1.0f + 2.0f * left_pos  / (float)rc->rc_width;
         float x2 = -1.0f + 2.0f * right_pos / (float)rc->rc_width;
@@ -490,7 +498,7 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
         glw_renderer_vtx_pos(&gtb->gtb_selection_renderer, 3, x1, y2, 0.0);
       }
     }
-    
+    skip_selection:
     gtb->gtb_update_selection = 0;
   }
 
