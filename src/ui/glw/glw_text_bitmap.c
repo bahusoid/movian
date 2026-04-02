@@ -108,6 +108,8 @@ typedef struct glw_text_bitmap {
 
   int16_t gtb_margin;
 
+  int gtb_scroll_x;  /* horizontal scroll offset in text pixels for long strings */
+
   uint8_t gtb_pending_updates;
 #define GTB_UPDATE_REALIZE      2
 
@@ -215,6 +217,54 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
 
   }
 
+  // Pre-compute scroll offset to keep cursor visible (must happen before text layout)
+  if(w->glw_class == &glw_text && gtb->gtb_update_cursor &&
+     ti != NULL && ti->ti_charpos != NULL) {
+
+    const int margin = gtb->gtb_margin;
+    const int visible_width = rc->rc_width - gtb->gtb_padding[0] - gtb->gtb_padding[2];
+    const int full_text_width = tex_width - 2 * margin;  // text pixels without margin
+
+    if(full_text_width > visible_width) {
+      // Text is wider than the widget — need scrolling
+      int i = gtb->gtb_edit_ptr;
+      int cursor_pixel_x;
+
+      if(i < ti->ti_charposlen) {
+        cursor_pixel_x = ti->ti_charpos[i * 2];
+      } else if(ti->ti_charposlen > 0) {
+        cursor_pixel_x = ti->ti_charpos[2 * ti->ti_charposlen - 1];
+      } else {
+        cursor_pixel_x = 0;
+      }
+
+      int new_scroll_x = gtb->gtb_scroll_x;
+
+      if(cursor_pixel_x < new_scroll_x) {
+        new_scroll_x = cursor_pixel_x;
+      } else if(cursor_pixel_x > new_scroll_x + visible_width) {
+        new_scroll_x = cursor_pixel_x - visible_width;
+      }
+
+      if(new_scroll_x < 0)
+        new_scroll_x = 0;
+      int max_scroll = full_text_width - visible_width;
+      if(new_scroll_x > max_scroll)
+        new_scroll_x = max_scroll;
+
+      if(new_scroll_x != gtb->gtb_scroll_x) {
+        gtb->gtb_scroll_x = new_scroll_x;
+        gtb->gtb_need_layout = 1;  // Re-layout to update text UV with new scroll
+      }
+    } else {
+      // Text fits, reset scroll
+      if(gtb->gtb_scroll_x != 0) {
+        gtb->gtb_scroll_x = 0;
+        gtb->gtb_need_layout = 1;
+      }
+    }
+  }
+
   if(ti != NULL && gtb->gtb_need_layout) {
 
     const int margin = gtb->gtb_margin;
@@ -267,7 +317,9 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
 
 
     // Horizontal
-    if(text_width > right - left || ti->ti_flags & IMAGE_TEXT_TRUNCATED) {
+    int text_oversized = (text_width > right - left || ti->ti_flags & IMAGE_TEXT_TRUNCATED);
+
+    if(text_oversized) {
 
       // Oversized, must cut
 
@@ -285,6 +337,10 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
       }
 #endif
     } else {
+
+      // Text fits — reset scroll offset
+      if(w->glw_class == &glw_text)
+        gtb->gtb_scroll_x = 0;
 
       glw_renderer_vtx_col_reset(&gtb->gtb_text_renderer);
 
@@ -316,45 +372,53 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
     x2 = -1.0f + 2.0f * right  / (float)rc->rc_width;
 
 
+    // For text widgets with horizontal scroll, offset the UV start accordingly.
+    // scroll_x is in "text pixels" (after the margin); translate to texture UV.
+    const float s_off = (w->glw_class == &glw_text && text_oversized)
+                        ? (float)gtb->gtb_scroll_x / (float)tex_width
+                        : 0.0f;
     const float s = text_width  / (float)tex_width;
     const float t = text_height / (float)tex_height;
 
     if(gtb->w.glw_flags2 & GLW2_DEBUG)
-      printf("  s=%f t=%f\n", s, t);
+      printf("  s=%f t=%f s_off=%f\n", s, t, s_off);
 
     glw_renderer_vtx_pos(&gtb->gtb_text_renderer, 0, x1, y1, 0.0);
-    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 0, 0, t);
+    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 0, s_off,     t);
 
     glw_renderer_vtx_pos(&gtb->gtb_text_renderer, 1, x2, y1, 0.0);
-    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 1, s, t);
+    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 1, s_off + s, t);
 
     glw_renderer_vtx_pos(&gtb->gtb_text_renderer, 2, x2, y2, 0.0);
-    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 2, s, 0);
+    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 2, s_off + s, 0);
 
     glw_renderer_vtx_pos(&gtb->gtb_text_renderer, 3, x1, y2, 0.0);
-    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 3, 0, 0);
+    glw_renderer_vtx_st (&gtb->gtb_text_renderer, 3, s_off,     0);
   }
 
   if(w->glw_class == &glw_text && gtb->gtb_update_cursor) {
 
     int i = gtb->gtb_edit_ptr;
-    int left;
+    int cursor_pixel_x;
     float x1, y1, x2, y2;
 
     if(ti != NULL && ti->ti_charpos != NULL) {
 
       if(i < ti->ti_charposlen) {
-	left  = ti->ti_charpos[i*2  ];
+	cursor_pixel_x = ti->ti_charpos[i*2];
+      } else if(ti->ti_charposlen > 0) {
+	cursor_pixel_x = ti->ti_charpos[2 * ti->ti_charposlen - 1];
       } else {
-	left  = ti->ti_charpos[2 * ti->ti_charposlen - 1];
+        cursor_pixel_x = 0;
       }
 
     } else {
 
-      left = 0;
+      cursor_pixel_x = 0;
     }
 
-    left  += gtb->gtb_padding[0];
+    // Account for horizontal scroll: shift cursor left by scroll_x
+    int left = cursor_pixel_x - gtb->gtb_scroll_x + gtb->gtb_padding[0];
 
     x1 = -1.0f + 2.0f * (left - 1)  / (float)rc->rc_width;
     x2 = -1.0f + 2.0f * (left    )  / (float)rc->rc_width;
@@ -367,8 +431,8 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
     glw_renderer_vtx_pos(&gtb->gtb_cursor_renderer, 3, x1, y2, 0.0);
 
     if(w->glw_flags2 & GLW2_DEBUG) {
-      printf("Cursor updated %f %f %f %f  rect:%d,%d\n",
-             x1, y1, x2, y2, rc->rc_width, rc->rc_height);
+      printf("Cursor updated %f %f %f %f  rect:%d,%d scroll_x:%d\n",
+             x1, y1, x2, y2, rc->rc_width, rc->rc_height, gtb->gtb_scroll_x);
     }
 
     gtb->gtb_update_cursor = 0;
@@ -411,9 +475,10 @@ glw_text_bitmap_layout(glw_t *w, const glw_rctx_t *rc)
           right_pos = left_pos;
         }
         
-        left_pos  += gtb->gtb_padding[0];
-        right_pos += gtb->gtb_padding[0];
-        
+        // Account for horizontal scroll
+        left_pos  = left_pos  - gtb->gtb_scroll_x + gtb->gtb_padding[0];
+        right_pos = right_pos - gtb->gtb_scroll_x + gtb->gtb_padding[0];
+
         float x1 = -1.0f + 2.0f * left_pos  / (float)rc->rc_width;
         float x2 = -1.0f + 2.0f * right_pos / (float)rc->rc_width;
         float y1 = -1.0f + 2.0f * gtb->gtb_padding[3] / (float)rc->rc_height;
@@ -1013,9 +1078,10 @@ glw_text_bitmap_pointer_event(glw_t *w, const glw_pointer_event_t *gpe)
   // Convert from [-1, 1] to pixel offset from left edge
   int click_x = (int)((gpe->local_x + 1.0f) * width / 2.0f);
   
-  // Adjust for padding
+  // Adjust for padding and horizontal scroll to get text-relative pixel position
   click_x -= gtb->gtb_padding[0];
-  
+  click_x += gtb->gtb_scroll_x;
+
   // Find closest character boundary (left or right edge of each character)
   int best_pos = 0;
   int best_dist = INT_MAX;
@@ -1510,9 +1576,19 @@ do_render(glw_text_bitmap_t *gtb, glw_root_t *gr, int no_output)
     max_width = MIN(gtb->gtb_max_width, gr->gr_width);
     flags |= TR_RENDER_NO_OUTPUT;
   } else {
-    max_width =
-      MAX(gtb->gtb_max_width, gtb->gtb_saved_width) -
-      gtb->gtb_padding[0] - gtb->gtb_padding[2];
+    if(gtb->w.glw_class == &glw_text) {
+      /* For text input widgets render up to 6x the visible width so the
+         texture can exceed visible_width (enabling horizontal scrolling)
+         without allocating huge textures for arbitrarily long strings. */
+      int visible = gtb->gtb_saved_width - gtb->gtb_padding[0] - gtb->gtb_padding[2];
+      max_width = gtb->gtb_max_width > 0
+                  ? gtb->gtb_max_width - gtb->gtb_padding[0] - gtb->gtb_padding[2]
+                  : MAX(visible * 6, gr->gr_width);
+    } else {
+      max_width =
+        MAX(gtb->gtb_max_width, gtb->gtb_saved_width) -
+        gtb->gtb_padding[0] - gtb->gtb_padding[2];
+    }
   }
   if(gtb->w.glw_flags2 & GLW2_DEBUG)
     printf("  Max_width=%d\n", max_width);
