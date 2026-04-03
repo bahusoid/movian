@@ -408,8 +408,67 @@ window_close(glw_x11_t *gx11)
 
 
 /**
+ * Handle a single SelectionRequest event – used both from the main loop
+ * and from the clipboard_get_x11() wait loop so we don't deadlock when
+ * the app is both the clipboard owner and the requestor.
+ */
+static void
+handle_selection_request(glw_x11_t *gx11, XEvent *ev)
+{
+  XSelectionRequestEvent *req = &ev->xselectionrequest;
+  XSelectionEvent response;
+
+  response.type      = SelectionNotify;
+  response.display   = req->display;
+  response.requestor = req->requestor;
+  response.selection = req->selection;
+  response.target    = req->target;
+  response.time      = req->time;
+  response.property  = None; // Default: failure
+
+  if(req->selection == gx11->atom_clipboard &&
+     gx11->clipboard_text != NULL &&
+     req->property != None) {
+
+    if(req->target == gx11->atom_targets) {
+      // Respond with list of supported targets
+      Atom targets[] = {
+        gx11->atom_utf8_string,
+        gx11->atom_text,
+        gx11->atom_string
+      };
+      XChangeProperty(req->display, req->requestor, req->property,
+                      XA_ATOM, 32, PropModeReplace,
+                      (unsigned char *)targets,
+                      sizeof(targets) / sizeof(targets[0]));
+      response.property = req->property;
+    } else if(req->target == gx11->atom_utf8_string ||
+              req->target == gx11->atom_text ||
+              req->target == gx11->atom_string) {
+      // Provide the clipboard text
+      XChangeProperty(req->display, req->requestor, req->property,
+                      req->target, 8, PropModeReplace,
+                      (unsigned char *)gx11->clipboard_text,
+                      strlen(gx11->clipboard_text));
+      response.property = req->property;
+    }
+  }
+
+  XSendEvent(req->display, req->requestor, False, 0, (XEvent *)&response);
+  XFlush(req->display);
+}
+
+/**
  * X11 Clipboard get function
- * Requests the clipboard content from the X server
+ * Requests the clipboard content from the X server.
+ *
+ * Special case: when this app is the current clipboard owner, X will send a
+ * SelectionRequest to our own window instead of a SelectionNotify, causing a
+ * deadlock if we just spin waiting for SelectionNotify.  We handle this in two
+ * complementary ways:
+ *   1. Fast-path: detect ownership upfront and return clipboard_text directly.
+ *   2. Safety-net: service any SelectionRequest events that arrive while we
+ *      wait (covers the race between the ownership check and XConvertSelection).
  */
 static rstr_t *
 clipboard_get_x11(void)
@@ -418,14 +477,23 @@ clipboard_get_x11(void)
     return NULL;
     
   glw_x11_t *gx11 = g_gx11;
-  
-  // Request clipboard content
+
+  // Fast-path: if we own the clipboard return the text directly.
+  // Going through XConvertSelection would send SelectionRequest to ourselves;
+  // that event is only processed by the main loop which is likely blocked
+  // waiting for us to return, causing a deadlock.
+  if(XGetSelectionOwner(gx11->display, gx11->atom_clipboard) == gx11->win)
+    return gx11->clipboard_text ? rstr_alloc(gx11->clipboard_text) : NULL;
+
+  // Request clipboard content from the external owner
   XConvertSelection(gx11->display, gx11->atom_clipboard,
                     gx11->atom_utf8_string, gx11->atom_clipboard,
                     gx11->win, CurrentTime);
   XFlush(gx11->display);
-  
-  // Wait for SelectionNotify event (with timeout)
+
+  // Wait for SelectionNotify (with timeout).
+  // Also service SelectionRequest events that may arrive if we become the
+  // owner mid-flight (rare race condition).
   XEvent event;
   struct timeval start, now;
   gettimeofday(&start, NULL);
@@ -464,7 +532,17 @@ clipboard_get_x11(void)
       XDeleteProperty(gx11->display, gx11->win, gx11->atom_clipboard);
       return NULL;
     }
-    usleep(1000); // Wait 1ms before checking again
+
+    // Safety-net: service SelectionRequest in case we raced to ownership
+    if(XCheckTypedWindowEvent(gx11->display, gx11->win,
+                               SelectionRequest, &event)) {
+      handle_selection_request(gx11, &event);
+      // SelectionNotify was sent to our requestor window; loop immediately
+      // to pick it up without sleeping.
+      continue;
+    }
+
+    usleep(1000); // 1 ms poll interval
   }
   
   return NULL; // Timeout
@@ -1227,45 +1305,15 @@ glw_x11_mainloop(glw_x11_t *gx11)
 	break;
 
       case SelectionRequest:
-        {
-          // Another app is requesting our clipboard content
-          XSelectionRequestEvent *req = &event.xselectionrequest;
-          XSelectionEvent response;
-          
-          response.type = SelectionNotify;
-          response.display = req->display;
-          response.requestor = req->requestor;
-          response.selection = req->selection;
-          response.target = req->target;
-          response.time = req->time;
-          response.property = None; // Default to failure
-          
-          if(req->selection == gx11->atom_clipboard && gx11->clipboard_text != NULL) {
-            if(req->target == gx11->atom_targets) {
-              // Respond with list of supported targets
-              Atom targets[] = {
-                gx11->atom_utf8_string,
-                gx11->atom_text,
-                gx11->atom_string
-              };
-              XChangeProperty(req->display, req->requestor, req->property,
-                            XA_ATOM, 32, PropModeReplace,
-                            (unsigned char *)targets, 3);
-              response.property = req->property;
-            } else if(req->target == gx11->atom_utf8_string ||
-                      req->target == gx11->atom_text ||
-                      req->target == gx11->atom_string) {
-              // Provide the clipboard text
-              XChangeProperty(req->display, req->requestor, req->property,
-                            req->target, 8, PropModeReplace,
-                            (unsigned char *)gx11->clipboard_text,
-                            strlen(gx11->clipboard_text));
-              response.property = req->property;
-            }
-          }
-          
-          XSendEvent(req->display, req->requestor, False, 0, (XEvent *)&response);
-          XFlush(req->display);
+        // Another app (or ourselves) is requesting our clipboard content
+        handle_selection_request(gx11, &event);
+        break;
+
+      case SelectionClear:
+        // Another app has taken clipboard ownership; discard our cached text
+        if(event.xselectionclear.selection == gx11->atom_clipboard) {
+          free(gx11->clipboard_text);
+          gx11->clipboard_text = NULL;
         }
         break;
 
