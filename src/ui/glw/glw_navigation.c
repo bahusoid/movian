@@ -117,7 +117,7 @@ glw_navigate_step(glw_t *c, int count, int may_wrap)
     // Prevents wrapping while nav key is pressed
     // This allows users to stop at list edges instead of wrapping immediately
     int64_t timestamp = arch_get_ts();
-    if(timestamp - last_nav_step_ts < 100000) {
+    if (timestamp - last_nav_step_ts < 200000) {
       last_nav_step_ts = timestamp;
       return 0;
     }
