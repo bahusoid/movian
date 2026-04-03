@@ -149,6 +149,17 @@ new page.Route(plugin.id + ":indexItem:(.*):(.*):(.*)", function(page, torrentUr
     page.loading = false;
 });
 
+function GetQualityIconName(titleMatch) {
+    function match(v) {
+        if(titleMatch.match(v + '[pPрР]'))
+            return 'res/' + v + 'p.png';
+    }
+
+    return match('2160')
+    || match('1080')
+    || match('720');
+}
+
 function scraper(page, doc, section) {
     // 1-date, 2-filelink, 3-infolink, 4-title, 5-(1)size, (2)seeds, (3)peers
     var re = /<tr class="[gai|tum]+"><td>([\s\S]*?)<\/td>[\s\S]*?href="([\s\S]*?)"[\s\S]*?<a href[\s\S]*?<a href="([\s\S]*?)">([\s\S]*?)<\/a>([\s\S]*?)<\/tr>/g;
@@ -172,12 +183,21 @@ function scraper(page, doc, section) {
             page.appendItem("", "separator", {
                 title: 'Связанные раздачи'
             });
-        page.appendItem(plugin.id + ':indexItem:' + escape(url) + ':' + escape(match[3]) + ':' + escape(match[4]), 'directory', {
+
+        // Build item properties and only include icon when we found a quality icon.
+        var itemProps = {
             title: new RichText(colorStr(match[1], orange) + ' ' +
                 match[4] + ' ('+ coloredStr(end[2], green) + '/'+
                 coloredStr(end[3], red) + ') ' + colorStr(end[1], blue) +
                 (comments ? colorStr(comments, orange) : ''))
-        }); 
+        };
+
+        // Try to pick a quality icon from res/ based on title
+        var qualityIcon = GetQualityIconName(match[4]);
+        if (qualityIcon)
+            itemProps.icon = Plugin.path +  qualityIcon;
+
+        page.appendItem(plugin.id + ':indexItem:' + escape(url) + ':' + escape(match[3]) + ':' + escape(match[4]), 'directory', itemProps);
         page.entries++;
         match = re.exec(doc);
     }
