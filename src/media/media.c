@@ -620,10 +620,30 @@ mp_set_playstatus_by_hold_locked(media_pipe_t *mp, const char *msg)
 
   mp_send_cmd_locked(mp, &mp->mp_audio, cmd);
 
-  if(!hold)
+  if(!hold) {
+    // Transitioning from hold to playing.
+    // Reset audio clock reference to current wall-clock time so that
+    // video A/V sync doesn't use a stale avtime.  During pause the
+    // audio subsystem stops updating the clock, so
+    //   aclock = mp_audio_clock + (now - mp_audio_clock_avtime)
+    // would include the entire pause duration, making aclock wildly
+    // inflated and causing frames to be rendered without proper timing
+    // (visible as a microstutter on unpause).
+    // Try resetting avtime until the audio callback naturally
+    // takes over.
+
+    hts_mutex_lock(&mp->mp_clock_mutex);
+    if(mp->mp_audio_clock_avtime != 0)
+    {
+      //mp->mp_audio_clock_avtime = arch_get_avtime();
+      mp->mp_audio_clock_avtime = 0;
+    }
+    hts_mutex_unlock(&mp->mp_clock_mutex);
+
     prop_set_void(mp->mp_prop_pausereason);
-  else
+  } else {
     prop_set_string(mp->mp_prop_pausereason, msg ?: "Paused by user");
+  }
 
   prop_set_string(mp->mp_prop_playstatus, hold ? "pause" : "play");
 
