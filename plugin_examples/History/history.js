@@ -194,14 +194,14 @@ function makeKey(entry) {
 }
 
 function saveEntry(entry) {
-  if (!entry || !entry.pageUrl || (!entry.itemCanonical && !entry.itemUrl)) {
+  if (!entry) {
     return;
   }
 
   var list = readEntries();
   var key = makeKey(entry);
 
-  if (filterByPage) {
+  if (filterByPage && entry.pageUrl) {
     var writeIdx = 0;
     for (var i = 0; i < list.length; i++) {
       if (list[i].pageUrl !== entry.pageUrl) {
@@ -682,7 +682,6 @@ new page.Route(PREFIX + 'open:(\\d+)', function(page, idxStr) {
   }
 
   page.error('Entry has no valid URL');
-  page.loading = false;
 });
 
 new page.Route(PREFIX + 'remove:(\\d+)', function(page, idxStr) {
