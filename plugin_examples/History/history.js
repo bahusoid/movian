@@ -11,6 +11,7 @@ var settings = new settingsModule.globalSettings(Plugin.id, 'History', null, 'Hi
 var popup = require('native/popup');
 var page = require('movian/page');
 var service = require('movian/service');
+
   var debug = false;
   settings.createBool('debug', 'Debug', false, function(v) { debug = v; });
   var filterByPage = false;
@@ -33,6 +34,7 @@ var service = require('movian/service');
   var lastPageUrl = null;
   var lastPageTitle = null;
   var browseStack = [];  // [{url, title, canonical}, ...] — recent browsable pages
+  var lastResortPageUrl;
   var MAX_BROWSE_STACK = 5;
   var currentPageUrl = null;
   var currentPageTitle = null;
@@ -96,11 +98,29 @@ var service = require('movian/service');
 
   function isBrowsablePage(url, type) {
     if (!url) return false;
-    if (url.indexOf(PREFIX) === 0) return false;
-    if (url.indexOf('videoparams:') === 0) return false;
+    if(type === 'video')
+    {
+      pendingFocus = null;
+      return false;
+    }
+
+    if (url.indexOf(PREFIX) === 0
+        || url.indexOf('page:home') === 0
+        || url.indexOf('settings:') === 0) {
+      browseStack = [];
+      return false;
+    }
+    if(isLastResortBrowsable(url)) {
+      lastResortPageUrl = url;
+      return false;
+    }
     // model.type is 'video' when the player is active; anything else is browsable.
-    return type !== 'video';
+    return true;
   }
+  function isLastResortBrowsable(url) {
+    return url.indexOf("search:") === 0 || url.indexOf('videoparams:') === 0;
+  }
+
 
   function updateBrowsable(url, title) {
     if (!url) return;
@@ -209,10 +229,24 @@ var service = require('movian/service');
 
   function titleForEntry(entry) {
     var item = entry.itemTitle || 'Unknown item';
-    var page = entry.pageTitle || entry.pageUrl || 'Unknown page';
-    return item + ' | ' + page;
+    var page = entry.pageTitle;
+    if(!page)
+       return item;
+    return item +  ' | ' + page;
   }
-
+/*
+  // TODO: It's added globally. How to add only on this page?
+  // ItemHook: add "Remove from History" context menu action for video items
+  var itemhook = require('movian/itemhook');
+  itemhook.create({
+    title: 'Remove from History',
+    icon: Plugin.path + 'icon.png',
+    itemtype: 'directory',
+    handler: function(obj, nav) {
+      page.redirect(PREFIX + 'remove:' + obj.index);
+    }
+  });
+*/
   function clearPendingFocus(reason) {
     var pf = pendingFocus;
     if (pf) {
@@ -496,14 +530,13 @@ function onPageModelNodeEvent(type, v1) {
     }
 
     var found = findBrowsablePageFor(itemCanonical);
-    var pageUrl = found ? found.url : lastPageUrl;
+    var pageUrl = found && found.url;
 
     // Fallback only when current page looks like a real listing/details page.
-    if (!pageUrl && isBrowsablePage(currentPageUrl, currentPageType)) {
-      pageUrl = currentPageUrl;
-    }
+    // if (!pageUrl && isBrowsablePage(currentPageUrl, currentPageType)) {
+    //   pageUrl = currentPageUrl;
+    // }
 
-    if (!pageUrl) return;
     log(debug && "data title=" + safeString(data && data.title, '<none>'));
     // debugDescribeNode(data);
     // log(debug && "origin");
@@ -545,10 +578,19 @@ function onPageModelNodeEvent(type, v1) {
       log(debug && 'title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
     }
 */
-    itemTitle = safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
+    var itemTitle = safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
 
-    var pageTitle = (found && found.title) || lastPageTitle || currentPageTitle || pageUrl;
 
+    var pageTitle =  (found && found.title);
+    if(!pageUrl && lastResortPageUrl) {
+      pageTitle = null;
+      pageUrl = lastResortPageUrl;
+      var title = safeString(data.title);
+      if(title)
+        itemTitle = title;
+    }
+    lastResortPageUrl = null;
+    browseStack = [];
     log(debug && 'save entry pageUrl=' + safeString(pageUrl, '<none>') +
         '\n pageTitle=' + safeString(pageTitle, '<none>') +
         '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
@@ -591,7 +633,8 @@ new page.Route(historyPageUrl, function(page) {
 
     for (var i = 0; i < list.length; i++) {
       page.appendItem(PREFIX + 'open:' + i, 'directory', {
-        title: titleForEntry(list[i])
+        title: titleForEntry(list[i]),
+        index: i
       });
     }
  
@@ -629,5 +672,17 @@ new page.Route(PREFIX + 'open:(\\d+)', function(page, idxStr) {
     }
 
     page.error('Entry has no valid URL');
+    page.loading = false;
   });
 
+new page.Route(PREFIX + 'remove:(\\d+)', function(page, idxStr) {
+  var idx = parseInt(idxStr, 10);
+  var list = readEntries();
+
+  if ( idx < list.length && popup.message('Remove ' + titleForEntry(list[idx]) + '?', true, true)) {
+    list.splice(idx, 1);
+    saveEntries(list);
+    historyUpdatedStamp = Date.now();
+  }
+  page.redirect(historyPageUrl);
+});
