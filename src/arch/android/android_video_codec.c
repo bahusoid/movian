@@ -43,6 +43,9 @@ typedef struct android_video_codec {
   AVBSFContext *bsf;
   prop_t *codec_info;
 
+  int64_t last_out_pts;
+  int estimated_duration;
+
 } android_video_codec_t;
 
 static int configure_media_codec(android_video_codec_t *avc, media_codec_t *mc, const media_codec_params_t *mcp);
@@ -137,11 +140,15 @@ fill_frame_info_from_pts(frame_info_t *fi,
       fi->fi_duration = mbm->mbm_duration;
       fi->fi_user_time = mbm->mbm_user_time;
       fi->fi_drive_clock = mbm->mbm_drive_clock;
+      // Use estimated duration if packet duration is invalid
+      if(fi->fi_duration <= 0)
+        fi->fi_duration = avc->estimated_duration;
       return 0;
     }
   }
   // Fallback if not found in reorder buffer
-  fi->fi_epoch = vd->vd_mp->mp_audio_clock_epoch; 
+  fi->fi_epoch = vd->vd_mp->mp_audio_clock_epoch;
+  fi->fi_duration = avc->estimated_duration;
   return 0;
 }
 
@@ -149,6 +156,8 @@ static void
 drain_output(android_video_codec_t *avc, video_decoder_t *vd)
 {
   AMediaCodecBufferInfo info;
+  media_pipe_t *mp = vd->vd_mp;
+
   while (1) {
     ssize_t idx = AMediaCodec_dequeueOutputBuffer(avc->codec, &info, 0);
     if (idx >= 0) {
@@ -157,50 +166,60 @@ drain_output(android_video_codec_t *avc, video_decoder_t *vd)
       frame_info_t fi = {};
       fill_frame_info_from_pts(&fi, vd, avc, pts);
 
-      int64_t now = arch_get_avtime();
-      media_pipe_t *mp = vd->vd_mp;
-      hts_mutex_lock(&mp->mp_clock_mutex);
-      if(mp->mp_realtime_delta == 0) 
-      {
-        mp->mp_realtime_delta = now - fi.fi_pts;
-        if(mp->mp_audio_clock_epoch == 0)
-          mp->mp_audio_clock_epoch = fi.fi_epoch;
+      // Estimate duration from inter-frame PTS differences
+      if (avc->last_out_pts != PTS_UNSET && pts != PTS_UNSET) {
+        int64_t d = pts - avc->last_out_pts;
+        if (d > 1000 && d < 1000000)
+          avc->estimated_duration = d;
       }
-      int64_t rtd = mp->mp_realtime_delta + mp->mp_avdelta;
-      int epoch = mp->mp_audio_clock_epoch;
+      avc->last_out_pts = pts;
+
+      // Use estimated duration if frame duration is still unknown
+      if (fi.fi_duration <= 0)
+        fi.fi_duration = avc->estimated_duration;
+
+      // Update vd estimated duration for bitrate calculations
+      if (fi.fi_duration > 0)
+        vd->vd_estimated_duration = fi.fi_duration;
+
+      // For video-only files, initialize the audio clock from video
+      // so that surface_deliver can sync against it.
+      // (Audio decoder normally sets these; this is the no-audio fallback.)
+      hts_mutex_lock(&mp->mp_clock_mutex);
+      if (mp->mp_audio_clock_avtime == 0 && fi.fi_pts != PTS_UNSET) {
+        mp->mp_audio_clock = fi.fi_pts;
+        mp->mp_audio_clock_avtime = arch_get_avtime();
+        mp->mp_realtime_delta = mp->mp_audio_clock_avtime - mp->mp_audio_clock;
+      }
+      if (mp->mp_audio_clock_epoch == 0 && fi.fi_epoch != 0)
+        mp->mp_audio_clock_epoch = fi.fi_epoch;
+      int audio_epoch = mp->mp_audio_clock_epoch;
       hts_mutex_unlock(&mp->mp_clock_mutex);
 
-      int64_t wt = fi.fi_pts + rtd;
-
-      if(epoch == fi.fi_epoch) {
-        if((wt - now) > 10000LL) {
-          while((wt - arch_get_avtime()) > 5000LL) {
-            hts_mutex_lock(&mp->mp_clock_mutex);
-            int current_epoch = mp->mp_audio_clock_epoch;
-            hts_mutex_unlock(&mp->mp_clock_mutex);
-            if (current_epoch != epoch) break;
-
-            usleep(2000);
-          }
-        }
-        AMediaCodec_releaseOutputBuffer(avc->codec, idx, 1);
-        //fi->fi_update_pts_only = 0; //Can we skip syncing?
-        fi.fi_type = 'SURF';
-        if (avc->out_width > 0 && avc->out_height > 0) {
-            fi.fi_dar_num = avc->out_width;
-            fi.fi_dar_den = avc->out_height;
-            fi.fi_height = avc->out_height;
-        } else {
-            fi.fi_dar_num = avc->width;
-            fi.fi_dar_den = avc->height;
-            fi.fi_height = avc->height;
-        }
-        video_deliver_frame(vd, &fi);
-      } else {
-        AVC_TRACE("   Skip buffer %zd @ %10lld in %16lld rtd=%lld",
-                  idx, fi.fi_pts, wt - now, rtd);
+      if (audio_epoch != 0 && fi.fi_epoch != audio_epoch) {
+        // Epoch mismatch (e.g. after seek), skip this frame
+        AVC_TRACE("Skip buffer %zd @ pts=%" PRId64 " epoch=%d (current=%d)",
+                  idx, pts, fi.fi_epoch, audio_epoch);
         AMediaCodec_releaseOutputBuffer(avc->codec, idx, 0);
+        continue;
       }
+
+      fi.fi_type = 'SURF';
+      if (avc->out_width > 0 && avc->out_height > 0) {
+          fi.fi_dar_num = avc->out_width;
+          fi.fi_dar_den = avc->out_height;
+          fi.fi_height = avc->out_height;
+      } else {
+          fi.fi_dar_num = avc->width;
+          fi.fi_dar_den = avc->height;
+          fi.fi_height = avc->height;
+      }
+
+      // Let surface_deliver handle A/V sync timing before rendering
+      int r = video_deliver_frame(vd, &fi);
+
+      // Now render the frame on the surface (after sync)
+      AMediaCodec_releaseOutputBuffer(avc->codec, idx, (r == 0) ? 1 : 0);
 
     } else if (idx == AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED) {
       update_output_format(avc);
@@ -317,6 +336,8 @@ android_codec_flush(struct media_codec *mc, struct video_decoder *vd)
   if (avc->bsf) {
     av_bsf_flush(avc->bsf);
   }
+
+  avc->last_out_pts = PTS_UNSET;
 
   for(int i=0; i<VIDEO_DECODER_REORDER_SIZE; i++)
     vd->vd_reorder[i].mbm_pts = AV_NOPTS_VALUE;
@@ -542,6 +563,7 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
 
   android_video_codec_t *avc = calloc(1, sizeof(android_video_codec_t));
   avc->mime = mime;
+  avc->last_out_pts = PTS_UNSET;
   if (mcp) {
     avc->width = mcp->width;
     avc->height = mcp->height;
