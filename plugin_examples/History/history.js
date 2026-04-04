@@ -597,7 +597,15 @@ scrobbler.onstart = function(data, prop, origin) {
       '\n pageTitle=' + safeString(pageTitle, '<none>') +
       '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
       '\n title=' + itemTitle);
-
+  if(pageTitle && pageTitle.indexOf(itemTitle) === 0)
+  {
+    itemTitle = pageTitle;
+    pageTitle = null;
+  }
+  else if(pageTitle && itemTitle.indexOf(pageTitle) === 0)
+  {
+    pageTitle = null;
+  }
   saveEntry({
     itemTitle: itemTitle,
     itemCanonical: itemCanonical,
