@@ -184,6 +184,7 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
   int lastsec = -1;
   int restartpos_last = -1;
   int64_t last_timestamp_presented = AV_NOPTS_VALUE;
+  int64_t last_video_st_ts = AV_NOPTS_VALUE;
 
   mp->mp_seek_base = 0;
   mp->mp_video.mq_seektarget = AV_NOPTS_VALUE;
@@ -236,11 +237,66 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
 	char buf[512];
 	if(av_strerror(r, buf, sizeof(buf)))
 	  snprintf(buf, sizeof(buf), "Error %d", r);
+
+  int64_t cur_st_ts = last_video_st_ts;
+  int recovered = 0;
+
+  /* Check if the stream index has more entries ahead of our
+   * current position.  If so, the EOF/error is likely caused by
+   * a small corruption in the file — seek to the next index
+   * entry and keep playing.  We do NOT flush the decoder pipeline
+   * so already-buffered frames play out naturally. */
+  if (r == AVERROR_EOF && cur_st_ts != AV_NOPTS_VALUE  && (mp->mp_flags & MP_CAN_SEEK) && mp->mp_video.mq_stream >= 0)
+  {
+    AVStream* vst = fctx->streams[mp->mp_video.mq_stream];
+
+    const AVIndexEntry* next;
+    int cur_idx = av_index_search_timestamp(vst, cur_st_ts, 0);
+
+    while ((next = avformat_index_get_entry(vst, ++cur_idx)))
+    {
+      if (next->timestamp < cur_st_ts)
+        continue;
+
+      /* There are still valid index entries ahead — skip to the next one */
+      TRACE(TRACE_DEBUG, "Video",
+            "Read error '%s' at %.2fs, but index has entry at %.2fs "
+            "— seeking forward to recover",
+            buf,
+            av_rescale_q(cur_st_ts, vst->time_base, AV_TIME_BASE_Q) / 1000000.0,
+            av_rescale_q(next->timestamp, vst->time_base , AV_TIME_BASE_Q) / 1000000.0);
+
+#ifdef DEBUG
+      // Note: Strangely file size here could be incorrect (trimmed by EOF error?)
+      int64_t cur_pos = avio_tell(fctx->pb);
+      int64_t size_orig = avio_size(fctx->pb);
+#endif
+
+      if (avformat_seek_file(fctx, mp->mp_video.mq_stream,
+                             next->timestamp, next->timestamp,
+                             INT64_MAX, 0) >= 0)
+      {
+#ifdef DEBUG
+        TRACE(TRACE_DEBUG, "Video",
+              "Seeked from byte %"PRId64" to byte %"PRId64" (file size %"PRId64", orig size %"PRId64")",
+              cur_pos, avio_tell(fctx->pb), avio_size(fctx->pb), size_orig);
+#endif
+        recovered = 1;
+        break;
+      }
+    }
+  }
+
+  if (recovered)
+    continue;
+
+
 	TRACE(TRACE_DEBUG, "Video", "Playback reached EOF: %s (%d)", buf, r);
 	mb = MB_SPECIAL_EOF;
 	mp->mp_eof = 1;
 	continue;
       }
+
 
       si = pkt.stream_index;
       if(si >= cwvec_size)
@@ -248,6 +304,7 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
 
       if(si == mp->mp_video.mq_stream) {
 	/* Current video stream */
+	last_video_st_ts = pkt.dts != AV_NOPTS_VALUE ?  pkt.dts : pkt.pts;
 	mb = media_buf_from_avpkt_unlocked(mp, &pkt);
 	mb->mb_data_type = MB_VIDEO;
 	mq = &mp->mp_video;
