@@ -286,6 +286,7 @@ settings.createBool('movianDRM', 'Проигрыватель Movian DRM', true, 
 settings.createBool('askQuality', 'Спрашивать качество каждый раз', false, function (v) {store.askQuality = v});
 settings.createMultiOpt('qualityResolution', 'Предпочтительное разрешение', [
   ['4k', '4K'],
+  ['1080p ultra', '1080p Ultra'],
   ['1080p', '1080p', true],
   ['720p', '720p'],
   ['sd', 'SD'],
@@ -1373,7 +1374,11 @@ function getUrlForCdn(urlMap, preferredCdn) {
 };
 function selectBestQuality(list, maxResolution, preferredFormat, preferredCdn) {
   // Define resolution hierarchy (higher index = better quality)
-  var resolutionOrder = ['sd', '720p', '1080p', '1080p Ultra', '4k'];
+  var resolutionOrder = ['360p', '480p', '720p', '1080p', '1080p ultra', '4k'];
+  if(maxResolution === 'sd')
+  {
+    maxResolution = '480p';
+  }
   var maxResIndex = resolutionOrder.indexOf(maxResolution);
   preferredCdn = preferredCdn || 'voidboost.cc';
   
