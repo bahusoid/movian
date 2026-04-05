@@ -93,6 +93,13 @@ var LOGOM = Plugin.path + 'src/magnet.png';
 var LOGOAVATAR = Plugin.path + 'src/avatar.png';
 var LOGOAVATARS = Plugin.path + 'src/avatars.png';
 var LOGOEXIT = Plugin.path + 'src/exit.png';
+// Helper to detect image URLs (includes webp)
+function isImage(u) {
+  try {
+    if (!u) return false;
+    return /\.(?:jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif|webp)(?:[?#]|$)/i.test(u);
+  } catch (e) { return false; }
+}
 //var listview = Plugin.path + 'src/list.view';
 var NAME = 'kinogo';
 
@@ -662,7 +669,7 @@ new page.Route(PREFIX + ':start', function (page) {
 //      avatar = HTTPS + BASE_URL + '///' + avatar;
     }
 //    avatar = avatar.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(avatar)) {
+    if (isImage(avatar)) {
       avatar = avatar;
     }
     else {
@@ -709,7 +716,7 @@ new page.Route(PREFIX + ':start', function (page) {
 //      x0avatar = HTTPS + BASE_URL + '///' + x0avatar;
     }
 //    x0avatar = x0avatar.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(x0avatar)) {
+    if (isImage(x0avatar)) {
       x0avatar = x0avatar;
     }
     else {
@@ -759,7 +766,7 @@ new page.Route(PREFIX + ':start', function (page) {
 //      xavatar = HTTPS + BASE_URL + '///' + xavatar;
     }
 //    xavatar = xavatar.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(xavatar)) {
+    if (isImage(xavatar)) {
       xavatar = xavatar;
     }
     else {
@@ -809,7 +816,7 @@ new page.Route(PREFIX + ':start', function (page) {
 //      avatar = HTTPS + BASE_URL + '///' + avatar;
     }
 //    avatar = avatar.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(avatar)) {
+    if (isImage(avatar)) {
       avatar = avatar;
     }
     else {
@@ -1839,7 +1846,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
   try {
     icon = icon;
 //    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon)) {
-    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon) && !/\.webp/.test(icon)) {
+    if (isImage(icon)) {
       icon = icon;
     }
     else {
@@ -1890,7 +1897,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
     }
 //    poster = poster.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
 //    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(poster)) {
-    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(poster) && !/\.webp/.test(poster)) {
+    if (isImage(poster)) {
       poster = poster;
     }
     else {
@@ -1937,7 +1944,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //      poster = HTTPS + BASE_URL + '///' + poster;
     }
 //    poster = poster.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-    if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(poster)) {
+    if (isImage(poster)) {
       poster = poster;
     }
     else {
@@ -1986,7 +1993,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
         }
 //        screenshot = screenshot.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
 //        if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(screenshot)) {
-        if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(screenshot) && !/\.webp/.test(screenshot)) {
+        if (isImage(screenshot)) {
           screenshot = screenshot;
         }
         else {
@@ -4656,7 +4663,7 @@ new page.Route(PREFIX + ':moviepage:(.*)~(.*)~(.*)', function (page, url, title,
 //              rposter = HTTPS + BASE_URL + '///' + rposter;
             }
 //            rposter = rposter.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-            if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(rposter)) {
+            if (isImage(rposter)) {
               rposter = rposter;
             }
             else {
@@ -6562,7 +6569,7 @@ new page.Route(PREFIX + ':takedwnpage:(.*)~(.*)~(.*)', function (page, url, titl
             poster = HTTPS + poster;
 //            poster = HTTPS + poster + '.jpg';
           }
-          if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(poster)) {
+          if (isImage(poster)) {
             poster = poster;
           }
           else {
@@ -6646,7 +6653,7 @@ new page.Route(PREFIX + ':takedwnpage:(.*)~(.*)~(.*)', function (page, url, titl
             poster = HTTPS + poster;
 //            poster = HTTPS + poster + '.jpg';
           }
-          if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(poster)) {
+          if (isImage(poster)) {
             poster = poster;
           }
           else {
@@ -7150,7 +7157,7 @@ new page.Route(PREFIX + ':imagespage:(.*)~(.*)~(.*)', function (page, url, title
         }
 //        screenshot = screenshot.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
 //        if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(screenshot)) {
-        if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(screenshot) && !/\.webp/.test(screenshot)) {
+        if (isImage(screenshot)) {
           screenshot = screenshot;
         }
         else {
@@ -7865,7 +7872,9 @@ function search(page, query, url, doc) {
     page.loading = true;
 //    url = HTTPS + BASE_URL + '/index.php?story=' + query + '&do=search&subaction=search';
 //    url = HTTPS + BASE_URL + '/xfsearch/' + query;
-    url = HTTPS + BASE_URL + '/xfsearch/' + query + '/page/' + fromPage + '/';
+    url = HTTPS + BASE_URL + '/xfsearch/' + query;
+    if(fromPage > 1)
+      url += '/page/' + fromPage + '/';
 //    url = showtime.entityDecode(url);
 //    url = unescape(url);
 //    url = decodeURIComponent(url);
@@ -7874,6 +7883,7 @@ function search(page, query, url, doc) {
     doc = http.request(url).toString();
 */
 //    doc = showtime.httpReq(url, {
+try {
     doc = http.request(url, {
       debug: true,
 //      debug: false,
@@ -7893,6 +7903,11 @@ function search(page, query, url, doc) {
 //      headers: {},
 //    });
     }).toString();
+  }
+  catch (err) {
+    page.loading = false;
+    return false;
+  }
 //    }).convertFromEncoding('utf-8').toString();
 //    }).convertFromEncoding('windows-1251').toString();
 /*
@@ -8469,7 +8484,7 @@ function scrapercar(page, doc) {
       }
 //      icon = icon.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
 //      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon)) {
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon) && !/\.webp/.test(icon)) {
+      if (isImage(icon)) {
         icon = icon;
       }
       else {
@@ -8504,7 +8519,7 @@ function scrapercar(page, doc) {
 //        xicon = HTTPS + BASE_URL + '///' + xicon;
       }
 //      xicon = xicon.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(xicon)) {
+      if (isImage(xicon)) {
         xicon = xicon;
       }
       else {
@@ -8540,7 +8555,7 @@ function scrapercar(page, doc) {
 //        icon = HTTPS + BASE_URL + '///' + icon;
       }
 //      icon = icon.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon)) {
+      if (isImage(icon)) {
         icon = icon;
       }
       else {
@@ -8940,7 +8955,7 @@ function scraper(page, doc, section) {
       }
 //      icon = icon.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
 //      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon)) {
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon) && !/\.webp/.test(icon)) {
+      if (isImage(icon)) {
         icon = icon;
       }
       else {
@@ -8977,7 +8992,7 @@ function scraper(page, doc, section) {
 //        x0icon = HTTPS + BASE_URL + '///' + x0icon;
       }
 //      x0icon = x0icon.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(x0icon)) {
+      if (isImage(x0icon)) {
         x0icon = x0icon;
       }
       else {
@@ -9017,11 +9032,11 @@ function scraper(page, doc, section) {
 //        xicon = HTTPS + BASE_URL + '///' + xicon;
       }
 //      xicon = xicon.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(xicon)) {
+      if (isImage(xicon)) {
         xicon = xicon;
       }
       else {
-//        xicon = icon;
+        //        xicon = icon;
         xicon = x0icon;
 //        xicon = LOGOICON;
 //        xicon = LOGOLOGO;
@@ -9057,7 +9072,7 @@ function scraper(page, doc, section) {
 //        icon = HTTPS + BASE_URL + '///' + icon;
       }
 //      icon = icon.replace(/(\/\/\/\/|\/\/\/)/g, '/').trim();
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(icon)) {
+      if (isImage(icon)) {
         icon = icon;
       }
       else {
@@ -9945,7 +9960,7 @@ function scrapercdnlandseries(page, doc, title, icon, poster, translationid) {
       } else {
         seasonPoster = HTTPS + BASE_URL + seasonPoster;
       }
-      if (!/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(seasonPoster)) {
+      if (!isImage(seasonPoster)) {
         seasonPoster = icon;
       }
     } catch (err) {
@@ -10133,7 +10148,7 @@ function scrapertakedwn(page, doc, title, icon, poster, season) {
         poster = HTTPS + poster;
 //        poster = HTTPS + poster + '.jpg';
       }
-      if (/\.(jpg|jpe|jpeg|jfif|png|bmp|dib|svg|gif)/.test(poster)) {
+      if (isImage(poster)) {
         poster = poster;
       }
       else {
