@@ -522,14 +522,6 @@ var scrobbler = new videoscrobbler.VideoScrobbler();
 scrobbler.onstart = function(data, prop, origin) {
   var dataCanonical = safeString(data && data.canonical_url, null);
   var dataUrl = safeString(data && data.url, null);
-  var originUrl = safeString(origin && origin.url, null);
-
-  var itemCanonical = dataCanonical || canonicalFromUrl(originUrl) || canonicalFromUrl(dataUrl);
-  var itemUrl = originUrl || dataUrl || itemCanonical;
-
-  if (!itemCanonical && !itemUrl) {
-    return;
-  }
 
   var found = findBrowsablePageFor(itemCanonical);
   var pageUrl = found && found.url;
@@ -580,9 +572,8 @@ scrobbler.onstart = function(data, prop, origin) {
     log(debug && 'title attempts:\n' + (logLines.length ? logLines.join('\n') : '<none>'));
   }
 */
-  var itemTitle = safeString(origin.metadata.title) || safeString(data.title) || "Unknown";
 
-
+  var itemTitle = null;
   var pageTitle =  (found && found.title);
   if(!pageUrl && lastResortPageUrl) {
     pageTitle = null;
@@ -591,6 +582,31 @@ scrobbler.onstart = function(data, prop, origin) {
     if(title)
       itemTitle = title;
   }
+
+  if(!itemTitle) {
+    itemTitle = pageUrl
+        ? safeString(origin.metadata.title) || safeString(data.title) || "Unknown"
+        : safeString(data.title);
+  }
+  var itemUrl = null;
+  var itemCanonical = null;
+
+
+  if(!pageUrl)
+  {
+    itemUrl = dataCanonical;
+  }
+  else
+  {
+    var originUrl = safeString(origin && origin.url, null);
+    itemCanonical = dataCanonical || canonicalFromUrl(originUrl) || canonicalFromUrl(dataUrl);
+    itemUrl= originUrl || dataUrl || itemCanonical;
+  }
+
+  if (!itemUrl) {
+    return;
+  }
+
   lastResortPageUrl = null;
   browseStack = [];
   log(debug && 'save entry pageUrl=' + safeString(pageUrl, '<none>') +
