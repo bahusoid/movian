@@ -9,15 +9,15 @@ exports.contentPage = function (page, mdata) {
   if (/\{/.test(mdata)) data = JSON.parse(mdata);
 //  /{"url":"/.test(mdata) ? (data = showtime.JSONDecode(mdata)) : (data.url = mdata);
 //  /{"url":"/.test(mdata) ? (data = JSON.parse(mdata)) : (data.url = mdata);
-  console.log('moviepage.contentPage called with mdata:', mdata);
-  console.log('Parsed data:', data);
+  log.d('moviepage.contentPage called with mdata:', mdata);
+  log.d('Parsed data:', data);
   
   // Extract series/film ID from URL if not already present
   if (data.url && !data.id) {
     var idMatch = data.url.match(/\/(\d+)-[^\/]+\.html$/);
     if (idMatch) {
       data.id = idMatch[1];
-      console.log('Extracted ID from URL:', data.id);
+      log.d('Extracted ID from URL:', data.id);
     }
   }
   
@@ -57,6 +57,13 @@ function getkpID() {
     data.kpID = data.kpID.match(/[0-9]+/)[0];
   }
 };
+
+function getTitleYear(data) {
+  if(data.title_year)
+    return data.title_year;
+  return data.title + (data.year ? ' (' + data.year + ')' : '');
+}
+
 function moviePage(page, data) {
   log.d({
     function: 'moviePage(page, data)',
@@ -78,7 +85,7 @@ function moviePage(page, data) {
         favs: /favs.*?="([^"]+)/.exec(pageHtml.text.toString())[1]
       };
       data.yoData = yoData;
-      data.title_year = data.title + (data.year ? ' (' + data.year + ')' : '');
+      data.title_year = getTitleYear(data);
       page.metadata.title = data.title_year;
       page.metadata.logo = data.icon;
       page.type = 'directory';
@@ -196,10 +203,10 @@ function moviePage(page, data) {
       if (plist.length >0) {
         page.appendItem('', 'separator', {title: 'Из серии:'});  
       }
-      console.log(plist);
+      log.d(plist);
       plist.forEach(function (person) {
-        console.log(person.textContent);
-        console.log(person.attributes.getNamedItem('href').value);
+        log.d(person.textContent);
+        log.d(person.attributes.getNamedItem('href').value);
         page.appendItem(PREFIX + ':list:' +  '/' + re.exec(person.attributes.getNamedItem('href').value)[1] + ':' + person.textContent, 'directory', {title: person.textContent});
 //        page.appendItem(PREFIX + ':list:' +  '/' + re.exec(person.attributes.getNamedItem('href').value)[1] + ':' + person.textContent, service.list, {title: person.textContent});
       });
@@ -212,10 +219,10 @@ function moviePage(page, data) {
       if (pi.length >0) {
         page.appendItem('', 'separator', {title: 'Из серии:'});  
       }
-      console.log(pi);
+      log.d(pi);
       pi.forEach(function (pi) {
-        console.log(pi.textContent);
-        console.log(pi.attributes.getNamedItem('href').value);
+        log.d(pi.textContent);
+        log.d(pi.attributes.getNamedItem('href').value);
         page.appendItem(PREFIX + ':list:' +  '/' + piretd.exec(pi.attributes.getNamedItem('href').value)[1] + ':' + pi.textContent, 'directory', {title: pi.textContent});
 //        page.appendItem(PREFIX + ':list:' +  '/' + piretd.exec(pi.attributes.getNamedItem('href').value)[1] + ':' + pi.textContent, service.list, {title: pi.textContent});
       });
@@ -309,8 +316,8 @@ function getPerson(page, data) {
     plistd = plist[0].getElementByTagName('a');
     page.appendItem('', 'separator', {title: 'Режиссер:'});
     plistd.forEach(function (person) {
-      console.log(person.textContent);
-      console.log(person.attributes.getNamedItem('href').value);
+      log.d(person.textContent);
+      log.d(person.attributes.getNamedItem('href').value);
       var re = /[\s\S]*?\/\/[\s\S]*?\/([\s\S]*?)$/g;
       personurl = re.exec(person.attributes.getNamedItem('href').value)[1];
 //      showtime.notify(personurl,5);
@@ -331,8 +338,8 @@ function getPerson(page, data) {
     plista = plist[1].getElementByTagName('a');
     page.appendItem('', 'separator', {title: 'Актеры:'});
     plista.forEach(function (person) {
-      console.log(person.textContent);
-      console.log(person.attributes.getNamedItem('href').value);
+      log.d(person.textContent);
+      log.d(person.attributes.getNamedItem('href').value);
       var re = /[\s\S]*?\/\/[\s\S]*?\/([\s\S]*?)$/g;
       personurl = re.exec(person.attributes.getNamedItem('href').value)[1];
 //      showtime.notify(personurl,5);
@@ -373,6 +380,7 @@ function getSeriesDom(id, translator_id, season_index) {
     },
   }).toString();
   var respJson = JSON.parse(resp);
+  log.d('getSeriesDom response:', respJson);
   var dom;
   if (season_index !== null) {
     var episodes = '<div id="simple-episodes-tabs">' + respJson.episodes + '</div>';
@@ -445,8 +453,8 @@ function data_(dom) {
       };
     });
   }
-//   [... document.getElementById('simple-episodes-tabs').children].forEach(function (stab){console.log(eptab.children)})
-//   [... document.getElementById('simple-episodes-tabs').children].forEach(function (stab, index){console.log(elist = eptab.children)})
+//   [... document.getElementById('simple-episodes-tabs').children].forEach(function (stab){log.d(eptab.children)})
+//   [... document.getElementById('simple-episodes-tabs').children].forEach(function (stab, index){log.d(elist = eptab.children)})
 
   //log.e({'data335': data});
 };
@@ -602,7 +610,7 @@ function display_franchise(page, pageDom) {
 };
 
 function display_season(page) {
-  console.log('display_season called with data:', {
+  log.d('display_season called with data:', {
     id: data.id,
     title: data.title,
     type: data.type,
@@ -618,16 +626,16 @@ function display_season(page) {
     var focusSeasonIndex = -1;
 
     if (lastWatchedEpisode) {
-      console.log('Last watched episode found:', lastWatchedEpisode);
+      log.d('Last watched episode found:', lastWatchedEpisode);
       // Find which season contains the last watched episode
       data.season.forEach(function (seasonElement, seasonIndex) {
         if (seasonElement.season_id == lastWatchedEpisode.season_id) {
           focusSeasonIndex = seasonIndex;
-          console.log('Found last watched episode in season index:', seasonIndex);
+          log.d('Found last watched episode in season index:', seasonIndex);
         }
       });
     } else {
-      console.log('No last watched episode found for series:', data.id);
+      log.d('No last watched episode found for series:', data.id);
     }
 
     data.season.forEach(function (seasonElement, seasonIndex) {
@@ -635,7 +643,8 @@ function display_season(page) {
       var seasonData = {
         id: data.id,
         title: data.title,
-        title_year: data.title_year,
+        title_en: data.title_en,
+        year: data.year,
         icon: data.icon,
         translator_id: data.translator_id,
         season_index: seasonIndex,
@@ -656,14 +665,15 @@ function display_season(page) {
       });
 
       if (seasonIndex === focusSeasonIndex) {
-        console.log('Setting autofocus on season:', seasonElement.title);
+        log.d('Setting autofocus on season:', seasonElement.title);
       }
     });
   } else {
-    console.log('No seasons data found');
+    log.d('No seasons data found');
   }
   page.loading = false;
 };
 
 // Export getSeriesDom for use in other modules
 exports.getSeriesDom = getSeriesDom;
+exports.getTitleYear = getTitleYear;

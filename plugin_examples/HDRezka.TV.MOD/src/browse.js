@@ -357,10 +357,10 @@ exports.updates = function (page, params) {
   });
 //  [... items].forEach(function (i) {
 //    day = i.children[0].textContent;
-//    console.log(day);
+//    log.d(day);
 //    [... i.children[1].children].forEach(function (i) {
-//      console.log(title = i.textContent);
-//      console.log(i.getElementsByTagName('a')[0].href)
+//      log.d(title = i.textContent);
+//      log.d(i.getElementsByTagName('a')[0].href)
 //    });
 //  })
   page.loading = false;
@@ -373,7 +373,7 @@ exports.season = function (page, data) {
   });
   page.loading = true;
   page.type = 'directory';
-  page.metadata.title = data.title_year + ' | ' + data.season_title;
+  page.metadata.title = moviepage.getTitleYear(data) + ' | ' + data.season_title;
   page.metadata.logo = data.icon;
 
   // Load episodes dynamically
@@ -399,49 +399,53 @@ exports.season = function (page, data) {
   var focusEpisodeIndex = -1;
 
   if (lastWatchedEpisode && data.season_id == lastWatchedEpisode.season_id) {
-    console.log('Last watched episode found for season page:', lastWatchedEpisode);
+    log.d('Last watched episode found for season page:', lastWatchedEpisode);
     episodes.forEach(function (episodeElement, episodeIndex) {
       if (episodeElement.episode_id == lastWatchedEpisode.episode_id) {
         focusEpisodeIndex = episodeIndex;
-        console.log('Found last watched episode at index:', episodeIndex);
+        log.d('Found last watched episode at index:', episodeIndex);
       }
     });
   } else {
-    console.log('No last watched episode found for series:', data.id);
+    log.d('No last watched episode found for series:', data.id);
   }
 
   // Display episodes for this season
   episodes.forEach(function (episodeElement, episodeIndex) {
-    var episodeTitle = episodeElement.title;
+    var episode_title = episodeElement.title;
+    var season_id = data.season_id;
+    var episode_id = episodeElement.episode_id;
 
-    var episodeData = {
-      season_id: data.season_id,
-      episode_id: episodeElement.episode_id,
-      title: episodeTitle,
-      series_id: data.id,
-      translator_id: data.translator_id,
-      type: 'serial'
-    };
-
-    var uri = JSON.stringify(episodeData);
+    var uri = JSON.stringify({
+        season_id: season_id,
+        episode_id: episode_id,
+        title: episode_title,
+        series_id: data.id,
+        translator_id: data.translator_id,
+        type: 'serial'
+  });
 
     var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
-      title: episodeTitle,
+      title: episode_title,
       icon: data.icon,
       autofocus: (episodeIndex === focusEpisodeIndex),
       focusable: (episodeIndex === focusEpisodeIndex) ? 1.5 : 1.0,
     });
 
     if (episodeIndex === focusEpisodeIndex) {
-      console.log('Setting autofocus on episode:', episodeTitle);
+      log.d('Setting autofocus on episode:', episode_title);
     }
 
-    if (service.tvdb) {
-      item.bindVideoMetadata({
-        title: (data.title_en ? data.title_en : data.title),
-        season: data.season_id,
-        episode: data.episode_id
-      });
+  if (service.tvdb) {
+    item.bindVideoMetadata({
+          title: (data.title_en ? data.title_en : data.title) +
+              ' S' + (season_id < 10 ? '0' + season_id : season_id) +
+              'E' + (episode_id < 10 ? '0' + episode_id : episode_id),
+          // Adding year breaks metadata lookup for some reason, so skipping it for now
+          // year: +data.year,
+          // season: season_id,
+          // episode: +episode_id
+        });
     }
   });
 

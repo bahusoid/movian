@@ -67,9 +67,7 @@ var service = require('movian/service');
 //var service = plugin.createService(TTL, PREFIX + ':start', 'video', true, LOGO);
 //require('showtime/service').create(TTL, PREFIX + ':start', 'video', true, LOGO);
 //require('movian/service').create(TTL, PREFIX + ':start', 'video', true, LOGO);
-console.log(service);
 service.create(TTL, PREFIX + ':start', 'video', true, LOGO);
-console.log(service);
 //var cache = require('showtime/store').create('cache');
 var cache = require('movian/store').create('cache');
 var resumeStore = require('movian/store').create('resume');
@@ -358,9 +356,9 @@ new page.Route(PREFIX + ':start', function (page) {
     r = t.match(/https?:\/\//)[0];
     t = t.substr(r.length);
     t = t.substr(0, t.length - 1);
-    console.log(eval(m[1]));
-    console.log(eval(m[2].replace('a.value', 'jschl_answer')));
-    console.log(jschl_answer);
+    log.d(eval(m[1]));
+    log.d(eval(m[2].replace('a.value', 'jschl_answer')));
+    log.d(jschl_answer);
     url = /action="\/([^"]+)/.exec(response.toString())[1];
     pass = /name="pass" value="([^"]+)/.exec(response.toString())[1];
     r = /name="r" value="([^"]+)/.exec(response.toString())[1];
@@ -439,8 +437,8 @@ new page.Route(PREFIX + ':start', function (page) {
 //    e = navmenu.children[i]
 //    href = e.getElementsByClassName('b-topnav__item-link')[0].attributes[1].textContent;
 //    title = e.getElementsByClassName('b-topnav__item-link')[0].textContent.trim();
-//    console.log('page.appendItem(PREFIX + ":list:' + href + ':' + title + '", "directory", {title: "' + title + '"});')
-//    console.log("page.appendItem(PREFIX + ':list:' + href + ':' + title + '', 'directory', {title: '' + title + ''});")
+//    log.d('page.appendItem(PREFIX + ":list:' + href + ':' + title + '", "directory", {title: "' + title + '"});')
+//    log.d("page.appendItem(PREFIX + ':list:' + href + ':' + title + '', 'directory', {title: '' + title + ''});")
 //  }
 /*
   page.appendItem(null, 'separator', {title: 'Главная'});
@@ -582,7 +580,7 @@ new page.Route(PREFIX + ':login', function (page) {
       },
     });
     if (ent.statuscode === 200) {
-      console.log('Login successful');
+      log.d('Login successful');
       currentUser = credentials.username; // Store the username
       store.currentUser = credentials.username; // Persist the username
     }
@@ -623,12 +621,12 @@ new page.Route(PREFIX + ':continue', function (page) {
 
   try {
     var responseText = response.toString();
-    console.log('Continue page response length:', responseText.length);
+    log.d('Continue page response length:', responseText.length);
     
     // Find the first occurrence of videosaves-list id and start regex matching from there
     var listIndex = responseText.indexOf('id="videosaves-list"');
     if (listIndex !== -1) {
-      console.log('Found videosaves-list at position:', listIndex);
+      log.d('Found videosaves-list at position:', listIndex);
 
       // Find all <a> tags starting from the videosaves-list position
       var aTagPattern = /<a[^>]*>[\s\S]*?<\/a>/g;
@@ -642,11 +640,11 @@ new page.Route(PREFIX + ':continue', function (page) {
         if (aMatches.length > 100) break;
       }
 
-      console.log('Found', aMatches.length, '<a> tags after videosaves-list');
+      log.d('Found', aMatches.length, '<a> tags after videosaves-list');
 
       // Log first few <a> tags for debugging
       for (var i = 0; i < Math.min(5, aMatches.length); i++) {
-        console.log('A tag', i + 1, ':', aMatches[i].substring(0, 200) + (aMatches[i].length > 200 ? '...' : ''));
+        log.d('A tag', i + 1, ':', aMatches[i].substring(0, 200) + (aMatches[i].length > 200 ? '...' : ''));
       }
 
       // Process each <a> tag to extract href, title, and cover_url (limit to 10 for debugging)
@@ -669,7 +667,7 @@ new page.Route(PREFIX + ':continue', function (page) {
         var title = titleMatch ? titleMatch[1].trim() : '';
 
         if (href && title && coverUrl) {
-          console.log('Processing item:', title, 'href:', href, 'cover:', coverUrl);
+          log.d('Processing item:', title, 'href:', href, 'cover:', coverUrl);
 
           // Create item data similar to other movie items
           var itemData = {
@@ -688,10 +686,10 @@ new page.Route(PREFIX + ':continue', function (page) {
         }
       }
     } else {
-      console.log('videosaves-list not found in response');
+      log.d('videosaves-list not found in response');
     }
     
-    console.log('Added', foundItems, 'continue watching items');
+    log.d('Added', foundItems, 'continue watching items');
     
   } catch (e) {
     console.error('Error parsing continue page:', e);
@@ -806,7 +804,7 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
 //  page.type = 'video';
 //  data = showtime.JSONDecode(data);
   data = JSON.parse(data);
-  console.log('Play route received data:', JSON.stringify(data, null, 2));
+  log.d('Play route received data:', JSON.stringify(data, null, 2));
   log.d({
     'play:data': data
   });
@@ -820,8 +818,8 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
       episode_id: data.episode_id,
       timestamp: new Date().getTime()
     };
-    console.log('Stored last watched episode:', lastWatchedKey, 'season:', data.season_id, 'episode:', data.episode_id, 'series_id:', seriesId);
-    //console.log('Available service keys after storage:', Object.keys(service).filter(k => k.startsWith('lastWatched_')));
+    log.d('Stored last watched episode:', lastWatchedKey, 'season:', data.season_id, 'episode:', data.episode_id, 'series_id:', seriesId);
+    //log.d('Available service keys after storage:', Object.keys(service).filter(k => k.startsWith('lastWatched_')));
   }
 
   if (!data.cdn_url) {
@@ -914,7 +912,7 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
 //    log.d(resp.toString());
 //    resp = showtime.JSONDecode(resp);
     resp = JSON.parse(resp);
-    console.log('API response parsed:', JSON.stringify(resp, null, 2));
+    log.d('API response parsed:', JSON.stringify(resp, null, 2));
 //    streams = resp.url;
     streams = clearUrl(resp.url);
     log.e(streams);
@@ -1311,7 +1309,7 @@ function getKeys(response) {
 };
 function clearUrl(url) {
   if (!url) {
-    console.log('clearUrl called with undefined/null url');
+    log.d('clearUrl called with undefined/null url');
     return '';
   }
   service.keys = cache.keys;
@@ -1320,7 +1318,7 @@ function clearUrl(url) {
     return url;
   function fd2(x) {
     if (!x) {
-      console.log('fd2 called with undefined/null x');
+      log.d('fd2 called with undefined/null x');
       return '';
     }
     var a;
@@ -1339,7 +1337,7 @@ function clearUrl(url) {
       a = '';
     }
     function b1(str) {
-//      console.log(unescape(str));
+//      log.d(unescape(str));
       return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
           function toSolidBytes(match, p1) {
             return String.fromCharCode('0x' + p1);
@@ -1425,7 +1423,7 @@ function scrapeSourceSub(streams) {
 //  var regex = /(\[.\d+p.*?\])(.*?) or (.*?\d+.mp4)/gm;
   var regex = /(\[.*?\])(.*?vtt)/gm;
   while ((m = regex.exec(streams)) !== null) {
-//    console.log(m);
+//    log.d(m);
     if (m.index === regex.lastIndex) {
       regex.lastIndex++;
     }
