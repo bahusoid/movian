@@ -595,8 +595,11 @@ scrobbler.onstart = function(data, prop, origin) {
   browseStack = [];
   log(debug && 'save entry pageUrl=' + safeString(pageUrl, '<none>') +
       '\n pageTitle=' + safeString(pageTitle, '<none>') +
-      '\n item=' + safeString(itemCanonical || itemUrl, '<none>') +
-      '\n title=' + itemTitle);
+      '\n title=' + itemTitle +
+      '\n itemUrl=' + safeString(itemUrl, '<none>') +
+      '\n itemCanonical=' + safeString(itemCanonical, '<none>') +
+      '\n dataCanonical=' + safeString(dataCanonical, '<none>') +
+      '\n datUrl=' + safeString(dataUrl, '<none>'));
   if(pageTitle && pageTitle.indexOf(itemTitle) === 0)
   {
     itemTitle = pageTitle;
