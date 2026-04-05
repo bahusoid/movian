@@ -316,8 +316,7 @@ function setPageHeader(page, title, icon) {
   }
   page.loading = true;
   if (page.metadata) {
-    page.metadata.background = LOGOBACKGROUND;
-    page.metadata.logo = LOGO;
+      page.metadata.logo = LOGO;
     page.metadata.icon = LOGO;
 //    page.metadata.title = title;
 //    page.metadata.title = showtime.entityDecode(title);
@@ -401,7 +400,6 @@ new page.Route(PREFIX + ':start', function (page) {
     cache.keys = service.keys;
   }
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
 //  setPageHeader(page, TTL);
   page.metadata.logo = LOGO;
   page.metadata.icon = LOGO;
@@ -502,7 +500,6 @@ new page.Route(PREFIX + ':start', function (page) {
 //plugin.addURI(PREFIX + ':search:(.*)', function (page, query) {
 new page.Route(PREFIX + ':search:(.*)', function (page, query) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
 //  setPageHeader(page, 'Результаты поиска для: ' + query + ' (' + page.entries + ')');
 //  setPageHeader(page, 'Результаты поиска для: ' + query);
 //  setPageHeader(page, 'Результат поиска по запросу : ' + query + ' (' + page.entries + ')');
@@ -530,7 +527,6 @@ new page.Route(PREFIX + ':search:(.*)', function (page, query) {
 //plugin.addSearcher(TTL + ': результат', LOGO, function (page, query) {
 new page.Searcher(TTL + ': результат', LOGO, function (page, query) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
 //  setPageHeader(page, TTL);
 //  setPageHeader(page, TTL + ': результат');
 //  page.metadata.logo = LOGO;
@@ -549,7 +545,6 @@ new page.Searcher(TTL + ': результат', LOGO, function (page, query) {
 });
 // Login route
 new page.Route(PREFIX + ':login', function (page) {
-  page.metadata.background = LOGOBACKGROUND;
   page.metadata.logo = LOGO;
   page.metadata.icon = LOGO;
   page.metadata.title = TTL;
@@ -591,7 +586,6 @@ new page.Route(PREFIX + ':login', function (page) {
 // Logout route
 new page.Route(PREFIX + ':logout', function (page) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
   page.metadata.logo = LOGO;
   page.metadata.icon = LOGO;
   page.metadata.title = TTL;
@@ -605,7 +599,6 @@ new page.Route(PREFIX + ':logout', function (page) {
 // Continue watching route
 new page.Route(PREFIX + ':continue', function (page) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
   page.metadata.logo = LOGO;
   page.metadata.icon = LOGO;
   page.metadata.title = 'Продолжить просмотр';
@@ -703,7 +696,6 @@ new page.Route(PREFIX + ':continue', function (page) {
 //plugin.addURI(PREFIX + ':list:(.*):(.*)', function (page, href, title) {
 new page.Route(PREFIX + ':list:(.*):(.*)', function (page, href, title) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
 //  setPageHeader(page, href);
 //  setPageHeader(page, title);
 //  setPageHeader(page, params.title);
@@ -726,7 +718,6 @@ new page.Route(PREFIX + ':list:(.*):(.*)', function (page, href, title) {
 //plugin.addURI(PREFIX + ':updates:(.*):(.*)', function (page, href, title) {
 new page.Route(PREFIX + ':updates:(.*):(.*)', function (page, href, title) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
 //  setPageHeader(page, href);
 //  setPageHeader(page, title);
 //  setPageHeader(page, params.title);
@@ -749,7 +740,6 @@ new page.Route(PREFIX + ':updates:(.*):(.*)', function (page, href, title) {
 
 new page.Route(PREFIX + ':moviepage:(.*)', function (page, data) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
 //  setPageHeader(page, data.title);
 //  setPageHeader(page, TTL);
 //  page.metadata.logo = data.icon;
@@ -767,7 +757,6 @@ new page.Route(PREFIX + ':moviepage:(.*)', function (page, data) {
 //plugin.addURI(PREFIX + ':SEASON:(.*)', function (page, data) {
 new page.Route(PREFIX + ':SEASON:(.*)', function (page, data) {
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
 //  setPageHeader(page, data.title);
 //  setPageHeader(page, TTL);
 //  page.metadata.logo = data.icon;
@@ -800,7 +789,6 @@ new page.Route(PREFIX + ':SEASON:(.*)', function (page, data) {
 new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   var canonicalUrl = PREFIX + ':play:' + data;
   page.loading = true;
-  page.metadata.background = LOGOBACKGROUND;
   page.type = 'directory';
 //  page.type = 'video';
 //  data = showtime.JSONDecode(data);
