@@ -825,7 +825,8 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   if (!data.cdn_url) {
     // Send async send_save request before playback
     if (currentUser) {
-      (function sendSaveAsync() {
+      function sendSaveAsync() {
+        //TODO: duration is missing
         var duration = 0;
         if (data.metadata && data.metadata.duration) {
           duration = data.metadata.duration;
@@ -835,7 +836,7 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
           translator_id: data.translator_id,
           season: data.season_id,
           episode: data.episode_id,
-          current_time: 0,
+          current_time: 50 + Math.floor(Math.random() * 100) + Math.random().toFixed(5),
           duration: duration
         };
         try {
@@ -858,7 +859,10 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
         } catch (e) {
           log.e('send_save async error: ' + e);
         }
-      })();
+      }
+      // Skip it to avoid account ban
+      // Use at own risk, to update watch history on site
+      //sendSaveAsync();
     }
 
     if (data.translator_id) {
