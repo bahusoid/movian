@@ -98,18 +98,13 @@ typedef struct plugin {
   char *pl_package;
   char *pl_title;
 
-  char *pl_inst_ver;
+  struct plugin_info *pl_info;
+
   char *pl_repo_ver;
   char *pl_app_min_version;
 
   prop_t *pl_status;
 
-  void (*pl_unload)(struct plugin *pl);
-
-  struct plugin_view_entry_list pl_views;
-
-  char pl_loaded;
-  char pl_installed;
   char pl_can_upgrade;
   char pl_auto_upgrade;
   char pl_new_version_avail;
@@ -118,6 +113,15 @@ typedef struct plugin {
   prop_t *pl_repo_model;
 
 } plugin_t;
+
+typedef struct plugin_info {
+  char *pl_inst_ver;
+  char pl_loaded;
+  char pl_installed;
+  int is_shared;
+  void (*pl_unload)(struct plugin *pl);
+  struct plugin_view_entry_list pl_views;
+} plugin_info_t;
 
 static struct plugin_repo_list plugin_repos;
 
@@ -237,15 +241,32 @@ static plugin_t *
 plugin_make(const char *id, const char *origin)
 {
   plugin_t *pl;
-  scoped_char *fqid = fmt("%s@%s", id, origin);
+  if (origin == NULL)
+    origin = "";
+  scoped_char *fqid = strcmp(origin, "dev") == 0 ? fmt("%s@%s", id, origin) : strdup(id);
 
+  plugin_info_t* pl_info = NULL;//Duplicated plugin with different origin
   LIST_FOREACH(pl, &plugins, pl_link)
     if(!strcmp(pl->pl_fqid, fqid))
-      return pl;
+    {
+      if (strcmp(pl->pl_origin, origin) == 0)
+        return pl; //Same plugin already exists, return it
 
+      pl_info = pl->pl_info;
+      break;
+    }
+
+  if (pl_info == NULL) {
+    pl_info = calloc(1, sizeof(plugin_info_t));
+  }
+  else
+  {
+    pl_info->is_shared = 1;
+  }
   pl = calloc(1, sizeof(plugin_t));
   pl->pl_fqid = strdup(fqid);
   pl->pl_origin = strdup(origin);
+  pl->pl_info = pl_info;
 
   pl->pl_status = prop_create_root(NULL);
 
@@ -287,6 +308,24 @@ update_global_state(void)
 	    PROP_SET_INT, num_upgradable);
 }
 
+static void
+update_state(plugin_t *pl);
+
+static void
+update_shared_state(plugin_t *pl)
+{
+  if (!pl->pl_info->is_shared)
+  {
+    update_state(pl);
+    return;
+  }
+  plugin_info_t* pl_info = pl->pl_info;
+  LIST_FOREACH(pl, &plugins, pl_link) {
+    if(pl->pl_info == pl_info) {
+      update_state(pl);
+    }
+  }
+}
 
 /**
  *
@@ -315,7 +354,7 @@ update_state(plugin_t *pl)
   /* Install button label is provided from C to simplify view file logic */
   rstr_t *installLabel = NULL;
 
-  if(pl->pl_installed == 0) {
+  if(pl->pl_info->pl_installed == 0) {
     canUninstall = 0;
 
     if(!version_dep_ok) {
@@ -329,7 +368,7 @@ update_state(plugin_t *pl)
   }
   else if (canInstall)
   {
-    if (!strcmp(pl->pl_inst_ver, version))
+    if (!strcmp(pl->pl_info->pl_inst_ver, version))
     {
       status = _("Up to date");
       canInstall = 0;
@@ -339,7 +378,7 @@ update_state(plugin_t *pl)
       /* Strings differ, check parsed versions */
       pl->pl_new_version_avail = 1;
       uint32_t repo_ver = parse_version_int(version);
-      uint32_t inst_ver = parse_version_int(pl->pl_inst_ver);
+      uint32_t inst_ver = parse_version_int(pl->pl_info->pl_inst_ver);
 
       if(repo_ver > inst_ver) {
 
@@ -367,10 +406,10 @@ update_state(plugin_t *pl)
   prop_set(pl->pl_status, "canUninstall", PROP_SET_INT, canUninstall);
   prop_set(pl->pl_status, "canUpgrade",   PROP_SET_INT, canUpgrade);
   prop_set(pl->pl_status, "cantUpgrade",  PROP_SET_INT, cantUpgrade);
-  prop_set(pl->pl_status, "installed",    PROP_SET_INT, pl->pl_installed);
+  prop_set(pl->pl_status, "installed",    PROP_SET_INT, pl->pl_info->pl_installed);
   prop_set(pl->pl_status, "statustxt",    PROP_SET_RSTRING, status);
-  prop_set(pl->pl_status, "loaded",       PROP_SET_INT, pl->pl_loaded);
-  prop_set(pl->pl_status, "installedVersion", PROP_SET_STRING, pl->pl_inst_ver);
+  prop_set(pl->pl_status, "loaded",       PROP_SET_INT, pl->pl_info->pl_loaded);
+  prop_set(pl->pl_status, "installedVersion", PROP_SET_STRING, pl->pl_info->pl_inst_ver);
   prop_set(pl->pl_status, "availableVersion", PROP_SET_STRING, version);
   prop_set(pl->pl_status, "installLabel", PROP_SET_RSTRING, installLabel);
   rstr_release(installLabel);
@@ -604,9 +643,9 @@ plugin_unload_vmir(plugin_t *pl)
 static void
 plugin_unload(plugin_t *pl)
 {
-  if(pl->pl_unload) {
-    pl->pl_unload(pl);
-    pl->pl_unload = NULL;
+  if(pl->pl_info->pl_unload) {
+    pl->pl_info->pl_unload(pl);
+    pl->pl_info->pl_unload = NULL;
   }
 
   plugin_unload_views(pl);
@@ -674,7 +713,7 @@ plugin_load(const char *url, const char *origin,
     }
   }
 
-  if(!(flags & PLUGIN_LOAD_FORCE) && pl->pl_loaded) {
+  if(!(flags & PLUGIN_LOAD_FORCE) && pl->pl_info->pl_loaded) {
     snprintf(errbuf, errlen, "Plugin \"%s\" already loaded", pl->pl_fqid);
     goto bad;
   }
@@ -709,7 +748,7 @@ plugin_load(const char *url, const char *origin,
                        memory_size * 1024, stack_size * 1024);
     hts_mutex_lock(&plugin_mutex);
     if(!r)
-      pl->pl_unload = plugin_unload_vmir;
+      pl->pl_info->pl_unload = plugin_unload_vmir;
 
 
 #endif
@@ -741,7 +780,7 @@ plugin_load(const char *url, const char *origin,
                                buf_cstr(b), pflags);
     hts_mutex_lock(&plugin_mutex);
     if(!r)
-      pl->pl_unload = plugin_unload_ecmascript;
+      pl->pl_info->pl_unload = plugin_unload_ecmascript;
 
   } else {
     if(flags & PLUGIN_LOAD_BY_USER) {
@@ -792,20 +831,21 @@ plugin_load(const char *url, const char *origin,
 
     if(flags & PLUGIN_LOAD_AS_INSTALLED) {
       plugin_prop_setup(ctrl, pl, url);
-      pl->pl_installed = 1;
-      mystrset(&pl->pl_inst_ver, htsmsg_get_str(ctrl, "version"));
+      pl->pl_info->pl_installed = 1;
+      mystrset(&pl->pl_info->pl_inst_ver, htsmsg_get_str(ctrl, "version"));
 
       autoplugin_set_installed(pl->pl_fqid, 1);
     }
 
     mystrset(&pl->pl_title, htsmsg_get_str(ctrl, "title") ?: pl->pl_fqid);
 
-    pl->pl_loaded = 1;
+    pl->pl_info->pl_loaded = 1;
   }
 
   buf_release(b);
   htsmsg_release(ctrl);
-  update_state(pl);
+
+  update_shared_state(pl);
   return 0;
 
  bad:
@@ -1015,7 +1055,7 @@ plugin_load_repo(plugin_repo_t *pr)
 
       htsmsg_t *ctrl = htsmsg_get_map(pm, "control");
       if(ctrl != NULL) {
-        autoplugin_create_from_control(id, ctrl, pl->pl_installed);
+        autoplugin_create_from_control(id, ctrl, pl->pl_info->pl_installed);
       }
     }
   }
@@ -1042,7 +1082,7 @@ plugin_autoupgrade(void)
       continue;
     notify_add(NULL, NOTIFY_INFO, NULL, 5,
 	       _("Upgraded plugin %s to version %s"), pl->pl_title,
-	       pl->pl_inst_ver);
+	       pl->pl_info->pl_inst_ver);
   }
   update_global_state();
 }
@@ -1516,10 +1556,10 @@ plugin_remove(plugin_t *pl)
 
   plugin_unload(pl);
 
-  pl->pl_installed = 0;
-  pl->pl_loaded = 0;
-  mystrset(&pl->pl_inst_ver, NULL);
-  update_state(pl);
+  pl->pl_info->pl_installed = 0;
+  pl->pl_info->pl_loaded = 0;
+  mystrset(&pl->pl_info->pl_inst_ver, NULL);
+  update_shared_state(pl);
 }
 
 
@@ -1988,7 +2028,7 @@ plugins_view_add(plugin_t *pl,
   pve->pve_type_prop = prop_create_r(r, path);
   prop_set_uri(pve->pve_type_prop, title, path);
 
-  LIST_INSERT_HEAD(&pl->pl_views, pve, pve_plugin_link);
+  LIST_INSERT_HEAD(&pl->pl_info->pl_views, pve, pve_plugin_link);
   pve->pve_key = strdup(path);
   pve->pve_filename = strdup(filename);
 
@@ -2019,7 +2059,7 @@ plugin_select_view(const char *plugin_id, const char *filename)
 
   if(pl != NULL) {
     plugin_view_entry_t *pve;
-    LIST_FOREACH(pve, &pl->pl_views, pve_plugin_link) {
+    LIST_FOREACH(pve, &pl->pl_info->pl_views, pve_plugin_link) {
       if(!strcmp(pve->pve_filename, filename)) {
         prop_select(pve->pve_setting_prop);
       }
@@ -2037,7 +2077,7 @@ plugin_unload_views(plugin_t *pl)
 {
   plugin_view_entry_t *pve;
 
-  while((pve = LIST_FIRST(&pl->pl_views)) != NULL) {
+  while((pve = LIST_FIRST(&pl->pl_info->pl_views)) != NULL) {
     LIST_REMOVE(pve, pve_plugin_link);
     if(pve->pve_setting_prop != NULL) {
       prop_destroy(pve->pve_setting_prop);
@@ -2282,7 +2322,7 @@ plugin_autoinstall(const char *id)
                   USAGE_SEG("plugin", id));
       notify_add(NULL, NOTIFY_INFO, NULL, 5,
                  _("Auto installed plugin %s (Version %s)"), pl->pl_title,
-                 pl->pl_inst_ver);
+                 pl->pl_info->pl_inst_ver);
     }
   }
   hts_mutex_unlock(&plugin_mutex);
