@@ -19,6 +19,24 @@
 });
 }
 
+#define BUTTON(HIDDEN, ONACT, CAPTION, FOCUSABLE) {
+  widget(container_z, {
+    hidden: HIDDEN;
+    height: 2em;
+    GridItemBevel();
+    GridItemHighlight();
+
+    focusable: select($self.metadata.autofocus, 1.5, 1.0);
+    onEvent(activate, deliverEvent($args, ONACT));
+
+    widget(label, {
+      padding: [0.5em, 0];
+      caption: CAPTION;
+      font: "skin://fonts/RobotoCondensed-Bold.ttf";
+    });
+  });
+}
+
 #define chlog(ver, text) {
   widget(container_x, {
     spacing: 1em;
@@ -80,36 +98,26 @@ widget(container_z, {
             !$args.status.installedVersion);
     INFOROW(_("Available version:"), $args.status.availableVersion,
             !$args.status.availableVersion);
-    INFOROW(_("Version:"), $args.metadata.version,
-          !$args.package || !$args.metadata.version);
+    INFOROW(_("Available version:"), $args.metadata.version,
+           !$args.package);
 
     widget(container_x, {
       padding: [7.5em, 0.1em, 0, 0];
+      spacing: 0.3em;
 
-      widget(container_z, {
-        height: 2em;
-        GridItemBevel();
-        GridItemHighlight();
+      /* Primary action button: Install / Upgrade */
+      BUTTON(!$args.status.canInstall && !$args.status.canUpgrade  && !$args.package,
+             select($args.status.canInstall || $args.package, "install:"+($args.package ?? ""),
+                    select($args.status.canUpgrade, "upgrade", void)),
+             $args.status.installLabel
+             );
 
-        focusable: select($self.metadata.autofocus, 1.5, 1.0);
-        onEvent(activate,
-	        deliverEvent($args,
-		             select($args.status.canInstall, "install:"+($args.package ?? ""),
-			            select($args.status.canUpgrade, "upgrade",
-				           select($args.status.canUninstall, "uninstall",
-					          void)))));
-
-        widget(label, {
-          padding: [0.5em, 0];
-          caption: select($args.status.canInstall, _("Install"),
-		          select($args.status.canUpgrade, _("Upgrade"),
-			         select($args.status.canUninstall, _("Uninstall"),
-				        void)));
-          font: "skin://fonts/RobotoCondensed-Bold.ttf";
-        });
-      });
+      /* Secondary action: Uninstall */
+      BUTTON(!$args.status.canUninstall,
+             "uninstall",
+             _("Uninstall")
+             );
     });
-
 
     /*
       widget(label, {

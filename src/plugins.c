@@ -294,8 +294,7 @@ update_global_state(void)
 static void
 update_state(plugin_t *pl)
 {
-  int canInstall = 0;
-  int canUninstall = 0;
+  int canUninstall = 1;
   int canUpgrade = 0;
   int cantUpgrade = 0;
   rstr_t *status = NULL;
@@ -310,8 +309,14 @@ update_state(plugin_t *pl)
 
   prop_set(pl->pl_status, "minver", PROP_SET_VOID);
   pl->pl_new_version_avail = 0;
+  char* version = pl->pl_repo_ver;
+
+  int canInstall = version != NULL;
+  /* Install button label is provided from C to simplify view file logic */
+  rstr_t *installLabel = NULL;
 
   if(pl->pl_installed == 0) {
+    canUninstall = 0;
 
     if(!version_dep_ok) {
       status = _("Not installable");
@@ -319,39 +324,43 @@ update_state(plugin_t *pl)
                pl->pl_app_min_version);
 
     } else {
-
       status = _("Not installed");
-      canInstall = 1;
     }
-
-  } else if(!strcmp(pl->pl_inst_ver ?: "", pl->pl_repo_ver ?: "")) {
-    status = _("Up to date");
-    canUninstall = 1;
-  } else {
-    status = _("Installed");
-    canUninstall = 1;
-
-    if(pl->pl_repo_ver != NULL) {
+  }
+  else if (canInstall)
+  {
+    if (!strcmp(pl->pl_inst_ver, version))
+    {
+      status = _("Up to date");
+      canInstall = 0;
+    }
+    else
+    {
+      /* Strings differ, check parsed versions */
       pl->pl_new_version_avail = 1;
+      uint32_t repo_ver = parse_version_int(version);
+      uint32_t inst_ver = parse_version_int(pl->pl_inst_ver);
 
-      int repo_ver = parse_version_int(pl->pl_repo_ver);
-      if(pl->pl_inst_ver != NULL &&
-	 repo_ver > parse_version_int(pl->pl_inst_ver)) {
+      if(repo_ver > inst_ver) {
 
-	if(!version_dep_ok) {
-	  status = _("Not upgradable");
+        if(!version_dep_ok) {
+          status = _("Not upgradable");
           prop_set(pl->pl_status, "minver", PROP_SET_STRING,
                    pl->pl_app_min_version);
-	  cantUpgrade = 1;
-	} else {
-	  status = _("Upgradable");
-	  canUpgrade = 1;
-	}
-      } else {
-	status = _("Installed version higher than available");
+          cantUpgrade = 1;
+        } else {
+          status = _("Upgradable");
+          canUpgrade = 1;
+          installLabel = _("Upgrade");
+        }
       }
     }
   }
+  if (installLabel == NULL)
+    installLabel = _("Install");
+
+  if (status == NULL)
+    status = _("Installed");
 
   pl->pl_can_upgrade = canUpgrade;
   prop_set(pl->pl_status, "canInstall",   PROP_SET_INT, canInstall);
@@ -362,7 +371,9 @@ update_state(plugin_t *pl)
   prop_set(pl->pl_status, "statustxt",    PROP_SET_RSTRING, status);
   prop_set(pl->pl_status, "loaded",       PROP_SET_INT, pl->pl_loaded);
   prop_set(pl->pl_status, "installedVersion", PROP_SET_STRING, pl->pl_inst_ver);
-  prop_set(pl->pl_status, "availableVersion", PROP_SET_STRING, pl->pl_repo_ver);
+  prop_set(pl->pl_status, "availableVersion", PROP_SET_STRING, version);
+  prop_set(pl->pl_status, "installLabel", PROP_SET_RSTRING, installLabel);
+  rstr_release(installLabel);
   rstr_release(status);
 }
 
@@ -447,8 +458,8 @@ plugin_fill_prop(struct htsmsg *pm, struct prop *p,
   prop_set(metadata, "author", PROP_SET_STRING,
            htsmsg_get_str(pm, "author"));
 
-  prop_set(metadata, "version", PROP_SET_STRING,
-           htsmsg_get_str(pm, "version"));
+  const char* version = htsmsg_get_str(pm, "version");
+  prop_set(metadata, "version", PROP_SET_STRING, version);
 
   if(icon != NULL) {
     if(mystrbegins(icon, "http://") || mystrbegins(icon, "https://")) {
