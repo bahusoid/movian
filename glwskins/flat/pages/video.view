@@ -106,7 +106,7 @@ widget(container_z, {
 
       onEvent(up,    {$clone.showPlaydeck = 1;    focus("pause-btn");});
       onEvent(down,  {$clone.showPlaydeck = 1;    focus("pause-btn");});
-      onEvent(activate,deliverEvent($self.media.eventSink, "PlayPause"));
+      onEvent(activate,deliverEvent($self.media.eventSink, "PlayPause"), $ui.keyboard);
 
       // Support remote actions that open the subtitle/audio OSD views
       onEvent(SubtitleTrackView, {
