@@ -1510,6 +1510,10 @@ plugin_remove(plugin_t *pl)
 	   gconf.persistent_path, storage_prefix, pl->pl_fqid);
   fa_unlink_recursive(path, NULL, 0, 0);
 
+  snprintf(path, sizeof(path), "%s/plugins/%s",
+	   gconf.persistent_path, pl->pl_fqid);
+  fa_unlink_recursive(path, NULL, 0, 0);
+
   plugin_unload(pl);
 
   pl->pl_installed = 0;
