@@ -1074,26 +1074,27 @@ gl_keypress(glw_x11_t *gx11, XEvent *event)
     e = event_create(EVENT_MAKE_SCREENSHOT, sizeof(event_t));
   }
 
-  if(e == NULL || (g_gx11->fullwindow)) {
+  if (e == NULL || g_gx11->fullwindow)
+  {
+      for (i = 0; i < sizeof(keysym2action) / sizeof(*keysym2action); i++)
+      {
+          if (keysym2action[i].XK == keysym && keysym2action[i].modifier == state)
+          {
+              av[0] = keysym2action[i].action1;
+              av[1] = keysym2action[i].action2;
+              av[2] = keysym2action[i].action3;
+              av[3] = ACTION_NONE;
 
-    for(i = 0; i < sizeof(keysym2action) / sizeof(*keysym2action); i++) {
+              int j = 1;
+              while (av[j] != ACTION_NONE)
+              {
+                  ++j;
+              }
+              e = event_create_action_multi(av, j);
 
-      if(keysym2action[i].XK == keysym &&
-	 keysym2action[i].modifier == state) {
-
-	av[0] = keysym2action[i].action1;
-	av[1] = keysym2action[i].action2;
-	av[2] = keysym2action[i].action3;
-    int j = 1;
-    while (av[j] != ACTION_NONE)
-    {
-        ++j;
-    }
-    e = event_create_action_multi(av, j);
-
-	break;
+              break;
+          }
       }
-    }
   }
 
   if(e == NULL && keysym >= XK_F1 && keysym <= XK_F12)
