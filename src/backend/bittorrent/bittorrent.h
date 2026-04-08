@@ -76,7 +76,7 @@ typedef struct good_seed {
 typedef struct blocked_range {
   LIST_ENTRY(blocked_range) br_link;
   uint8_t  br_prefix[3];      /* first three octets of IPv4 /24 */
-  int      br_fail_count;
+  int      br_fail_count;     /* number of unique IPs that failed */
   int64_t  br_blocked_until;  /* async_current_time() deadline; 0 = counting */
 } blocked_range_t;
 
@@ -699,5 +699,7 @@ void torrent_save_good_seed(torrent_t *to, const net_addr_t *addr,
                              int64_t score);
 
 void torrent_record_peer_failure(torrent_t *to, const net_addr_t *addr);
+
+void torrent_record_peer_success(torrent_t *to, const net_addr_t *addr);
 
 int  torrent_is_addr_blocked(torrent_t *to, const net_addr_t *addr);

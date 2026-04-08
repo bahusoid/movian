@@ -538,7 +538,7 @@ torrent_save_good_seed(torrent_t *to, const net_addr_t *addr, int64_t score)
 
 
 /**
- * Record a connection failure; block /24 after BLOCK_FAIL_THRESHOLD hits.
+ * Record a connection failure; block /24 after BLOCK_FAIL_THRESHOLD unique IPs.
  */
 void
 torrent_record_peer_failure(torrent_t *to, const net_addr_t *addr)
@@ -570,6 +570,29 @@ torrent_record_peer_failure(torrent_t *to, const net_addr_t *addr)
     TRACE(TRACE_DEBUG, "BITTORRENT",
           "%s: Blocking /24 subnet %d.%d.%d.0 for %d min",
           to->to_title, ip[0], ip[1], ip[2], BLOCK_DURATION_SEC / 60);
+  }
+}
+
+
+/**
+ * A peer connected successfully — reset any accumulated failure state
+ * for its /24 subnet since the network path clearly works.
+ */
+void
+torrent_record_peer_success(torrent_t *to, const net_addr_t *addr)
+{
+  if(addr->na_family != 4)
+    return;
+
+  const uint8_t *ip = addr->na_addr;
+
+  blocked_range_t *br;
+  LIST_FOREACH(br, &to->to_blocked_ranges, br_link) {
+    if(!memcmp(br->br_prefix, ip, 3)) {
+      br->br_fail_count = 0;
+      br->br_blocked_until = 0;
+      return;
+    }
   }
 }
 
@@ -622,6 +645,8 @@ torrent_attempt_more_peers(torrent_t *to)
     }
     net_addr_t addr = to->to_good_seeds[best].gs_addr;
     to->to_good_seeds[best] = to->to_good_seeds[--to->to_good_seeds_count];
+    /* Good seeds proved useful before — clear any accumulated block */
+    torrent_record_peer_success(to, &addr);
     peer_add(to, &addr);
     return;
   }

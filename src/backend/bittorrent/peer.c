@@ -388,8 +388,10 @@ peer_shutdown(peer_t *p, int next_state, int resched)
 
   case PEER_STATE_CONNECT_FAIL:
     p->p_fail_time = async_current_time();
+    if (p->p_connect_fail == 0)
+      torrent_record_peer_failure(to, &p->p_addr);
+
     p->p_connect_fail++;
-    torrent_record_peer_failure(to, &p->p_addr);
     if(p->p_connect_fail == 5)
       goto destroy;
     TAILQ_INSERT_TAIL(&to->to_connect_failed_peers, p, p_queue_link);
@@ -1165,6 +1167,7 @@ peer_read_cb(void *opaque, htsbuf_queue_t *q)
     // FALLTHRU
     p->p_connect_fail = 0;
     p->p_disconnected = 0;
+    torrent_record_peer_success(p->p_torrent, &p->p_addr);
 
   case PEER_STATE_RUNNING:
     while(1) {
