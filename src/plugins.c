@@ -608,7 +608,7 @@ plugin_prop_setup(htsmsg_t *pm, plugin_t *pl, const char *basepath)
   mystrset(&pl->pl_title, htsmsg_get_str(pm, "title") ?: pl->pl_fqid);
   prop_set(p, "type", PROP_SET_STRING, "plugin");
   plugin_fill_prop(pm, p, basepath, pl);
-  if(basepath == NULL) {
+  if(basepath != NULL) {
     prop_ref_dec(pl->pl_repo_model);
     pl->pl_repo_model = prop_ref_inc(p);
   }
