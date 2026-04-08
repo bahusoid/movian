@@ -71,6 +71,7 @@ static struct strtab catnames[] = {
 };
 
 const char *storage_prefix = "mrp"; // multi-repo plugins
+const char* dev_origin = "dev";
 
 static HTS_MUTEX_DECL(plugin_mutex);
 static HTS_MUTEX_DECL(autoplugin_mutex);
@@ -243,7 +244,7 @@ plugin_make(const char *id, const char *origin)
   plugin_t *pl;
   if (origin == NULL)
     origin = "";
-  scoped_char *fqid = strcmp(origin, "dev") == 0 ? fmt("%s@%s", id, origin) : strdup(id);
+  scoped_char *fqid = origin == dev_origin? fmt("%s@%s", id, origin) : strdup(id);
 
   plugin_info_t* pl_info = NULL;//Duplicated plugin with different origin
   LIST_FOREACH(pl, &plugins, pl_link)
@@ -1486,7 +1487,7 @@ plugins_init(char **devplugs)
 
       strvec_addp(&devplugins, path);
 
-      if(plugin_load(path, "dev", errbuf, sizeof(errbuf),
+      if(plugin_load(path, dev_origin, errbuf, sizeof(errbuf),
                      PLUGIN_LOAD_FORCE | PLUGIN_LOAD_DEBUG)) {
         TRACE(TRACE_ERROR, "plugins",
               "Unable to load development plugin: %s\n%s", path, errbuf);
@@ -1516,7 +1517,7 @@ plugins_reload_dev_plugin(void)
   const char *path;
   for(int i = 0; (path = devplugins[i]) != NULL; i++) {
 
-    if(plugin_load(path, "dev", errbuf, sizeof(errbuf),
+    if(plugin_load(path, dev_origin, errbuf, sizeof(errbuf),
                    PLUGIN_LOAD_FORCE | PLUGIN_LOAD_DEBUG | PLUGIN_LOAD_BY_USER))
       TRACE(TRACE_ERROR, "plugins",
             "Unable to reload development plugin: %s\n%s", path, errbuf);
