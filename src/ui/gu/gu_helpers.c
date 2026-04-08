@@ -187,6 +187,16 @@ gu_cloner_destroy(gu_cloner_t *gc)
     cloner_del(gc, gcn, 0);
 }
 
+static void cloner_add_childs(gu_cloner_t* gc, struct prop_vec* pv)
+{
+  const int len = prop_vec_len(pv);
+  for(int i = 0; i < len; i++)
+  {
+    prop_t *p = prop_vec_get(pv, i);
+    cloner_add(gc, p, NULL);
+  }
+}
+
 /**
  *
  */
@@ -202,6 +212,11 @@ gu_cloner_subscription(void *opaque, prop_event_t event, ...)
   switch(event) {
   case PROP_ADD_CHILD:
     cloner_add(gc, va_arg(ap, prop_t *), NULL);
+    break;
+
+  case PROP_ADD_CHILD_VECTOR:
+  case PROP_ADD_CHILD_VECTOR_DIRECT:
+    cloner_add_childs(gc, va_arg(ap, prop_vec_t *));
     break;
 
   case PROP_ADD_CHILD_BEFORE:
