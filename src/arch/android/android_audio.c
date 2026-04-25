@@ -372,8 +372,7 @@ player_cb(SLPlayItf caller,
   // Current sample being played
   int64_t current_sample = (int64_t)ms * d->ad.ad_out_sample_rate / 1000LL;
 
-  int64_t audio_delay_samples = d->d_samples_sent - current_sample +
-    d->ad.ad_tile_size * PCM_RING_SIZE;
+  int64_t audio_delay_samples = d->d_mark_samples - current_sample;
 
   d->ad.ad_delay = audio_delay_samples * 1000000LL / d->ad.ad_out_sample_rate;
   if(d->d_mark_ts != PTS_UNSET) {
@@ -581,7 +580,7 @@ buffer_callback(SLAndroidSimpleBufferQueueItf bqif, void *context)
   __sync_synchronize();
   const int nr = (d->d_read_ptr + 1) & PCM_RING_MASK;
   if(nr == d->d_write_ptr) {
-    TRACE(TRACE_DEBUG, "GLES", "Underrun");
+    //TRACE(TRACE_DEBUG, "GLES", "Underrun");
     int offset = d->d_read_ptr * d->d_pcmbuf_size;
     memset(d->d_pcmbuf + offset, 0, d->d_pcmbuf_size);
     (*d->d_bif)->Enqueue(d->d_bif, d->d_pcmbuf + offset, d->d_pcmbuf_size);
