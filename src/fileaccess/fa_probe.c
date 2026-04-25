@@ -55,10 +55,8 @@
  *
  */
 static const char *
-codecname(enum AVCodecID id)
+codecname(enum AVCodecID id, const AVCodec** codec)
 {
-  const AVCodec *c;
-
   switch(id) {
   case AV_CODEC_ID_AC3:
     return "AC3";
@@ -73,10 +71,10 @@ codecname(enum AVCodecID id)
     return "SSA";
 
   default:
-    c = avcodec_find_decoder(id);
-    if(c)
-      return c->name;
-    return "Unsupported Codec";
+    *codec = avcodec_find_decoder(id);
+    if(*codec)
+      return (*codec)->name;
+    return id == 0 ? "Unsupported Codec":  avcodec_get_name(id);
   }
 }
 
@@ -459,7 +457,6 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
   for(i = 0; i < fctx->nb_streams; i++) {
     AVStream *stream = fctx->streams[i];
     AVCodecParameters *avpar = stream->codecpar;
-
     if(avpar->codec_type == AVMEDIA_TYPE_AUDIO)
       has_audio = 1;
 
@@ -492,17 +489,18 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
     for(i = 0; i < fctx->nb_streams; i++) {
       AVStream *stream = fctx->streams[i];
       AVCodecParameters *avpar = stream->codecpar;
-      const AVCodec *codec = avcodec_find_decoder(avpar->codec_id);
+      const AVCodec *codec = NULL;
       AVDictionaryEntry *lang, *title;
       int tn;
-      char str[256];
 
-      snprintf(str, sizeof(str), "%s", codec ? codec->name : "Unknown codec");
-      TRACE(TRACE_DEBUG, "Probe", " Stream #%d: %s", i, str);
+      const char* codec_name = codecname(avpar->codec_id, &codec);
+
+      snprintf(tmp1, sizeof(tmp1), "%s%s", codec_name, codec || avpar->codec_type != AVMEDIA_TYPE_VIDEO  ? "" : " (no SW decoder)");
+      TRACE(TRACE_DEBUG, "Probe", " Stream #%d: %s", i, tmp1);
 
       switch(avpar->codec_type) {
       case AVMEDIA_TYPE_VIDEO:
-	has_video = !!codec;
+	has_video = 1;//allow unknown sw codec in case hw supports it.
 	tn = ++vtrack;
 	break;
       case AVMEDIA_TYPE_AUDIO:
@@ -517,11 +515,8 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
 	continue;
       }
 
-      if(codec == NULL) {
-	snprintf(tmp1, sizeof(tmp1), "%s", codecname(avpar->codec_id));
-      } else {
-	metadata_from_libav(tmp1, sizeof(tmp1), codec, NULL);
-      }
+      if(codec != NULL)
+        metadata_from_libav(tmp1, sizeof(tmp1), codec, NULL);
 
       lang = av_dict_get(stream->metadata, "language", NULL,
                          AV_DICT_IGNORE_SUFFIX);
@@ -529,7 +524,7 @@ fa_lavf_load_meta(metadata_t *md, AVFormatContext *fctx,
       title = av_dict_get(stream->metadata, "title", NULL,
                           AV_DICT_IGNORE_SUFFIX);
 
-      metadata_add_stream(md, codecname(avpar->codec_id),
+      metadata_add_stream(md, codec_name,
 			  avpar->codec_type, i,
 			  title ? title->value : NULL,
 			  tmp1,
