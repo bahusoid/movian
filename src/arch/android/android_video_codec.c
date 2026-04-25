@@ -556,8 +556,14 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
   case AV_CODEC_ID_MPEG2VIDEO: mime = "video/mpeg2"; break;
   case AV_CODEC_ID_VP8:        mime = "video/x-vnd.on2.vp8"; break;
   case AV_CODEC_ID_VP9:        mime = "video/x-vnd.on2.vp9"; break;
+  case AV_CODEC_ID_AV1:        mime = "video/av01"; break;
   default: return -1;
   }
+    // const AVCodecDescriptor *desc = avcodec_descriptor_get(mc->codec_id);
+    //   if (desc->)
+    // if (desc && desc->mime_types) {
+    //     mime = desc->mime_types[0];
+
 
   TRACE(TRACE_DEBUG, "Video", "Creating NDK MediaCodec for %s", mime);
 
