@@ -489,10 +489,12 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
       last_error = r;
       return 0;
     }
-    
     last_error = 0;
+
+    update_abitrate(mp, mq, mb->mb_size, ad);
     // Packet is fully consumed by send_packet in FFmpeg's API
-    mb->mb_size = 0;
+   mb->mb_size = 0;
+
     
     // With FFmpeg's send/receive API, the packet is consumed by send_packet.
     // We should try to receive all available frames before returning.
@@ -504,8 +506,6 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
       return 0;
     }
     got_frame = 1;
-
-    update_abitrate(mp, mq, mb->mb_size, ad);
 
     if(frame->sample_rate == 0) {
       frame->sample_rate = ctx->sample_rate;
