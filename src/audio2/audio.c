@@ -345,7 +345,7 @@ update_abitrate(media_pipe_t *mp, media_queue_t *mq,
 }
 
 
-
+static int last_error = 0;
 /**
  * Return 1 if packet should be retained (more data to be extracted)
  */
@@ -481,12 +481,16 @@ audio_process_audio(audio_decoder_t *ad, media_buf_t *mb)
 
     r = avcodec_send_packet(ctx, &mb->mb_pkt);
     if(r < 0 && r != AVERROR(EAGAIN)) {
+
       char errbuf[128];
       av_strerror(r, errbuf, sizeof(errbuf));
-      TRACE(TRACE_ERROR, "Audio", "avcodec_send_packet failed: %s", errbuf);
+      if(last_error != r)
+        TRACE(TRACE_ERROR, "Audio", "avcodec_send_packet failed: %s", errbuf);
+      last_error = r;
       return 0;
     }
     
+    last_error = 0;
     // Packet is fully consumed by send_packet in FFmpeg's API
     mb->mb_size = 0;
     
