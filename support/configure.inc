@@ -426,7 +426,7 @@ libav_setup() {
     
     # Decoders - Video
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=bmp --enable-decoder=flv1 --enable-decoder=gif --enable-decoder=h263"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=h264 --enable-decoder=hevc --enable-decoder=mjpeg --enable-decoder=mjpegb"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=h264 --enable-decoder=hevc --enable-decoder=av1 --enable-decoder=mjpeg --enable-decoder=mjpegb"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=mpeg2video --enable-decoder=mpeg4 --enable-decoder=png --enable-decoder=svq3"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=theora --enable-decoder=vc1 --enable-decoder=vp8 --enable-decoder=vp9"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=webp --enable-decoder=wmv3 --enable-decoder=zlib"
@@ -447,7 +447,7 @@ libav_setup() {
 
     # Parsers
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=aac --enable-parser=ac3 --enable-parser=dca --enable-parser=flac"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=h264 --enable-parser=hevc --enable-parser=mpegaudio --enable-parser=mpeg4video"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=h264 --enable-parser=hevc --enable-parser=mpegaudio --enable-parser=mpeg4video --enable-parser=av1"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=mpegvideo --enable-parser=opus --enable-parser=vc1 --enable-parser=vorbis"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-parser=vp8 --enable-parser=vp9"
 
