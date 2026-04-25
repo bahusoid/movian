@@ -61,6 +61,7 @@ var LOGONONE = Plugin.path + 'src/none.png';
 var LOGO4K = Plugin.path + 'src/4k.png';
 //var listview = Plugin.path + 'src/list.view';
 var NAME = 'hdrezka';
+var LOGIN_STATE_REGEX = /\/logout\b/;
 //var service = require('showtime/service');
 var service = require('movian/service');
 //var service = plugin.createService(config.TTL, config.PREFIX + ':start', 'video', true, config.LOGO);
@@ -408,7 +409,7 @@ new page.Route(PREFIX + ':start', function (page) {
   page.model.contents = 'list';
 //  page.model.contents = 'grid';
 // Check login status
-  var loginstate = response.toString().match(/logout|Выйти|Кабинет|Мой профиль/);
+  var loginstate = LOGIN_STATE_REGEX.test(response.toString());
   var user = 'Авторизация';
   if (loginstate) {
     user = currentUser || 'Пользователь';
@@ -555,7 +556,8 @@ new page.Route(PREFIX + ':login', function (page) {
     return page.redirect(PREFIX + ':start');
   }
   if (credentials.username && credentials.password) {
-    var url = BASE_URL;
+    var url = BASE_URL + '/ajax/login/';
+    // Prefer AJAX login endpoint which returns JSON
     var ent = http.request(url, {
       debug: service.debug,
       noFollow: true,
@@ -563,23 +565,42 @@ new page.Route(PREFIX + ':login', function (page) {
       postdata: {
         login_name: credentials.username,
         login_password: credentials.password,
-        login: 'submit',
+        login_not_save: '0',
       },
       headers: {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-        'Accept-Encoding': 'gzip, deflate',
-        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Cache-control': 'no-cache',
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
         'User-Agent': UA,
         'Referer': BASE_URL,
       },
     });
-    if (ent.statuscode === 200) {
-      log.d('Login successful');
-      currentUser = credentials.username; // Store the username
-      store.currentUser = credentials.username; // Persist the username
+
+    try {
+      var respText = ent.toString();
+      var json = null;
+      try { json = JSON.parse(respText); } catch (e) { json = null; }
+      if (json && json.success === true) {
+        log.d('Login successful (ajax)');
+        currentUser = credentials.username;
+        store.currentUser = credentials.username;
+      } else {
+        // Fallback: if server returned HTML redirect or status 200, try to detect login state
+        var body = respText || '';
+        if (ent.statuscode === 200 && LOGIN_STATE_REGEX.test(body)) {
+          log.d('Login successful (detected in HTML)');
+          currentUser = credentials.username;
+          store.currentUser = credentials.username;
+        } else {
+          var msg = (json && json.message) ? json.message : 'Login failed';
+          popup.notify('Login failed: ' + msg, 5);
+          log.e('Login error: ' + respText);
+        }
+      }
+    } catch (e) {
+      log.e('Exception while processing login response: ' + e);
     }
+
   }
   page.redirect(PREFIX + ':start');
 });
