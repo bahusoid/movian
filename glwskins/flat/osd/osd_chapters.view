@@ -20,7 +20,7 @@ widget(container_y, {
 
       cloner($self.media.chapterindex.positions, container_z, {
 
-        height: 2.5em;
+        height: 3.5em;
         ListItemHighlight();
         ListItemBevel();
 
@@ -31,32 +31,52 @@ widget(container_y, {
 
         widget(container_x, {
           padding: [0.5em, 0];
+          spacing: 0.5em;
 
-          widget(icon, {
-            source: "skin://icons/ic_check_48px.svg";
-            alpha: iir($core.media.current.currenttime > $self.timestamp &&
-                      $core.media.current.currenttime < $self.end, 4);
-            style: "NavSelectedText";
+          widget(container_z, {
+            width: 8em;
+            widget(image, {
+              source: $self.image;
+              width: 8em;
+              align: center;
+            });
+
+            // Background bar
+            widget(quad, {
+              height: 0.6em;
+              width: 8em;
+              align: bottom;
+              color: 0;
+              alpha: 0.4;
+              margin: [0, -0.5em, 0, 0];
+            });
+
+            // Progress overlay using clipping similar to old skin
+            widget(quad, {
+              height: 0.6em;
+              width: 8em;
+              align: bottom;
+              color: [0.2,0.6,1];
+              alpha: 0.8;
+              margin: [0, -0.5em, 0, 0];
+              clipping: [-1, 0, 1 - (($core.media.current.currenttime - $self.timestamp) / ($self.end - $self.timestamp)), 0];
+            });
+
           });
 
           widget(container_y, {
             padding: [0.5em, 0, 0, 0];
             align: center;
-
-            widget(container_x, {
-              widget(label, {
-                filterConstraintX: true;
-                caption: $self.title ?? value2duration($self.timestamp);
-                style: "NavSelectedTextSecondary";
-              });
+            widget(label, {
+              filterConstraintX: true;
+              caption: $self.title ?? value2duration($self.timestamp);
+              style: "NavSelectedTextSecondary";
             });
 
-            widget(container_x, {
-              widget(label, {
-                filterConstraintX: true;
-                caption: value2duration($self.timestamp);
-                style: "NavSelectedTextSecondary";
-              });
+            widget(label, {
+              filterConstraintX: true;
+              caption: value2duration($self.timestamp);
+              style: "NavSelectedTextSecondary";
             });
           });
         });
@@ -67,9 +87,7 @@ widget(container_y, {
       width: 4;
       focusable: canScroll();
       alpha: iir(canScroll(), 16);
-      widget(quad, {
-	alpha: 1;
-      });
+      widget(quad, { alpha: 1; });
     });
   });
 });
