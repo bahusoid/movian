@@ -25,6 +25,9 @@ import android.view.SurfaceView;
 import android.view.Window;
 import android.view.WindowManager;
 import android.util.Log;
+import android.media.AudioManager;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 
 import android.os.Environment;
 import android.content.ContentUris;
@@ -57,6 +60,11 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     SurfaceView sv;
     private AlertDialog mKeyboardDialog;
 
+    // Media session and audio focus
+    private MediaSession mMediaSession;
+    private AudioManager mAudioManager;
+    private AudioManager.OnAudioFocusChangeListener mAfChangeListener;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.d("Movian", "onCreate");
@@ -73,6 +81,9 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
         setContentView(mRoot);
 
         startService(new Intent(this, CoreService.class));
+
+        // Initialize MediaSession and request audio focus so media keys are routed here
+        initMediaSession();
     }
 
     @Override
@@ -83,6 +94,55 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
     @Override
     protected void onStop() {
         super.onStop();
+    }
+
+    private void initMediaSession() {
+        if (mMediaSession != null) return;
+        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        mMediaSession = new MediaSession(this, "MovianMediaSession");
+        mMediaSession.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mMediaSession.setCallback(new MediaSession.Callback() {
+             @Override
+             public boolean onMediaButtonEvent(Intent mediaButtonIntent) {
+                 KeyEvent event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                 if (event != null && mGLWView != null) {
+                     if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                         Log.d("Movian", "Key DOWN");
+                         mGLWView.keyDown(event.getKeyCode(), event);
+                     } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                         Log.d("Movian", "Key UP");
+                         mGLWView.keyUp(event.getKeyCode(), event);
+                     }
+                     return true; // Return true to indicate you handled it
+                 }
+                 return super.onMediaButtonEvent(mediaButtonIntent);
+             }
+        });
+        // set initial playback state with supported actions
+        PlaybackState.Builder stateBuilder = new PlaybackState.Builder()
+            .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_STOP | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_FAST_FORWARD | PlaybackState.ACTION_REWIND);
+        mMediaSession.setPlaybackState(stateBuilder.build());
+        mMediaSession.setActive(true);
+
+        mAfChangeListener = new AudioManager.OnAudioFocusChangeListener() {
+            @Override
+            public void onAudioFocusChange(int focusChange) {
+                Log.d("Movian", "AudioFocus change: " + focusChange);
+            }
+        };
+        requestAudioFocus();
+    }
+
+    private void requestAudioFocus() {
+        if (mAudioManager == null) return;
+        int result = mAudioManager.requestAudioFocus(mAfChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        Log.d("Movian", "requestAudioFocus result=" + result);
+    }
+
+    private void abandonAudioFocus() {
+        if (mAudioManager == null) return;
+        mAudioManager.abandonAudioFocus(mAfChangeListener);
+        Log.d("Movian", "abandonAudioFocus");
     }
 
     public boolean onKeyUp(int keyCode, KeyEvent event) {
@@ -179,6 +239,12 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
         if (mGLWView != null) {
             mGLWView.destroy();
         }
+        if (mMediaSession != null) {
+            mMediaSession.setActive(false);
+            mMediaSession.release();
+            mMediaSession = null;
+        }
+        abandonAudioFocus();
     }
 
     // These does not execute on the main ui thread so we need to dispatch
