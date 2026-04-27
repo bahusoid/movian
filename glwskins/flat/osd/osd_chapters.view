@@ -52,14 +52,16 @@ widget(container_y, {
             });
 
             // Progress overlay using clipping similar to old skin
-            widget(quad, {
-              height: 0.6em;
-              width: 8em;
-              align: bottom;
-              color: [0.2,0.6,1];
-              alpha: 0.8;
-              margin: [0, -0.5em, 0, 0];
+            widget(clip, {
               clipping: [-1, 0, 1 - (($core.media.current.currenttime - $self.timestamp) / ($self.end - $self.timestamp)), 0];
+              widget(quad, {
+                height: 0.6em;
+                width: 8em;
+                align: bottom;
+                color: [0.2,0.6,1];
+                alpha: 0.8;
+                margin: [0, -0.5em, 0, 0];
+              });
             });
 
           });
