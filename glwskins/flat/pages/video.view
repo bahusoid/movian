@@ -192,7 +192,8 @@ widget(container_z, {
                                   3, "skin://osd/osd_settings_audio.view",
                                   4, "skin://osd/osd_settings_video.view",
                                   100, "skin://osd/osd_subs.view",
-                                  101, "skin://osd/osd_audio.view"
+                                  101, "skin://osd/osd_audio.view",
+                                  102, "skin://osd/osd_chapters.view"
                                  );
               });
             });
