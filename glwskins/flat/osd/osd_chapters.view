@@ -18,7 +18,7 @@ widget(container_y, {
     widget(list_y, {
       id: "list";
 
-      cloner($self.media.chapterindex.positions, container_z, {
+      cloner($core.media.current.chapterindex.positions, container_z, {
 
         height: 2.5em;
         ListItemHighlight();
