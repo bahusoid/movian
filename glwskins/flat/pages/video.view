@@ -222,12 +222,15 @@ widget(container_z, {
 
           align: center;
           
-          PLAYDECK_BUTTON("skin://icons/ic_my_library_books_48px.svg",
-                          _("Chapters"),
-                          {
-                            $clone.osdpage = select($clone.osdpage == 102, 0, 102);
-                            focus("osd_chapters");
-                          }, true, "chapters-btn");
+          widget(container_z, {
+            hidden: !$core.media.current.chapterindex.available;
+            PLAYDECK_BUTTON("skin://icons/ic_my_library_books_48px.svg",
+                            _("Chapters"),
+                            {
+                              $clone.osdpage = select($clone.osdpage == 102, 0, 102);
+                              focus("osd_chapters");
+                            }, true, "chapters-btn");
+          });
 
           PLAYDECK_BUTTON("skin://icons/ic_stop_48px.svg",
                           _("Stop"),
