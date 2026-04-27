@@ -310,6 +310,13 @@ esac
 
 echo "Using GLW Frontend:    $GLWFRONTEND"
 
+# Try to detect gio-2.0 so we can include gio headers and libs when available
+if pkg-config gio-2.0; then
+    echo >>${CONFIG_MAK} "LDFLAGS_cfg += " `pkg-config --libs gio-2.0`
+    echo >>${CONFIG_MAK} "CFLAGS_cfg += " `pkg-config --cflags gio-2.0`
+    echo "Using gio:              `pkg-config --modversion gio-2.0`"
+fi
+
 
 
 #

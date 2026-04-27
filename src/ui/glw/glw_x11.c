@@ -18,6 +18,8 @@
  *  For more information, contact andreas@lonelycoder.com
  */
 #include <assert.h>
+#include <gio/gio.h>
+#include <glib/gtypes.h>
 #include <sys/time.h>
 #include <math.h>
 #include <stdio.h>
@@ -108,6 +110,14 @@ typedef struct glw_x11 {
   
   char *clipboard_text;
 
+  /* DBus media keys */
+  GDBusConnection *dbus_conn;
+
+  /* MPRIS support */
+  GDBusNodeInfo *mpris_node_info;
+  guint mpris_reg[4];
+  guint mpris_owner_id;
+
   int wm_flags;
 #define GX11_WM_DETECTED       0x1 // A window manager is present
 #define GX11_WM_CAN_FULLSCREEN 0x2 // WM can fullscreen us
@@ -149,9 +159,219 @@ build_blank_cursor(glw_x11_t *gx11)
 }
 
 
-/**
- *
- */
+/* MPRIS implementation (minimal) */
+static const char introspection_xml[] =
+  "<node>"
+  "  <interface name='org.mpris.MediaPlayer2'>"
+  "    <method name='Raise' />"
+  "    <method name='Quit' />"
+  "    <property name='CanQuit' type='b' access='read' />"
+  "    <property name='Identity' type='s' access='read' />"
+  "  </interface>"
+  "  <interface name='org.mpris.MediaPlayer2.Player'>"
+  "    <method name='Play' />"
+  "    <method name='Pause' />"
+  "    <method name='PlayPause' />"
+  "    <method name='Next' />"
+  "    <method name='Previous' />"
+  "    <method name='Stop' />"
+  "    <property name='PlaybackStatus' type='s' access='read' />"
+  "    <property name='CanGoNext' type='b' access='read' />"
+  "    <property name='CanGoPrevious' type='b' access='read' />"
+  "    <property name='CanPlay' type='b' access='read' />"
+  "    <property name='CanPause' type='b' access='read' />"
+  "    <property name='CanControl' type='b' access='read' />"
+  "  </interface>"
+  "</node>";
+
+static void mpris_method_call(GDBusConnection *connection,
+                              const char *sender,
+                              const char *object_path,
+                              const char *interface_name,
+                              const char *method_name,
+                              GVariant *parameters,
+                              GDBusMethodInvocation *invocation,
+                              gpointer user_data)
+{
+  glw_x11_t *gx11 = user_data;
+  event_t *e = NULL;
+
+  if (g_strcmp0(method_name, "Play") == 0 || g_strcmp0(method_name, "PlayPause") == 0)
+    e = event_create_action(ACTION_PLAYPAUSE);
+  else if (g_strcmp0(method_name, "Pause") == 0)
+    e = event_create_action(ACTION_PLAYPAUSE);
+  else if (g_strcmp0(method_name, "Next") == 0)
+    e = event_create_action(ACTION_SKIP_FORWARD);
+  else if (g_strcmp0(method_name, "Previous") == 0)
+    e = event_create_action(ACTION_SKIP_BACKWARD);
+  else if (g_strcmp0(method_name, "Stop") == 0)
+    e = event_create_action(ACTION_STOP);
+  else if (g_strcmp0(method_name, "Quit") == 0)
+    app_shutdown(0);
+  else if (g_strcmp0(method_name, "Raise") == 0) {
+    /* Bring window to foreground */
+    if (gx11->display && gx11->win)
+      XRaiseWindow(gx11->display, gx11->win);
+  }
+
+  if (e) {
+    e->e_flags |= EVENT_KEYPRESS;
+    glw_inject_event(&gx11->gr, e);
+  }
+
+  /* No return values for these methods */
+  g_dbus_method_invocation_return_value(invocation, NULL);
+}
+
+static GVariant *mpris_get_property(GDBusConnection *connection,
+                                   const char *sender,
+                                   const char *object_path,
+                                   const char *interface_name,
+                                   const char *property_name,
+                                   GError **error,
+                                   gpointer user_data)
+{
+  (void)connection; (void)sender; (void)object_path; (void)user_data;
+
+  if (g_strcmp0(interface_name, "org.mpris.MediaPlayer2") == 0) {
+    if (g_strcmp0(property_name, "CanQuit") == 0)
+      return g_variant_new_boolean(FALSE);
+    if (g_strcmp0(property_name, "Identity") == 0)
+      return g_variant_new_string("Movian");
+  } else if (g_strcmp0(interface_name, "org.mpris.MediaPlayer2.Player") == 0) {
+    if (g_strcmp0(property_name, "PlaybackStatus") == 0)
+      return g_variant_new_string("Stopped");
+    if (g_strcmp0(property_name, "CanGoNext") == 0)
+      return g_variant_new_boolean(TRUE);
+    if (g_strcmp0(property_name, "CanGoPrevious") == 0)
+      return g_variant_new_boolean(TRUE);
+    if (g_strcmp0(property_name, "CanPlay") == 0)
+      return g_variant_new_boolean(TRUE);
+    if (g_strcmp0(property_name, "CanPause") == 0)
+      return g_variant_new_boolean(TRUE);
+    if (g_strcmp0(property_name, "CanControl") == 0)
+      return g_variant_new_boolean(TRUE);
+  }
+
+  /* Unknown property */
+  if (error)
+    *error = g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, "Property not found");
+  return NULL;
+}
+
+static const GDBusInterfaceVTable mpris_vtable = {
+  .method_call = mpris_method_call,
+  .get_property = mpris_get_property,
+  .set_property = NULL
+};
+
+static void on_bus_acquired(GDBusConnection *connection, const gchar *name, gpointer user_data)
+{
+  glw_x11_t *gx11 = user_data;
+  GError *err = NULL;
+
+  gx11->dbus_conn = g_object_ref(connection);
+
+  gx11->mpris_node_info = g_dbus_node_info_new_for_xml(introspection_xml, &err);
+  if (!gx11->mpris_node_info) {
+    TRACE(TRACE_ERROR, "GLW", "MPRIS: introspection parse failed: %s", err ? err->message : "(null)");
+    if (err) g_error_free(err);
+    return;
+  }
+
+  /* Register each interface on the same object path */
+  if (gx11->mpris_node_info->interfaces) {
+    guint max_regs = (guint)(sizeof(gx11->mpris_reg)/sizeof(gx11->mpris_reg[0]));
+    for (guint i = 0; gx11->mpris_node_info->interfaces[i] && i < max_regs; i++) {
+      guint reg = g_dbus_connection_register_object(connection,
+                                                     "/org/mpris/MediaPlayer2",
+                                                     gx11->mpris_node_info->interfaces[i],
+                                                     &mpris_vtable,
+                                                     gx11,
+                                                     NULL,
+                                                     &err);
+      if (reg == 0) {
+        TRACE(TRACE_ERROR, "GLW", "MPRIS: register_object failed: %s", err ? err->message : "(null)");
+        if (err) g_error_free(err);
+        continue;
+      }
+      gx11->mpris_reg[i] = reg;
+    }
+  }
+
+  TRACE(TRACE_INFO, "GLW", "MPRIS: name %s acquired on session bus", name);
+}
+
+static void on_name_lost(GDBusConnection *connection, const gchar *name, gpointer user_data)
+{
+  glw_x11_t *gx11 = user_data;
+  (void)connection;
+  TRACE(TRACE_INFO, "GLW", "MPRIS: name %s lost", name);
+  /* unregister objects and free node info */
+  if (gx11->dbus_conn) {
+    for (int i = 0; i < (int)(sizeof(gx11->mpris_reg)/sizeof(gx11->mpris_reg[0])); i++) {
+      if (gx11->mpris_reg[i]) {
+        g_dbus_connection_unregister_object(gx11->dbus_conn, gx11->mpris_reg[i]);
+        gx11->mpris_reg[i] = 0;
+      }
+    }
+  }
+  if (gx11->mpris_node_info) {
+    g_dbus_node_info_unref(gx11->mpris_node_info);
+    gx11->mpris_node_info = NULL;
+  }
+  if (gx11->dbus_conn) {
+    g_object_unref(gx11->dbus_conn);
+    gx11->dbus_conn = NULL;
+  }
+}
+
+static void
+register_media_keys(glw_x11_t *gx11)
+{
+  /* Own the MPRIS well-known name on the session bus so desktops can talk to us */
+  if (gx11->mpris_owner_id != 0)
+    return;
+
+  gx11->mpris_owner_id = g_bus_own_name(G_BUS_TYPE_SESSION,
+                                        "org.mpris.MediaPlayer2.movian",
+                                        G_BUS_NAME_OWNER_FLAGS_NONE,
+                                        on_bus_acquired,
+                                        NULL,
+                                        on_name_lost,
+                                        gx11,
+                                        NULL);
+  TRACE(TRACE_INFO, "GLW", "MPRIS: owning name org.mpris.MediaPlayer2.movian (owner id %u)", gx11->mpris_owner_id);
+}
+
+static void
+unregister_media_keys(glw_x11_t *gx11)
+{
+  /* Release the well-known name and cleanup */
+  if (gx11->mpris_owner_id != 0) {
+    g_bus_unown_name(gx11->mpris_owner_id);
+    gx11->mpris_owner_id = 0;
+  }
+
+  /* on_name_lost will have cleaned up registered objects when name is lost;
+     defensively cleanup here as well if connection still exists */
+  if (gx11->dbus_conn) {
+    for (int i = 0; i < (int)(sizeof(gx11->mpris_reg)/sizeof(gx11->mpris_reg[0])); i++) {
+      if (gx11->mpris_reg[i]) {
+        g_dbus_connection_unregister_object(gx11->dbus_conn, gx11->mpris_reg[i]);
+        gx11->mpris_reg[i] = 0;
+      }
+    }
+    g_object_unref(gx11->dbus_conn);
+    gx11->dbus_conn = NULL;
+  }
+  if (gx11->mpris_node_info) {
+    g_dbus_node_info_unref(gx11->mpris_node_info);
+    gx11->mpris_node_info = NULL;
+  }
+}
+
+
 static void
 hide_cursor(glw_x11_t *gx11)
 {
@@ -590,6 +810,8 @@ window_shutdown(glw_x11_t *gx11)
   glw_lock(&gx11->gr);
   glw_flush(&gx11->gr);
   glw_unlock(&gx11->gr);
+  /* Unregister media keys */
+  unregister_media_keys(gx11);
   window_close(gx11);
 }
 
@@ -866,6 +1088,9 @@ glw_x11_init(glw_x11_t *gx11)
   // Fullscreen via window manager
   if(gx11->want_fullscreen && !fs)
     wm_set_fullscreen(gx11, 1);
+
+  /* Register for desktop media keys (best-effort) */
+  register_media_keys(gx11);
 
   return 0;
 }
