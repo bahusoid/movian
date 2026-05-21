@@ -1813,7 +1813,9 @@ void
 glw_focus_suggest(glw_t *w)
 {
   for(; w->glw_parent != NULL; w = w->glw_parent) {
-    if(w->glw_parent->glw_class->gc_suggest_focus != NULL) {
+    if(w->glw_parent->glw_class->gc_suggest_focus != NULL
+       //&& (w->glw_parent->glw_flags & GLW_FLOATING_FOCUS)
+      ) {
       w->glw_parent->glw_class->gc_suggest_focus(w->glw_parent, w);
       break;
     }

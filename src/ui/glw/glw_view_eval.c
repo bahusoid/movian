@@ -1731,8 +1731,9 @@ prop_callback_cloner(void *opaque, prop_event_t event, ...)
     break;
 
   case PROP_SUGGEST_FOCUS:
-    p = va_arg(ap, prop_t *);
-    cloner_suggest_focus(sc, p, gps->gps_widget);
+     p = va_arg(ap, prop_t *);
+    // if (gps->gps_widget->glw_flags & GLW_FLOATING_FOCUS)
+       cloner_suggest_focus(sc, p, gps->gps_widget);
     break;
 
   case PROP_SET_URI:
@@ -5926,6 +5927,9 @@ glwf_suggestFocus(glw_view_eval_context_t *ec, struct token *self,
   if((a = token_resolve(ec, argv[0])) == NULL)
     return -1;
 
+  /*token_t *b = token_resolve(ec, argv[1]);
+  int auto = token2int(ec, b);
+*/
   if(token2bool(a))
     glw_focus_suggest(ec->w);
   return 0;
