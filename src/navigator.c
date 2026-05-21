@@ -794,6 +794,15 @@ nav_open(const char *url, const char *view)
 }
 
 
+static void go_sys_home(navigator_t* nav)
+{
+  event_t *e = event_create_action(ACTION_SYSTEM_HOME);
+  prop_t *eventsink = prop_create_r(nav->nav_prop_root, "eventSink");
+  prop_send_ext_event(eventsink, e);
+  prop_ref_dec(eventsink);
+  event_release(e);
+}
+
 /**
  *
  */
@@ -812,11 +821,7 @@ nav_back(navigator_t *nav)
     if(doclose)
       nav_close(np, 1);
   } else {
-    event_t *e = event_create_action(ACTION_SYSTEM_HOME);
-    prop_t *eventsink = prop_create_r(nav->nav_prop_root, "eventSink");
-    prop_send_ext_event(eventsink, e);
-    prop_ref_dec(eventsink);
-    event_release(e);
+    go_sys_home(nav);
   }
 }
 
@@ -930,6 +935,17 @@ nav_eventsink(void *opaque, event_t *e)
     nav_fwd(nav);
 
   } else if(event_is_action(e, ACTION_HOME)) {
+    /* Close current page first if it requested direct close or global always-close */
+    nav_page_t *np = nav->nav_page_current;
+    if(np != NULL) {
+      if(np->np_direct_close)
+        nav_close(np, 1);
+      else if (strcmp(np->np_url, NAV_HOME) == 0)
+      {
+        go_sys_home(nav);
+        return;
+      }
+    }
     nav_open0(nav, NAV_HOME, NULL, NULL, NULL, NULL, NULL);
 
   } else if(event_is_action(e, ACTION_PLAYQUEUE)) {
