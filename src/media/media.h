@@ -367,6 +367,9 @@ typedef struct media_pipe {
   int mp_vol_user;
   float mp_vol_ui;
 
+  int mp_video_accel;
+  int mp_video_accel_cb_inited;
+
   /**
    * Cancellable must be accessed under mp_mutex protection
    */

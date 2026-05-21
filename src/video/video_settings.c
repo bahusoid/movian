@@ -73,6 +73,7 @@ video_settings_init(void)
                    SETTING_TITLE(_p("Hardware accelerated decoding")),
                    SETTING_STORE("videoplayback", "videoaccel2"),
                    SETTING_VALUE(1),
+                   SETTING_VALUE_ORIGIN("global"),
                    SETTING_WRITE_BOOL(&video_settings.video_accel),
                    NULL);
 #endif

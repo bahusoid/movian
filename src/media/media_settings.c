@@ -58,7 +58,17 @@ update_sv_delta(void *opaque, int v)
 static void
 update_video_accel_user(void *opaque, int value)
 {
-  event_dispatch(event_create_action(ACTION_RELOAD_DATA));
+  media_pipe_t *mp = opaque;
+  printf("update_video_accel_user: value=%d, inited=%d\n", value, mp->mp_video_accel_cb_inited);
+  if(mp->mp_video_accel_cb_inited) {
+    if(mp->mp_video_accel != value) {
+      mp->mp_video_accel = value;
+      event_dispatch(event_create_action(ACTION_RELOAD_DATA));
+    }
+  } else {
+    mp->mp_video_accel_cb_inited = 1;
+    mp->mp_video_accel = value;
+  }
 }
 #endif
 
