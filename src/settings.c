@@ -411,6 +411,11 @@ settings_get_type(const setting_t *s)
   return s->s_type;
 }
 
+prop_t *
+setting_get_root(setting_t *s)
+{
+  return s->s_root;
+}
 
 /**
  *

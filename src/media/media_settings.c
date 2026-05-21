@@ -84,6 +84,27 @@ mp_settings_clear(media_pipe_t *mp)
 }
 
 
+static void
+reset_video_defaults(void *opaque)
+{
+  media_pipe_t *mp = opaque;
+  setting_group_reset(&mp->mp_settings_video);
+}
+
+static void
+reset_audio_defaults(void *opaque)
+{
+  media_pipe_t *mp = opaque;
+  setting_group_reset(&mp->mp_settings_audio);
+}
+
+static void
+reset_subtitle_defaults(void *opaque)
+{
+  media_pipe_t *mp = opaque;
+  setting_group_reset(&mp->mp_settings_subtitle);
+}
+
 // -- Video setting action ------------------------------------
 
 static void
@@ -101,14 +122,6 @@ set_video_directory_defaults(void *opaque)
   media_pipe_t *mp = opaque;
   setting_group_push_to_ancestor(&mp->mp_settings_video, "directory");
   setting_group_reset(&mp->mp_settings_video);
-}
-
-
-static void
-clr_video_directory_defaults(void *opaque)
-{
-  media_pipe_t *mp = opaque;
-  setting_group_reset(&mp->mp_settings_video_dir);
 }
 
 // -- Audio setting action ------------------------------------
@@ -130,14 +143,6 @@ set_audio_directory_defaults(void *opaque)
   setting_group_reset(&mp->mp_settings_audio);
 }
 
-
-static void
-clr_audio_directory_defaults(void *opaque)
-{
-  media_pipe_t *mp = opaque;
-  setting_group_reset(&mp->mp_settings_audio_dir);
-}
-
 // -- Subtitle setting action ------------------------------------
 
 
@@ -156,14 +161,6 @@ set_subtitle_directory_defaults(void *opaque)
   media_pipe_t *mp = opaque;
   setting_group_push_to_ancestor(&mp->mp_settings_subtitle, "directory");
   setting_group_reset(&mp->mp_settings_subtitle);
-}
-
-
-static void
-clr_subtitle_directory_defaults(void *opaque)
-{
-  media_pipe_t *mp = opaque;
-  setting_group_reset(&mp->mp_settings_subtitle_dir);
 }
 
 /**
@@ -196,10 +193,9 @@ void
 mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
                  const char *parent_title)
 {
-  setting_t *p;
+  setting_t *p, *more;
   prop_t *c = mp->mp_prop_ctrl;
   char set_directory_title[256];
-  char clr_directory_title[256];
 
   mp_settings_clear(mp);
 
@@ -218,11 +214,6 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
 
     fmt = _("Save as defaults for folder '%s'");
     snprintf(set_directory_title, sizeof(set_directory_title), rstr_get(fmt),
-             parent_title);
-    rstr_release(fmt);
-
-    fmt = _("Reset defaults for folder '%s'");
-    snprintf(clr_directory_title, sizeof(clr_directory_title), rstr_get(fmt),
              parent_title);
     rstr_release(fmt);
   }
@@ -358,6 +349,19 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
                  SETTING_GROUP(&mp->mp_settings_video),
                  NULL);
 
+  more = setting_create(SETTING_SEPARATOR, mp->mp_setting_video_root, 0,
+                        SETTING_TITLE(_p("More...")),
+                        SETTING_GROUP(&mp->mp_settings_video),
+                        NULL);
+  if(more) {
+    prop_t *more_root = setting_get_root(more);
+    if (more_root) {
+      prop_set(more_root, "type", PROP_SET_STRING, "settings");
+      prop_set(more_root, "url", PROP_SET_STRING, "settings:video");
+      prop_set(more_root, "subtype", PROP_SET_STRING, "video");
+    }
+  }
+
   setting_create(SETTING_ACTION, mp->mp_setting_video_root, 0,
                  SETTING_TITLE(_p("Save as global default")),
                  SETTING_MUTEX(mp),
@@ -374,15 +378,15 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
                    SETTING_CALLBACK(set_video_directory_defaults, mp),
                    SETTING_GROUP(&mp->mp_settings_video),
                    NULL);
-
-    setting_create(SETTING_ACTION, mp->mp_setting_video_root, 0,
-                   SETTING_TITLE_CSTR(clr_directory_title),
-                   SETTING_MUTEX(mp),
-                   SETTING_LOCKMGR(mp_lockmgr),
-                   SETTING_CALLBACK(clr_video_directory_defaults, mp),
-                   SETTING_GROUP(&mp->mp_settings_video),
-                   NULL);
   }
+
+  setting_create(SETTING_ACTION, mp->mp_setting_video_root, 0,
+                 SETTING_TITLE(_p("Reset to defaults")),
+                 SETTING_MUTEX(mp),
+                 SETTING_LOCKMGR(mp_lockmgr),
+                 SETTING_CALLBACK(reset_video_defaults, mp),
+                 SETTING_GROUP(&mp->mp_settings_video),
+                 NULL);
 
   // --- Audio ---------------------------------------------
 
@@ -428,6 +432,19 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
                  SETTING_GROUP(&mp->mp_settings_audio),
                  NULL);
 
+  more = setting_create(SETTING_SEPARATOR, mp->mp_setting_audio_root, 0,
+                        SETTING_TITLE(_p("More...")),
+                        SETTING_GROUP(&mp->mp_settings_audio),
+                        NULL);
+  if(more) {
+    prop_t *more_root = setting_get_root(more);
+    if (more_root) {
+      prop_set(more_root, "type", PROP_SET_STRING, "settings");
+      prop_set(more_root, "url", PROP_SET_STRING, "settings:audio");
+      prop_set(more_root, "subtype", PROP_SET_STRING, "audio");
+    }
+  }
+
   setting_create(SETTING_ACTION, mp->mp_setting_audio_root, 0,
                  SETTING_TITLE(_p("Save as global default")),
                  SETTING_MUTEX(mp),
@@ -444,16 +461,15 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
                    SETTING_CALLBACK(set_audio_directory_defaults, mp),
                    SETTING_GROUP(&mp->mp_settings_audio),
                    NULL);
-
-    setting_create(SETTING_ACTION, mp->mp_setting_audio_root, 0,
-                   SETTING_TITLE_CSTR(clr_directory_title),
-                   SETTING_MUTEX(mp),
-                   SETTING_LOCKMGR(mp_lockmgr),
-                   SETTING_CALLBACK(clr_audio_directory_defaults, mp),
-                   SETTING_GROUP(&mp->mp_settings_audio),
-                   NULL);
   }
 
+  setting_create(SETTING_ACTION, mp->mp_setting_audio_root, 0,
+                 SETTING_TITLE(_p("Reset to defaults")),
+                 SETTING_MUTEX(mp),
+                 SETTING_LOCKMGR(mp_lockmgr),
+                 SETTING_CALLBACK(reset_audio_defaults, mp),
+                 SETTING_GROUP(&mp->mp_settings_audio),
+                 NULL);
 
   // --- Subtitle ------------------------------------------
 
@@ -545,6 +561,19 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
                  SETTING_GROUP(&mp->mp_settings_subtitle),
                  NULL);
 
+  more = setting_create(SETTING_SEPARATOR, mp->mp_setting_subtitle_root, 0,
+                        SETTING_TITLE(_p("More...")),
+                        SETTING_GROUP(&mp->mp_settings_subtitle),
+                        NULL);
+  if(more) {
+    prop_t *more_root = setting_get_root(more);
+    if (more_root) {
+      prop_set(more_root, "type", PROP_SET_STRING, "settings");
+      prop_set(more_root, "url", PROP_SET_STRING, "settings:subtitles");
+      prop_set(more_root, "subtype", PROP_SET_STRING, "subtitle");
+    }
+  }
+
   setting_create(SETTING_ACTION, mp->mp_setting_subtitle_root, 0,
                  SETTING_TITLE(_p("Save as global default")),
                  SETTING_MUTEX(mp),
@@ -561,15 +590,15 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
                    SETTING_CALLBACK(set_subtitle_directory_defaults, mp),
                    SETTING_GROUP(&mp->mp_settings_subtitle),
                    NULL);
-
-    setting_create(SETTING_ACTION, mp->mp_setting_subtitle_root, 0,
-                   SETTING_TITLE_CSTR(clr_directory_title),
-                   SETTING_MUTEX(mp),
-                   SETTING_LOCKMGR(mp_lockmgr),
-                   SETTING_CALLBACK(clr_subtitle_directory_defaults, mp),
-                   SETTING_GROUP(&mp->mp_settings_subtitle),
-                   NULL);
   }
+
+  setting_create(SETTING_ACTION, mp->mp_setting_subtitle_root, 0,
+                 SETTING_TITLE(_p("Reset to defaults")),
+                 SETTING_MUTEX(mp),
+                 SETTING_LOCKMGR(mp_lockmgr),
+                 SETTING_CALLBACK(reset_subtitle_defaults, mp),
+                 SETTING_GROUP(&mp->mp_settings_subtitle),
+                 NULL);
 
   // ----------------------------------------------------------------
 

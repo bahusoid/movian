@@ -55,6 +55,8 @@ void settings_add_int(setting_t *s, int delta);
 
 int settings_get_type(const setting_t *s);
 
+prop_t *setting_get_root(setting_t *s);
+
 setting_t *settings_create_action(prop_t *parent, prop_t *title,
                                   const char *subtype,
 				  prop_callback_t *cb, void *opaque,
