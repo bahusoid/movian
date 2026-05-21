@@ -303,7 +303,25 @@ widget(container_z, {
                 space(1);
               });
             });
+
+            cloner($core.media.current.chapterindex.positions, clip, {
+              hidden: !$core.media.current.chapterindex.available;
+              left: clamp($self.timestamp / $core.media.current.metadata.duration,
+                          0, 1);
+              right: clamp(1 - ($self.timestamp / $core.media.current.metadata.duration) -
+                           0.0025, 0, 1);
+              widget(container_y, {
+                align: center;
+                widget(quad, {
+                  height: 5;
+                  alpha: 0.55;
+                  color: [1,1,1];
+                  additive: true;
+                });
+              });
             });
+          });
+
           widget(label, {
             width: 4em;
             caption: value2duration($self.media.metadata.duration);

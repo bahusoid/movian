@@ -148,6 +148,11 @@ update_seek_index(seek_index_t *si, int sec)
     if(si->si_current != &si->si_items[j]) {
       si->si_current = &si->si_items[j];
       prop_suggest_focus(si->si_current->si_prop);
+      if(si->si_root) {
+        prop_set_int(prop_create(si->si_root, "current_index"), j + 1);
+        //prop_set_int(prop_create(si->si_root, "count"), si->si_nitems);
+        prop_link(si->si_current->si_prop, prop_create(si->si_root, "current"));
+      }
     }
   }
 }
@@ -425,6 +430,7 @@ video_player_loop(AVFormatContext *fctx, media_codec_t **cwvec,
 
       ets = (event_ts_t *)e;
       video_seek(fctx, mp, &mb, ets->ts, "direct");
+      update_seek_index(cidx, ets->ts / 1000000.0);
 
     } else if(event_is_action(e, ACTION_SKIP_FORWARD) ||
               event_is_action(e, ACTION_SKIP_BACKWARD) ||

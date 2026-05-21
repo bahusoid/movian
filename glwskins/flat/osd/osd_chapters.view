@@ -50,10 +50,13 @@ widget(container_y, {
               alpha: 0.4;
               margin: [0, -0.5em, 0, 0];
             });
-
-            // Progress overlay using clipping similar to old skin
+/*
+            // Progress overlay for the active chapter
             widget(clip, {
-              clipping: [-1, 0, 1 - (($core.media.current.currenttime - $self.timestamp) / ($self.end - $self.timestamp)), 0];
+              alpha: iir($core.media.current.currenttime > $self.timestamp &&
+                         $core.media.current.currenttime < $self.end, 8);
+              right: clamp(1 - (($core.media.current.currenttime - $self.timestamp) /
+                                ($self.end - $self.timestamp)), 0, 1);
               widget(quad, {
                 height: 0.6em;
                 width: 8em;
@@ -63,7 +66,7 @@ widget(container_y, {
                 margin: [0, -0.5em, 0, 0];
               });
             });
-
+*/
           });
 
           widget(container_y, {

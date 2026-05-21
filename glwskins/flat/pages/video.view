@@ -387,7 +387,25 @@ widget(container_z, {
               space(1);
             });
           });
+
+          cloner($core.media.current.chapterindex.positions, clip, {
+            hidden: !$core.media.current.chapterindex.available;
+            left: clamp($self.timestamp / $core.media.current.metadata.duration,
+                        0, 1);
+            right: clamp(1 - ($self.timestamp / $core.media.current.metadata.duration) -
+                         0.0025, 0, 1);
+            widget(container_y, {
+              align: center;
+              widget(quad, {
+                height: 5;
+                alpha: 0.55;
+                color: [1,1,1];
+                additive: true;
+              });
+            });
+          });
         });
+
         widget(label, {
           width: 4em;
           caption: value2duration($self.media.metadata.duration);
@@ -395,7 +413,6 @@ widget(container_z, {
       });
     });
   });
-
 
   widget(container_y, {
     hidden: $clone.osdpage > 0;
@@ -410,12 +427,34 @@ widget(container_z, {
       alpha: iir($view.showSeekBar ||
                  changed($self.media.metadata.title, 5, true) ||
                  $self.media.error, 8);
-
       padding: [1.5em, 0];
+//      padding: [1.5em, 0, 0, 0];
       caption: $self.media.metadata.title;
       shadow: true;
       size: 2em;
     });
+
+    widget(label, {
+      hidden: count($self.media.chapterindex.positions) == 0 || $view.tentativeSeekPosition;
+      alpha: iir($view.showSeekBar ||
+                 changed($self.media.metadata.title, 5, true) ||
+                 changed($self.media.chapterindex.current_index, 5, true) ||
+                 $self.media.error, 8);
+      padding: [1.5em, 0];
+      caption: join("  ",
+                    join("",
+                         fmt(_("Chapter: %02d/%02d"), $self.media.chapterindex.current_index, count($self.media.chapterindex.positions)),
+                         select($self.media.chapterindex.current.title, join(" ", " -", $self.media.chapterindex.current.title), "")
+                    ),
+                    join(" / ",
+                         value2duration( $self.media.currenttime  - $self.media.chapterindex.current.timestamp),
+                         value2duration($self.media.chapterindex.current.end - $self.media.chapterindex.current.timestamp)
+                    )
+      );
+      shadow: true;
+      size: 1.2em;
+    });
+
     widget(container_x, {
       spacing: 0.5em;
       hidden: select($self.media.error, false, true);

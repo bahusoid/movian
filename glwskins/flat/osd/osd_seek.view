@@ -16,13 +16,15 @@ widget(container_y, {
   widget(container_x, {
     widget(list_y, {
       id: "list";
+      chaseFocus: true;
 
       cloner($self.media.seekindex.positions, container_z, {
         height: 3.5em;
         ListItemHighlight();
         ListItemBevel();
+        suggestFocus($core.media.current.currenttime > $self.timestamp &&  $core.media.current.currenttime <  $self.timestamp + 60);
+        focusable: 1;
 
-        focusable: select($self.metadata.autofocus, 1.5, 1.0);
         onEvent(activate, {
           $core.media.current.currenttime = $self.timestamp;
         });
