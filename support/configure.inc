@@ -430,7 +430,9 @@ libav_setup() {
     
     # Decoders - Video
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=bmp --enable-decoder=flv1 --enable-decoder=gif --enable-decoder=h263"
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=h264 --enable-decoder=hevc --enable-decoder=av1 --enable-decoder=mjpeg --enable-decoder=mjpegb"
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=h264 --enable-decoder=hevc --enable-decoder=mjpeg --enable-decoder=mjpegb"
+    # AV1 requires separate dav1d lib - https://code.videolan.org/videolan/dav1d
+    # LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=av1 --enable-libdav1d"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=mpeg2video --enable-decoder=mpeg4 --enable-decoder=png --enable-decoder=svq3"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=theora --enable-decoder=vc1 --enable-decoder=vp8 --enable-decoder=vp9"
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-decoder=webp --enable-decoder=wmv3 --enable-decoder=zlib"
