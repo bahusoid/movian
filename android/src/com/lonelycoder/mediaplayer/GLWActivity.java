@@ -49,6 +49,8 @@ import android.app.AlertDialog;
 import android.widget.EditText;
 import android.text.InputType;
 import android.view.inputmethod.InputMethodManager;
+import android.view.inputmethod.EditorInfo;
+import android.widget.TextView;
 import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.Context;
@@ -501,6 +503,29 @@ public class GLWActivity extends Activity implements VideoRendererProvider {
                 });
 
                 mKeyboardDialog = builder.create();
+
+                // Ensure IME shows a Done action and handle it so a single keyboard OK press
+                // submits the text and dismisses the dialog (no double-press needed).
+                input.setImeOptions(EditorInfo.IME_ACTION_DONE);
+                input.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+                    @Override
+                    public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                        if (actionId == EditorInfo.IME_ACTION_DONE
+                            //|| (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_UP)
+                            )
+                            {
+                            if (mGLWView != null) {
+                                Core.glwTextChanged(mGLWView.getGlwId(), input.getText().toString());
+                            }
+                            if (mKeyboardDialog != null && mKeyboardDialog.isShowing()) {
+                                mKeyboardDialog.dismiss();
+                            }
+                            return true;
+                        }
+                        return false;
+                    }
+                });
+
                 mKeyboardDialog.getWindow().setSoftInputMode(
                     WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
                 mKeyboardDialog.show();
