@@ -546,7 +546,7 @@ android_codec_create(media_codec_t *mc, const media_codec_params_t *mcp,
 {
   const char *mime = NULL;
   
-  if(!video_settings.video_accel)
+  if(!mp_get_video_accel(mp))
     return -1;
 
   switch(mc->codec_id) {

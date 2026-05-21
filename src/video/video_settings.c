@@ -67,13 +67,14 @@ video_settings_init(void)
                  NULL);
 #endif
 
-#if defined(__APPLE__) || defined(__ANDROID__)
-  setting_create(SETTING_BOOL, s, SETTINGS_INITIAL_UPDATE,
-                 SETTING_TITLE(_p("Hardware accelerated decoding")),
-                 SETTING_STORE("videoplayback", "videoaccel2"),
-                 SETTING_VALUE(1),
-                 SETTING_WRITE_BOOL(&video_settings.video_accel),
-                 NULL);
+#ifdef HW_VIDEO_DECODER
+  video_settings.video_accel_setting =
+    setting_create(SETTING_BOOL, s, SETTINGS_INITIAL_UPDATE,
+                   SETTING_TITLE(_p("Hardware accelerated decoding")),
+                   SETTING_STORE("videoplayback", "videoaccel2"),
+                   SETTING_VALUE(1),
+                   SETTING_WRITE_BOOL(&video_settings.video_accel),
+                   NULL);
 #endif
 
 #ifdef __ANDROID__

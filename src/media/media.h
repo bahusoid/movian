@@ -557,3 +557,5 @@ void media_discontinuity_debug(media_discontinuity_aux_t *aux,
                                int skip,
                                const char *prefix);
 
+
+int mp_get_video_accel(struct media_pipe *mp);

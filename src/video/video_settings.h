@@ -18,6 +18,9 @@
  *  For more information, contact andreas@lonelycoder.com
  */
 #pragma once
+#if defined(__APPLE__) || defined(__ANDROID__)
+#define HW_VIDEO_DECODER
+#endif
 void video_settings_init(void);
 
 struct video_settings {
@@ -47,7 +50,11 @@ struct video_settings {
   int vdpau_deinterlace;
   int vdpau_deinterlace_resolution_limit;
   int continuous_playback;
+#ifdef HW_VIDEO_DECODER
   int video_accel;
+  struct setting *video_accel_setting;
+#endif
+
 
   int seek_back_step;
   int seek_fwd_step;

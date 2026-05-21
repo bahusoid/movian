@@ -54,6 +54,14 @@ update_sv_delta(void *opaque, int v)
   TRACE(TRACE_DEBUG, "SVSYNC", "Set to %ds", v);
 }
 
+#ifdef HW_VIDEO_DECODER
+static void
+update_video_accel_user(void *opaque, int value)
+{
+  event_dispatch(event_create_action(ACTION_RELOAD_DATA));
+}
+#endif
+
 /**
  *
  */
@@ -219,6 +227,23 @@ mp_settings_init(media_pipe_t *mp, const char *url, const char *dir_url,
   }
 
   // --- Video -------------------------------------------------
+
+#ifdef HW_VIDEO_DECODER
+  p = make_dir_setting(SETTING_BOOL, "video_accel", &mp->mp_settings_video_dir,
+                       dir_url, video_settings.video_accel_setting, mp);
+
+  setting_create(SETTING_BOOL, mp->mp_setting_video_root,
+                 SETTINGS_INITIAL_UPDATE,
+                 SETTING_TITLE(_p("Hardware accelerated decoding")),
+                 SETTING_MUTEX(mp),
+                 SETTING_LOCKMGR(mp_lockmgr),
+                 SETTING_WRITE_PROP(prop_create(c, "video_accel")),
+                 SETTING_KVSTORE(url, "video_accel"),
+                 SETTING_GROUP(&mp->mp_settings_video),
+                 SETTING_INHERIT(p),
+                 SETTING_CALLBACK(update_video_accel_user, mp),
+                 NULL);
+#endif
 
   p = make_dir_setting(SETTING_INT, "vzoom", &mp->mp_settings_video_dir,
                        dir_url, video_settings.vzoom_setting, mp);

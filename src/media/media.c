@@ -995,3 +995,21 @@ media_discontinuity_debug(media_discontinuity_aux_t *aux,
 
 
 
+
+int
+mp_get_video_accel(struct media_pipe *mp)
+{
+  int accel = 0;
+#ifdef HW_VIDEO_DECODER
+  extern struct video_settings video_settings;
+  accel = video_settings.video_accel;
+  if(mp && mp->mp_prop_ctrl) {
+    prop_t *p_accel = prop_find(mp->mp_prop_ctrl, "video_accel", NULL);
+    if(p_accel) {
+      accel = prop_get_int(mp->mp_prop_ctrl, "video_accel", NULL);
+      prop_ref_dec(p_accel);
+    }
+  }
+#endif
+  return accel;
+}
