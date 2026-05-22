@@ -27,6 +27,12 @@ widget(container_z, {
           caption: fmt(_("Season %d"), $self.model.season.number);
         });
 
+        widget(loader, {
+          autohide: true;
+          noInitialTransform: true;
+          source: select($self.parent, "skin://items/list/parent.view", "");
+        });
+
         cloner($self.model.nodes, loader, {
           selectOnFocus: true;
           selectOnHover: true;

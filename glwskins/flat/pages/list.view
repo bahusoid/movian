@@ -22,6 +22,12 @@ widget(container_z, {
         clipAlpha: 0.2;
         clipBlur: 1;
 
+        widget(loader, {
+          hidden: isVoid($self.parent);
+          noInitialTransform: true;
+          source: "skin://items/list/parent.view";
+        });
+
         cloner($self.model.nodes, loader, {
           onEvent(copy, deliverRef($core.clipboard.setFromItem, $self));
           selectOnFocus: true;

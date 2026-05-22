@@ -17,6 +17,12 @@ widget(container_z, {
     clipAlpha: 0.2;
     clipBlur: 1;
 
+    widget(loader, {
+      autohide: true;
+      noInitialTransform: true;
+      source: select($self.parent, "skin://items/list/parent.view", "");
+    });
+
     cloner($self.model.nodes, container_z, {
       height: 2em;
       ListItemBevel();
