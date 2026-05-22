@@ -21,12 +21,6 @@ widget(container_z, {
         clipAlpha: 0.2;
         clipBlur: 1;
 
-        widget(label, {
-          size: 1.5em;
-          margin: [1em, 0, 0, 0];
-          caption: fmt(_("Season %d"), $self.model.season.number);
-        });
-
         widget(loader, {
           autohide: true;
           noInitialTransform: true;
@@ -73,15 +67,6 @@ widget(container_z, {
   });
   widget(container_y, {
     align: top;
-    PageHeader0(
-      widget(deck, {
-        widget(image, {
-          filterConstraintX: true;
-          margin: [0, 0.3em];
-          source: $self.model.series.wideBanner;
-        });
-        page: 0;
-      });
-    );
+    PageHeader($self.model.series.title + " - " + fmt(_("Season %d"), $self.model.season.number));
   });
 });
