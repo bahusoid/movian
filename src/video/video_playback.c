@@ -467,16 +467,29 @@ play_video(const char *url, struct media_pipe *mp,
     vsource_free(vs);
   }
 
-  while(e != NULL) {
+  while(1) {
+
+    if(e == NULL) {
+      if (LIST_FIRST(&vsources) != NULL && !cancellable_is_cancelled(mp->mp_cancellable)) {
+        e = event_create_type(EVENT_REOPEN);
+      } else {
+        break;
+      }
+    }
 
     if(event_is_type(e, EVENT_REOPEN)) {
 
       vsource_t *vs = LIST_FIRST(&vsources);
       if(vs == NULL) {
         snprintf(errbuf, errlen, "No alternate video sources");
+        event_release(e);
         e = NULL;
         break;
       }
+
+      LIST_REMOVE(vs, vs_link);
+
+      event_release(e);
 
       TRACE(TRACE_DEBUG, "Video", "Playing %s", vs->vs_url);
 

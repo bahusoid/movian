@@ -2282,24 +2282,60 @@ hls_playvideo(const char *url, media_pipe_t *mp,
               video_queue_t *vq, struct vsource_list *vsl,
               const video_args_t *va0)
 {
-  buf_t *buf;
+  buf_t *buf = NULL;
 
   mp_set_url(mp, va0->canonical_url, va0->parent_url, va0->parent_title);
 
   prop_set(mp->mp_prop_root, "loading", PROP_SET_INT, 1);
 
-  url += strlen("hls:");
-  if(!strcmp(url, "test"))
-    url = TESTURL;
+  const char *prefix = "multisrc:hls:";
+  const char *fallback_urls = NULL;
+  char *url_copy = NULL;
+  char *saveptr = NULL;
+
+  if(!strncmp(url, prefix, strlen(prefix))) {
+    fallback_urls = url + strlen("multisrc:");
+    url_copy = strdup(fallback_urls);
+    url = strtok_r(url_copy, "|", &saveptr);
+  }
 
   char *baseurl = NULL;
 
-  buf = fa_load(url,
-                FA_LOAD_ERRBUF(errbuf, errlen),
-                FA_LOAD_FLAGS(FA_COMPRESSION),
-                FA_LOAD_CANCELLABLE(mp->mp_cancellable),
-                FA_LOAD_LOCATION(&baseurl),
-                NULL);
+  while(url != NULL) {
+    if(!strncmp(url, "hls:", 4))
+      url += 4;
+
+    if(!strcmp(url, "test"))
+      url = TESTURL;
+
+    buf = fa_load(url,
+                  FA_LOAD_ERRBUF(errbuf, errlen),
+                  FA_LOAD_FLAGS(FA_COMPRESSION),
+                  FA_LOAD_CANCELLABLE(mp->mp_cancellable),
+                  FA_LOAD_LOCATION(&baseurl),
+                  NULL);
+
+    if(buf != NULL)
+      break;
+
+    if(cancellable_is_cancelled(mp->mp_cancellable))
+      break;
+
+    if(url_copy) {
+      url = strtok_r(NULL, "|", &saveptr);
+      if(url != NULL) {
+        TRACE(TRACE_DEBUG, "HLS", "Playlist open failed, trying next fallback: %s", url);
+        free(baseurl);
+        baseurl = NULL;
+        continue;
+      }
+    }
+    break;
+  }
+
+  if(url_copy)
+    free(url_copy);
+
   if(buf == NULL) {
     free(baseurl);
     return NULL;
@@ -2329,7 +2365,9 @@ hls_playvideo(const char *url, media_pipe_t *mp,
 static int
 hls_canhandle(const char *url)
 {
-  return !strncmp(url, "hls:", strlen("hls:"));
+  if (!strncmp(url, "hls:", strlen("hls:"))) return 101;
+  if (!strncmp(url, "multisrc:hls:", strlen("multisrc:hls:"))) return 101;
+  return 0;
 }
 
 /**
