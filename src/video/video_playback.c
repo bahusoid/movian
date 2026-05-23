@@ -76,8 +76,10 @@ typedef struct vsource {
   LIST_ENTRY(vsource) vs_link;
   char *vs_url;
   char *vs_mimetype;
+  char *vs_quality;
   int vs_bitrate;
   int vs_flags;
+  int vs_qmatch;
 } vsource_t;
 
 
@@ -87,6 +89,8 @@ typedef struct vsource {
 static int
 vs_cmp(const vsource_t *a, const vsource_t *b)
 {
+  if(a->vs_qmatch != b->vs_qmatch)
+    return b->vs_qmatch - a->vs_qmatch;
   return b->vs_bitrate - a->vs_bitrate;
 }
 
@@ -96,7 +100,8 @@ vs_cmp(const vsource_t *a, const vsource_t *b)
  */
 static void
 vsource_insert(struct vsource_list *list, 
-	       const char *url, const char *mimetype, int bitrate, int flags)
+	       const char *url, const char *mimetype, int bitrate,
+	       const char *quality, const char *wanted_quality, int flags)
 {
   if(backend_canhandle(url) == NULL)
     return;
@@ -105,7 +110,9 @@ vsource_insert(struct vsource_list *list,
   vs->vs_bitrate = bitrate;
   vs->vs_url = strdup(url);
   vs->vs_mimetype = mimetype ? strdup(mimetype) : NULL;
+  vs->vs_quality = quality ? strdup(quality) : NULL;
   vs->vs_flags = flags;
+  vs->vs_qmatch = (quality && wanted_quality && !strcmp(quality, wanted_quality)) ? 1 : 0;
   LIST_INSERT_SORTED(list, vs, vs_link, vs_cmp, vsource_t);
 }
 
@@ -118,6 +125,7 @@ vsource_free(vsource_t *vs)
 {
   free(vs->vs_url);
   free(vs->vs_mimetype);
+  free(vs->vs_quality);
   free(vs);
 }
 
@@ -132,6 +140,9 @@ vsource_dup(const vsource_t *src)
   *dst = *src;
   dst->vs_url = strdup(dst->vs_url);
   dst->vs_mimetype = dst->vs_mimetype ? strdup(src->vs_mimetype) : NULL;
+  dst->vs_quality = dst->vs_quality ? strdup(src->vs_quality) : NULL;
+  dst->vs_flags = src->vs_flags;
+  dst->vs_qmatch = src->vs_qmatch;
   return dst;
 }
 
@@ -147,6 +158,7 @@ vsource_cleanup(struct vsource_list *list)
     LIST_REMOVE(vs, vs_link);
     free(vs->vs_url);
     free(vs->vs_mimetype);
+    free(vs->vs_quality);
     free(vs);
   }
 }
@@ -354,6 +366,8 @@ play_video(const char *url, struct media_pipe *mp,
 
     // Sources
 
+    const char *wanted_quality = htsmsg_get_str(m, "quality");
+
     if((sources = htsmsg_get_list(m, "sources")) == NULL) {
       snprintf(errbuf, errlen, "No sources list in JSON parameters");
       if(request_headers) {
@@ -367,15 +381,15 @@ play_video(const char *url, struct media_pipe *mp,
       htsmsg_t *src = f->hmf_childs;
       const char *url      = htsmsg_get_str(src, "url");
       const char *mimetype = htsmsg_get_str(src, "mimetype");
+      const char *quality  = htsmsg_get_str(src, "quality");
       int bitrate          = htsmsg_get_u32_or_default(src, "bitrate", -1);
 
       if(url == NULL)
         continue;
 
-      vsource_insert(&vsources, url, mimetype, bitrate,
+      vsource_insert(&vsources, url, mimetype, bitrate, quality, wanted_quality,
 		     BACKEND_VIDEO_NO_FS_SCAN);
     }
-
 
     if(LIST_FIRST(&vsources) == NULL) {
       snprintf(errbuf, errlen, "No players found for sources");
@@ -419,6 +433,29 @@ play_video(const char *url, struct media_pipe *mp,
     TRACE(TRACE_DEBUG, "Video", "Playing %s", vs->vs_url);
 
     vs = vsource_dup(vs);
+
+    // Group all matching quality urls
+    if(wanted_quality) {
+      char multi_url[4096];
+      multi_url[0] = 0;
+      int count = 0;
+      vsource_t *ivs;
+      LIST_FOREACH(ivs, &vsources, vs_link) {
+        if(ivs->vs_qmatch) {
+          if(count == 0) {
+            snprintf(multi_url, sizeof(multi_url), "multisrc:%s", ivs->vs_url);
+          } else {
+            strlcat(multi_url, "|", sizeof(multi_url));
+            strlcat(multi_url, ivs->vs_url, sizeof(multi_url));
+          }
+          count++;
+        }
+      }
+      if(count > 1) {
+        free(vs->vs_url);
+        vs->vs_url = strdup(multi_url);
+      }
+    }
 
     va.canonical_url = canonical_url;
     va.flags = flags | vs->vs_flags;
