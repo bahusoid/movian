@@ -11,6 +11,10 @@ if [ "$KNAME" == "Linux" ]; then
     echo "Configuring for Linux environment"
     `dirname $0`/configure.linux "$@"
     exit $?
+elif [[ "$KNAME" == MINGW* ]] || [[ "$KNAME" == MSYS* ]]; then
+    echo "Configuring for Windows environment"
+    `dirname $0`/configure.windows "$@"
+    exit $?
 elif [ "$KNAME" == "Darwin" ]; then
     echo "Configuring for Mac OS X environment"
     `dirname $0`/configure.osx "$@"

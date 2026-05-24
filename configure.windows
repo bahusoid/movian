@@ -1,0 +1,118 @@
+#!/bin/bash
+#
+# Movian configure script for Windows Native port
+#
+# Using MinGW-w64 toolchain
+#
+
+PLATFORM="windows"
+DEFAULT_UI="glw"
+GLWFRONTEND="glfw"
+CONFIGURE_POSTFIX="windows"
+
+source support/configure.inc
+
+CPU=generic
+ARCH=`uname -m`
+
+CC=x86_64-w64-mingw32-gcc
+CXX=x86_64-w64-mingw32-g++
+RANLIB=x86_64-w64-mingw32-ranlib
+AR=x86_64-w64-mingw32-ar
+STRIP=x86_64-w64-mingw32-strip
+WINDRES=x86_64-w64-mingw32-windres
+TOOLCHAIN=x86_64-w64-mingw32-
+
+show_help(){
+  common_help
+  echo "  --cc=CC                  Build using compiler CC [$CC]"
+  exit 1
+}
+
+enable sqlite_internal
+enable libfreetype
+enable trex
+enable emu_thread_specifics
+enable glw
+enable polarssl
+enable httpserver
+enable sqlite_vfs
+enable sqlite_locking
+enable glw_backend_opengl_es
+
+# Depending on how networking goes, we might need these:
+# enable mdns
+# disable ftpserver
+
+[ -f project.config ] && source project.config
+
+for opt do
+  optval="${opt#*=}"
+  case "$opt" in
+  --help) show_help
+  ;;
+  --logtarget=*) DEFAULT_LOGTARGET="$optval"
+  ;;
+  --cc=*) CC="$optval"
+  ;;
+  --cxx=*) CXX="$optval"
+  ;;
+  *)
+  common_opt $opt $optval
+  esac
+done
+
+setup_env "$@"
+
+LIBAV_CFLAGS="-I${EXT_INSTALL_DIR}/include"
+LIBAV_LDFLAGS="-L${EXT_INSTALL_DIR}/lib"
+LIBAV_ARCH_FLAGS="--cross-prefix=x86_64-w64-mingw32- --enable-cross-compile --arch=x86_64 --target-os=mingw32"
+
+glfw_setup()
+{
+    GLFW_VER="3.3.8"
+    download_file https://github.com/glfw/glfw/releases/download/${GLFW_VER}/glfw-${GLFW_VER}.bin.WIN64.zip glfwzip
+
+    GLFW_SRC_DIR=${BUILDDIR}/glfw-${GLFW_VER}.bin.WIN64
+    unzip -q -o "${glfwzip}" -d "${BUILDDIR}"
+
+    mkdir -p "${EXT_INSTALL_DIR}/include"
+    mkdir -p "${EXT_INSTALL_DIR}/lib"
+
+    cp -r ${GLFW_SRC_DIR}/include/GLFW "${EXT_INSTALL_DIR}/include/"
+    cp ${GLFW_SRC_DIR}/lib-mingw-w64/libglfw3.a "${EXT_INSTALL_DIR}/lib/"
+}
+
+angle_setup()
+{
+    # Example ANGLE binaries placeholder. A known release can be embedded here.
+    # For now, let's just make ensure we just skip building ANGLE and rely on placeholders
+    # In reality, we'd pull a specific ANGLE binary package:
+    # download_file https://github.com/microsoft/angle/releases/download/... anglezip
+    echo "ANGLE setup bypassed: Assuming ANGLE headers/libs are either in ext or to be bundled."
+}
+
+glfw_setup
+angle_setup
+
+zlib_setup
+bzip2_setup
+freetype_setup --host=x86_64-w64-mingw32
+libav_setup
+
+cat >> ${CONFIG_MAK} <<EOF
+CC = $CC
+CXX = $CXX
+AR = $AR
+RANLIB = $RANLIB
+STRIP = $STRIP
+WINDRES = $WINDRES
+PROG_EXT = .exe
+
+CFLAGS_cfg += -D_WIN32 -DWIN32 -D_WIN32_WINNT=0x0601
+# Need ws2_32 for networking, etc.
+LDFLAGS_cfg += -lws2_32 -lwinmm -lpthread
+EOF
+
+finalize
+

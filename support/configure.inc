@@ -560,7 +560,7 @@ libyuv_setup() {
 zlib_setup()
 {
     ZLIB_VER="1.2.3"
-    download_file http://commondatastorage.googleapis.com/nativeclient-mirror/nacl/zlib-${ZLIB_VER}.tar.gz zlibtarball
+    download_file https://zlib.net/fossils/zlib-${ZLIB_VER}.tar.gz zlibtarball
 
     ZLIB_SRC_DIR=${BUILDDIR}/zlib-${ZLIB_VER}
 
