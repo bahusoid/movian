@@ -11,6 +11,7 @@ typedef struct {
   int num_urls;
   fa_open_extra_t foe;
   cancellable_t *my_c;
+  cancellable_t *winner_c;
   fa_handle_t *primary;
   int current_idx;
   int64_t size;
@@ -69,14 +70,15 @@ static void parent_cancel_cb(void *opaque) {
   hts_mutex_lock(&race->lock);
   race->done = 1;
   for(int i = 0; i < race->num_urls; i++) {
-    cancellable_cancel(race->candidates[i].my_c);
+    cancellable_cancel_locked(race->candidates[i].my_c);
   }
   hts_cond_broadcast(&race->cond);
   hts_mutex_unlock(&race->lock);
 }
 static void ms_cancel_cb(void *opaque) {
   multisrc_t *ms = opaque;
-  cancellable_cancel(ms->my_c);
+  cancellable_cancel_locked(ms->my_c);
+  if(ms->winner_c) cancellable_cancel_locked(ms->winner_c);
 }
 static fa_handle_t *
 ms_open(fa_protocol_t *fap, const char *url, char *errbuf, size_t errsize,
@@ -97,6 +99,7 @@ ms_open(fa_protocol_t *fap, const char *url, char *errbuf, size_t errsize,
     if (errbuf) snprintf(errbuf, errsize, "No URLs specified for multisrc");
     return NULL;
   }
+  TRACE(TRACE_DEBUG, "ms", "opening multisrc with %d urls: %s", num_urls, url);
   struct ms_race *race = calloc(1, sizeof(*race));
   hts_mutex_init(&race->lock);
   hts_cond_init(&race->cond, &race->lock);
@@ -138,6 +141,11 @@ ms_open(fa_protocol_t *fap, const char *url, char *errbuf, size_t errsize,
   if(foe && foe->foe_cancellable) {
     cancellable_unbind(foe->foe_cancellable, race);
   }
+  cancellable_t *winner_c = NULL;
+  if(primary) {
+    TRACE(TRACE_DEBUG, "ms", "winner: %s", race->candidates[winner_idx].url);
+    winner_c = cancellable_retain(race->candidates[winner_idx].my_c);
+  }
   if(atomic_dec(&race->refcount) == 0) {
     hts_mutex_destroy(&race->lock);
     hts_cond_destroy(&race->cond);
@@ -160,6 +168,7 @@ ms_open(fa_protocol_t *fap, const char *url, char *errbuf, size_t errsize,
   ms->current_idx = winner_idx;
   if (foe) ms->foe = *foe;
   ms->my_c = cancellable_create();
+  ms->winner_c = winner_c;
   ms->foe.foe_cancellable = ms->my_c;
   ms->flags = flags;
   ms->size = fa_fsize(primary);
@@ -176,6 +185,7 @@ static void ms_close(fa_handle_t *fh) {
   for(int i=0; i<ms->num_urls; i++) free(ms->urls[i]);
   free(ms->urls);
   cancellable_release(ms->my_c);
+  if(ms->winner_c) cancellable_release(ms->winner_c);
   free(ms);
 }
 static int ms_read(fa_handle_t *fh, void *buf, size_t size) {
@@ -184,6 +194,10 @@ static int ms_read(fa_handle_t *fh, void *buf, size_t size) {
   int r = -1;
   while(attempts < ms->num_urls) {
     if(!ms->primary) {
+      if(ms->winner_c) {
+        cancellable_release(ms->winner_c);
+        ms->winner_c = NULL;
+      }
       ms->current_idx = (ms->current_idx + 1) % ms->num_urls;
       ms->primary = fa_open_ex(ms->urls[ms->current_idx], NULL, 0, ms->flags, &ms->foe);
       if(ms->primary) {
@@ -221,15 +235,10 @@ static int64_t ms_fsize(fa_handle_t *fh) {
 static int ms_stat(fa_protocol_t *fap, const char *url, struct fa_stat *buf,
                    int flags, char *errbuf, size_t errsize)
 {
-  int r = -1;
-  char *dup = strdup(url);
-  char *saveptr;
-  char *p = strtok_r(dup, "|", &saveptr);
-  if(p) {
-    r = fa_stat_ex(p, buf, errbuf, errsize, flags);
-  }
-  free(dup);
-  return r;
+  memset(buf, 0, sizeof(*buf));
+  buf->fs_type = CONTENT_FILE;
+  buf->fs_size = 0;
+  return 0;
 }
 static fa_protocol_t fa_protocol_multisrc = {
   .fap_name = "multisrc",

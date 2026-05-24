@@ -111,7 +111,7 @@ static void hls_race_cancel_cb(void *opaque) {
   hts_mutex_lock(&race->lock);
   race->done = 1;
   for(int i=0; i<race->num_urls; i++) {
-    cancellable_cancel(race->candidates[i].my_c);
+    cancellable_cancel_locked(race->candidates[i].my_c);
   }
   hts_cond_broadcast(&race->cond);
   hts_mutex_unlock(&race->lock);
@@ -2413,6 +2413,7 @@ hls_playvideo(const char *url, media_pipe_t *mp,
       }
       buf = race->winner_buf;
       if (buf) {
+          TRACE(TRACE_DEBUG, "HLS", "winner: %s", race->candidates[race->winner_idx].url);
           baseurl = race->candidates[race->winner_idx].baseurl;
           race->candidates[race->winner_idx].baseurl = NULL; // Take ownership
       } else if (errbuf) {

@@ -430,8 +430,6 @@ play_video(const char *url, struct media_pipe *mp,
     if(canonical_url == NULL)
       canonical_url = vs->vs_url;
 
-    TRACE(TRACE_DEBUG, "Video", "Playing %s", vs->vs_url);
-
     vs = vsource_dup(vs);
 
     // Group all matching quality urls
@@ -463,6 +461,7 @@ play_video(const char *url, struct media_pipe *mp,
     va.parent_title = parent_title;
     va.parent_url = parent_url;
 
+    TRACE(TRACE_DEBUG, "Video", "Playing %s", vs->vs_url);
     e = backend_play_video(vs->vs_url, mp, errbuf, errlen, vq, &vsources, &va);
     vsource_free(vs);
   }
