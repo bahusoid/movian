@@ -1,0 +1,27 @@
+#import "skin://theme.view"
+
+widget(container_z, {
+
+  ListItemBevel();
+  ListItemHighlight();
+  style: "ListItemOuter";
+  focusable: 0.5;
+
+  onEvent(activate, navOpen($self.parent));
+
+  widget(container_x, {
+    style: "ListItem";
+
+    widget(icon, {
+      style: "ListItemIcon";
+      source: "skin://icons/ic_folder_48px.svg";
+    });
+
+    widget(label, {
+      caption: "..";
+      style: ["ListItemLabel", "ListItemLabelContainer"];
+    });
+  });
+});
+
+
