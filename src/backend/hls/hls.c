@@ -19,6 +19,8 @@
  */
 #include <string.h>
 #include <unistd.h>
+#include "arch/threads.h"
+#include "arch/atomic.h"
 
 #include "navigator.h"
 #include "backend/backend.h"
@@ -39,6 +41,81 @@
 #include "misc/minmax.h"
 
 #define HLS_CORRUPTION_MEASURE_PERIOD (60 * 1000000)
+
+struct hls_race_candidate {
+  char *url;
+  cancellable_t *my_c;
+  int id;
+  struct hls_race *race;
+  char *baseurl;
+};
+
+struct hls_race {
+  int num_urls;
+  struct hls_race_candidate *candidates;
+  hts_mutex_t lock;
+  hts_cond_t cond;
+  atomic_t refcount;
+  buf_t *winner_buf;
+  int winner_idx;
+  int done;
+  char errbuf[256];
+};
+
+static void *hls_race_thread(void *opaque) {
+  struct hls_race_candidate *cand = opaque;
+  struct hls_race *race = cand->race;
+
+  char errbuf[256];
+  buf_t *buf = fa_load(cand->url,
+                FA_LOAD_ERRBUF(errbuf, sizeof(errbuf)),
+                FA_LOAD_FLAGS(FA_COMPRESSION),
+                FA_LOAD_CANCELLABLE(cand->my_c),
+                FA_LOAD_LOCATION(&cand->baseurl),
+                NULL);
+
+  hts_mutex_lock(&race->lock);
+  if (!race->done && buf != NULL) {
+    race->winner_buf = buf;
+    race->winner_idx = cand->id;
+    race->done = 1;
+    for(int i=0; i<race->num_urls; i++) {
+        if(i != cand->id) cancellable_cancel(race->candidates[i].my_c);
+    }
+  } else {
+    if (buf) buf_release(buf);
+    if (cand->baseurl) { free(cand->baseurl); cand->baseurl = NULL; }
+    if (!buf && !race->done) {
+        snprintf(race->errbuf, sizeof(race->errbuf), "%s", errbuf);
+    }
+  }
+  hts_cond_broadcast(&race->cond);
+  hts_mutex_unlock(&race->lock);
+
+  if (atomic_dec(&race->refcount) == 0) {
+      hts_mutex_destroy(&race->lock);
+      hts_cond_destroy(&race->cond);
+      for(int i=0; i<race->num_urls; i++) {
+          cancellable_release(race->candidates[i].my_c);
+          free(race->candidates[i].url);
+      }
+      free(race->candidates);
+      free(race);
+  }
+
+  return NULL;
+}
+
+static void hls_race_cancel_cb(void *opaque) {
+  struct hls_race *race = opaque;
+  hts_mutex_lock(&race->lock);
+  race->done = 1;
+  for(int i=0; i<race->num_urls; i++) {
+    cancellable_cancel(race->candidates[i].my_c);
+  }
+  hts_cond_broadcast(&race->cond);
+  hts_mutex_unlock(&race->lock);
+}
 
 /**
  * Relevant docs:
@@ -2292,45 +2369,88 @@ hls_playvideo(const char *url, media_pipe_t *mp,
   const char *fallback_urls = NULL;
   char *url_copy = NULL;
   char *saveptr = NULL;
+  char *baseurl = NULL;
 
   if(!strncmp(url, prefix, strlen(prefix))) {
     fallback_urls = url + strlen("multisrc:");
     url_copy = strdup(fallback_urls);
-    url = strtok_r(url_copy, "|", &saveptr);
-  }
+    char *p = strtok_r(url_copy, "|", &saveptr);
+    int num_urls = 0;
+    char **urls = NULL;
+    while(p) {
+      urls = realloc(urls, (num_urls + 1) * sizeof(char*));
+      urls[num_urls++] = strdup(p);
+      p = strtok_r(NULL, "|", &saveptr);
+    }
 
-  char *baseurl = NULL;
+    if (num_urls > 0) {
+      struct hls_race *race = calloc(1, sizeof(*race));
+      hts_mutex_init(&race->lock);
+      hts_cond_init(&race->cond, &race->lock);
+      atomic_set(&race->refcount, num_urls + 1); // 1 for main, 1 per thread
+      race->num_urls = num_urls;
+      race->candidates = calloc(num_urls, sizeof(struct hls_race_candidate));
 
-  while(url != NULL) {
-    if(!strncmp(url, "hls:", 4))
-      url += 4;
+      for(int i=0; i<num_urls; i++) {
+        const char *u = urls[i];
+        if(!strncmp(u, "hls:", 4)) u += 4;
+        race->candidates[i].url = strdup(u);
+        race->candidates[i].my_c = cancellable_create();
+        race->candidates[i].race = race;
+        race->candidates[i].id = i;
+      }
 
-    if(!strcmp(url, "test"))
-      url = TESTURL;
+      cancellable_t *ignored = cancellable_bind(mp->mp_cancellable, hls_race_cancel_cb, race);
+      (void)ignored;
 
-    buf = fa_load(url,
+      for(int i=0; i<num_urls; i++) {
+        hts_thread_create_detached("hls_race", hls_race_thread, &race->candidates[i], THREAD_PRIO_FILESYSTEM);
+      }
+
+      hts_mutex_lock(&race->lock);
+      while(race->winner_buf == NULL && !race->done && atomic_get(&race->refcount) > 1) {
+        hts_cond_wait(&race->cond, &race->lock);
+      }
+      buf = race->winner_buf;
+      if (buf) {
+          baseurl = race->candidates[race->winner_idx].baseurl;
+          race->candidates[race->winner_idx].baseurl = NULL; // Take ownership
+      } else if (errbuf) {
+          if (cancellable_is_cancelled(mp->mp_cancellable)) {
+             snprintf(errbuf, errlen, "Cancelled");
+          } else {
+             snprintf(errbuf, errlen, "%s", race->errbuf);
+          }
+      }
+      hts_mutex_unlock(&race->lock);
+
+      cancellable_unbind(mp->mp_cancellable, race);
+
+      if(atomic_dec(&race->refcount) == 0) {
+        hts_mutex_destroy(&race->lock);
+        hts_cond_destroy(&race->cond);
+        for(int i=0; i<race->num_urls; i++) {
+          cancellable_release(race->candidates[i].my_c);
+          free(race->candidates[i].url);
+        }
+        free(race->candidates);
+        free(race);
+      }
+      for(int i=0; i<num_urls; i++) free(urls[i]);
+      free(urls);
+    }
+  } else {
+    url_copy = strdup(url);
+    const char *u = url_copy;
+    if(!strncmp(u, "hls:", 4)) u += 4;
+    if(!strcmp(u, "test")) u = TESTURL;
+
+    buf = fa_load(u,
                   FA_LOAD_ERRBUF(errbuf, errlen),
                   FA_LOAD_FLAGS(FA_COMPRESSION),
                   FA_LOAD_CANCELLABLE(mp->mp_cancellable),
                   FA_LOAD_LOCATION(&baseurl),
                   NULL);
-
-    if(buf != NULL)
-      break;
-
-    if(cancellable_is_cancelled(mp->mp_cancellable))
-      break;
-
-    if(url_copy) {
-      url = strtok_r(NULL, "|", &saveptr);
-      if(url != NULL) {
-        TRACE(TRACE_DEBUG, "HLS", "Playlist open failed, trying next fallback: %s", url);
-        free(baseurl);
-        baseurl = NULL;
-        continue;
-      }
-    }
-    break;
   }
 
   if(url_copy)
@@ -2340,6 +2460,7 @@ hls_playvideo(const char *url, media_pipe_t *mp,
     free(baseurl);
     return NULL;
   }
+
   buf = buf_make_writable(buf);
   char *s = buf_str(buf);
   event_t *e;
