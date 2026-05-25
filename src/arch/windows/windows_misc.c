@@ -201,4 +201,3 @@ int arch_pipe(int fd[2]) {
     return 0;
 }
 
-#include "windows_crash.c"

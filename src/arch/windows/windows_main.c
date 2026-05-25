@@ -30,3 +30,18 @@ int main(int argc, char **argv) {
     main_fini();
     return 0;
 }
+
+LONG WINAPI MyUnhandledExceptionFilter(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+    HMODULE hModule = GetModuleHandle(NULL);
+    unsigned long long baseAddr = (unsigned long long)hModule;
+    unsigned long long crashAddr = (unsigned long long)ExceptionInfo->ExceptionRecord->ExceptionAddress;
+    unsigned long long rva = crashAddr - baseAddr;
+    
+    fprintf(stderr, "\n=== FATAL EXCEPTION CAUGHT ===\n");
+    fprintf(stderr, "Exception Code: 0x%08lX\n", (unsigned long)ExceptionInfo->ExceptionRecord->ExceptionCode);
+    fprintf(stderr, "Base Address: 0x%016llX\n", baseAddr);
+    fprintf(stderr, "Crash Address: 0x%016llX\n", crashAddr);
+    fprintf(stderr, "Relative Address (RVA): 0x%08llX\n", rva);
+    fflush(stderr);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
