@@ -150,7 +150,7 @@ void asyncio_udp_send(asyncio_fd_t *af, const void *data, int size,
 		      const net_addr_t *remote_addr);
 
 int asyncio_udp_add_membership(asyncio_fd_t *af, const net_addr_t *group,
-                               const net_addr_t *interface);
+                               const net_addr_t *iface);
 
 /*************************************************************************
  * Timers

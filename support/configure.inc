@@ -559,15 +559,15 @@ libyuv_setup() {
 #
 zlib_setup()
 {
-    ZLIB_VER="1.2.3"
-    download_file https://zlib.net/fossils/zlib-${ZLIB_VER}.tar.gz zlibtarball
+    ZLIB_VER="1.2.13"
+    download_file https://github.com/madler/zlib/releases/download/v${ZLIB_VER}/zlib-${ZLIB_VER}.tar.gz zlibtarball
 
     ZLIB_SRC_DIR=${BUILDDIR}/zlib-${ZLIB_VER}
 
     tar -x -C "${BUILDDIR}" -f "${zlibtarball}"
 
     (cd ${ZLIB_SRC_DIR} && \
-        CC=${CC} AR="${TOOLCHAIN}ar -r" RANLIB=${TOOLCHAIN}ranlib \
+        CC=${CC} AR="${TOOLCHAIN}ar" RANLIB=${TOOLCHAIN}ranlib \
         ./configure --static --prefix=${EXT_INSTALL_DIR})
 
     (cd ${ZLIB_SRC_DIR} && make -j4 && make install)

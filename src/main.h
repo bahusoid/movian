@@ -377,3 +377,19 @@ extern void inithelper_register(inithelper_t *ih);
 void init_group(int group);
 
 void fini_group(int group);
+
+#if defined(_WIN32)
+char *strndup(const char *s, size_t n);
+#endif
+
+#if defined(_WIN32)
+struct tm *gmtime_r(const time_t *timep, struct tm *result);
+#endif
+
+#if defined(_WIN32)
+char *strsep(char **stringp, const char *delim);
+#endif
+
+#if defined(_WIN32)
+size_t strlcat(char *dst, const char *src, size_t siz);
+#endif

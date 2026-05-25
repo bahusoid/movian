@@ -33,33 +33,39 @@ Most of these are built by the internal `ext/` system (`libav_setup`, `freetype_
 
 ---
 
-## Current Status (May 2026)
-* **Configure Script**: Created `configure.windows` utilizing MinGW-w64 (`x86_64-w64-mingw32-gcc`). Integrated seamless launching in the main `./configure`.
-* **Dependencies**: 
+## Current Status (May 2026 - Linker & Core Implementation Resolved)
+* **Configure Script**: Created `configure.windows` utilizing MinGW-w64 (`x86_64-w64-mingw32-gcc`). 
+* **Dependencies & Precompiled Binaries**: 
   * Automatically fetches prebuilt generic Windows **GLFW 3.3.8** binaries, extracting static libs/headers to `build.windows/inst/`.
-  * Patched `zlib_setup_win` to correctly download `zlib-1.2.13` and cross-compile `libz.a` targeting MinGW. (Also fixed broken curl 403 Google NaCl URLs in the global `support/configure.inc` and `support/configure_alternative.inc`).
+  * Patched `zlib_setup_win` to correctly cross-compile `libz.a` targeting MinGW.
   * `bzip2`, `freetype`, and `libav` (FFmpeg) configure and build properly with the Windows cross-compiler logic. 
-* **Arch Layer skeleton**: Created `src/arch/windows/` with base hooks (`windows.mk`, `windows_main.c`, `windows_misc.c`).
-* **Active compilation**: Making `BUILD=windows` succeeds through the massive `libav` build, but currently pending resolving native compilation errors in the Movian `src/` layer.
+* **Arch Layer skeleton**: Created `src/arch/windows/` with base hooks populated (`windows.mk`, `windows_main.c`, `windows_misc.c`).
+* **Active compilation & Linker Step**: The `movian.exe` successfully compiles and links natively.
 
-## Recommended Next Steps for the Next Machine Setup
-1. **Setup Environment**: Install MinGW-w64 cross-compiler (`sudo apt install gcc-mingw-w64 g++-mingw-w64`) if you are building from a Linux machine/WSL. 
-2. **Run Configure**: Clean your tree and run `./configure.windows` (or just `./configure`, it detects MSYS/MinGW environments automatically if natively on Windows, though from Linux `configure.windows` forces the cross-compilation). 
-3. **Build and Fix C-level Errors**: 
-   * Run `make BUILD=windows V=1 -j4`.
-   * **Wait for `libav` to compile** (it takes a few minutes and may look like the build is hung, check `ps aux | grep make`).
-   * When `libav` completes, `make` will begin compiling Movian's `src/**/*.c`. 
-   * **Networking**: You will rapidly hit socket incompatibilities in `src/networking/net_posix.c`. Code must be patched for mapped Winsock functionality (e.g. `closesocket()` instead of `close()`, and `WSAStartup()` during `windows_misc_init()`). 
-   * **Filesystem**: Similarly, inspect `fa_fs.c` and fix file handling methods that expect strict POSIX paths or semantics.
-4. **GLFW Frontend (`glw_frontend_glfw.c`)**: Create a GLFW event handler/glue layer in `src/ui/glw/` to initialize a window, parse keyboard/mouse input, and pass it to Movian's `glw` UI layer. 
-5. **ANGLE Initialization**: Since `glw_backend_opengl_es.c` handles drawing, your GLFW window will need to initialize EGL/GLES contexts via ANGLE binaries (`libEGL.dll` and `libGLESv2.dll`). Add the download logic in `configure.windows` as outlined by the bypassed function there.
+### Documentation of Issues Encountered and Resolutions
+You mentioned expecting no issues with GLFW because `build.windows/glfw-3.3.8.bin.WIN64/lib-mingw-w64` contained precompiled libraries specifically for MinGW. You were right! **GLFW itself didn't have any issues**. The precompiled `libglfw3.a` worked flawlessly.
 
+The linker "struggles" we encountered were strictly due to missing **OS-level dependency flags** and missing **OpenGL backend implementations** for ANGLE:
 
-Moving to the New Machine — Your Next Steps:
-Toolchain setup: If on Linux, sudo apt install gcc-mingw-w64 g++-mingw-w64 binutils-mingw-w64 is required.
-Setup run: rm -rf build.windows && ./configure.windows
-Trigger compiling: make BUILD=windows V=1 -j4
-Note: libav (FFmpeg) configure and compile process will run for a while sequentially before it even hits Movian src/ files. Do not terminate it thinking it's stuck.
-Platform Fixes: When libav completes, make will begin checking things like src/networking/net_posix.c. This is where you'll transition from configuring the tooling to natively mapping Winsock / Win32 properties (like implementing net_windows.c instead of net_posix.c).
-GLFW Graphics Frontend: Implement src/ui/glw/glw_frontend_glfw.c which interfaces GLFW into Movian's UI renderer, using ANGLE context bootstrapping (since Movian's hardware layer is tailored towards OpenGL ES).
-All directions and next hurdles are safely logged in the plan document. Safe travels!
+1. **GLFW OS Dependencies**: While `libglfw3.a` is statically provided, it relies on underlying Windows APIs. To make it link successfully, we just had to explicitly append `-lglfw3` along with its required Windows system libraries (`-lgdi32`, `-liphlpapi`) to `LDFLAGS_cfg` inside `configure.windows`.
+2. **The real graphics linker struggle — ANGLE (GLESv2 & EGL)**: Movian expects an OpenGL ES 2 renderer (`glEnable`, `glDrawArrays`, etc.). Precompiled GLFW gives us a window, but *not* a graphics driver. When we tried linking, `make` aborted citing hundreds of `undefined reference to gl...` errors. 
+   - *Resolution*: Windows lacks native GLESv2. We bypassed building Google ANGLE from source (too heavy) and instead forcibly downloaded the pre-compiled **MSYS2 ANGLE package** (`mingw-w64-x86_64-angleproject-*.pkg.tar.zst`). We extracted `libGLESv2.dll.a`, `libEGL.dll.a`, and the ANGLE `<GLES2/gl2.h>` headers into `build.windows/inst`, satisfying all missing OpenGL symbols!
+3. **Cryptography & Random Bytes**: POSIX relies on `/dev/urandom`. We implemented `arch_get_random_bytes` using Windows Cryptography Next Generation (`<bcrypt.h>`, `BCryptGenRandom`) and linked against `-lbcrypt` and `-lsecur32` in `config.mak`.
+4. **Networking (WinSock2 mapping)**: Windows handles sockets drastically differently. Compiling POSIX socket code naturally failed. 
+   - *Resolution*: Replaced `net_posix.c` with a platform-specific `net_windows.c`. Converted `#include <sys/socket.h>` to `<winsock2.h>`. Replaced POSIX `fcntl(fd, F_SETFL, O_NONBLOCK)` with Windows `ioctlsocket(fd, FIONBIO)`. Removed `gethostbyname_r` (missing in MinGW) in favor of standard thread-local `gethostbyname`. Mapped `poll` to `WSAPoll`.
+5. **Architectural Pipes (`arch_pipe`)**: Unix pipes (`pipe()`) do not exist with the same multiplex-capable traits on Windows.
+   - *Resolution*: We successfully simulated `arch_pipe()` in `windows_misc.c` by booting up a localhost TCP socket (`INET_LOOPBACK`) that connects to itself.
+
+## Recommended Next Steps for the Windows Port
+1. **Packaging (`movian.exe`)**: 
+   The binary has been successfully linked. However, to execute `movian.exe`, you must bundle it alongside the shared DLLs we linked against:
+   * ANGLE DLLs (`libGLESv2.dll`, `libEGL.dll`) from the MSYS2 archive.
+   * C-Runtime DLLs if not strictly statically linked (e.g., `libgcc_s_sjlj-1.dll`, `libwinpthread-1.dll`).
+2. **Audio Backend**: 
+   `audio_driver_init` in `windows_misc.c` currently returns `NULL` (audio disabled). We need to implement an audio output adapter traversing through Windows WASAPI or XAudio2.
+3. **GLFW Input Handling**:
+   While GLFW initializes the window context correctly, you need to map GLFW input callbacks (key presses, mouse, gamepad) into Movian's `glw` UI layers inside `src/ui/glw/glw_frontend_glfw.c` etc.
+4. **Added `windows_release` target to Makefile**
+    A new Make target `.PHONY: windows_release` has been added to `Makefile` so that:
+    `make BUILD=windows windows_release` correctly outputs a final distributable bundle inside `build.windows/release/`. 
+    This automatically collects the built `movian.exe` along with necessary MSYS2 ANGLE DLL binaries (`libEGL.dll`, `libGLESv2.dll`) and any compiler-specific threading runtimes (`libwinpthread-1.dll`) into one directory.

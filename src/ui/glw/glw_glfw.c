@@ -1,0 +1,178 @@
+#include <unistd.h>
+#include "arch/arch.h"
+#include "glw.h"
+#include <GLFW/glfw3.h>
+#include "main.h"
+
+void *glw_glfw_start(void *nav);
+
+typedef struct glw_glfw {
+    glw_root_t gr;
+    GLFWwindow* window;
+    int width;
+    int height;
+} glw_glfw_t;
+
+static void error_callback(int error, const char* description) {
+    fprintf(stderr, "GLFW Error: %s\n", description);
+}
+
+static void char_callback(GLFWwindow* window, unsigned int codepoint) {
+    glw_glfw_t *g = glfwGetWindowUserPointer(window);
+    if (!g) return;
+    event_t *ev = event_create_int(EVENT_UNICODE, codepoint);
+    ev->e_flags |= EVENT_KEYPRESS;
+    glw_inject_event(&g->gr, ev);
+}
+
+static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    glw_glfw_t *g = glfwGetWindowUserPointer(window);
+    if (!g) return;
+    double x, y;
+    glfwGetCursorPos(window, &x, &y);
+    glw_pointer_event_t gpe = {0};
+    gpe.screen_x =  (2.0 * x / g->width) - 1;
+    gpe.screen_y = -(2.0 * y / g->height) + 1;
+    gpe.ts = arch_get_ts();
+    if (action == GLFW_PRESS) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT) gpe.type = GLW_POINTER_LEFT_PRESS;
+        else if (button == GLFW_MOUSE_BUTTON_RIGHT) gpe.type = GLW_POINTER_RIGHT_PRESS;
+    } else if (action == GLFW_RELEASE) {
+        if (button == GLFW_MOUSE_BUTTON_LEFT) gpe.type = GLW_POINTER_LEFT_RELEASE;
+        else if (button == GLFW_MOUSE_BUTTON_RIGHT) gpe.type = GLW_POINTER_RIGHT_RELEASE;
+    }
+    if (gpe.type != 0) {
+        glw_lock(&g->gr);
+        glw_pointer_event(&g->gr, &gpe);
+        glw_unlock(&g->gr);
+    }
+}
+
+static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    glw_glfw_t *g = glfwGetWindowUserPointer(window);
+    if (!g) return;
+    event_t *ev = event_create_int(EVENT_SCROLL, yoffset*120);
+    if (yoffset < 0) ev->e_flags |= EVENT_MOUSE;
+    glw_inject_event(&g->gr, ev);
+}
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    glw_glfw_t *g = glfwGetWindowUserPointer(window);
+    if (!g) return;
+    glw_pointer_event_t gpe = {0};
+    gpe.screen_x =  (2.0 * xpos / g->width) - 1;
+    gpe.screen_y = -(2.0 * ypos / g->height) + 1;
+    gpe.ts = arch_get_ts();
+    gpe.type = GLW_POINTER_MOTION_UPDATE;
+    glw_lock(&g->gr);
+    glw_pointer_event(&g->gr, &gpe);
+    glw_unlock(&g->gr);
+}
+
+static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    glw_glfw_t *g = glfwGetWindowUserPointer(window);
+    if (!g) return;
+
+    if (action != GLFW_PRESS && action != GLFW_REPEAT)
+        return;
+
+    int movian_key = 0;
+    switch(key) {
+        case GLFW_KEY_RIGHT: movian_key = ACTION_RIGHT; break;
+        case GLFW_KEY_LEFT:  movian_key = ACTION_LEFT; break;
+        case GLFW_KEY_UP:    movian_key = ACTION_UP; break;
+        case GLFW_KEY_DOWN:  movian_key = ACTION_DOWN; break;
+        case GLFW_KEY_ENTER: movian_key = ACTION_ENTER; break;
+        case GLFW_KEY_ESCAPE:
+        case GLFW_KEY_BACKSPACE: movian_key = ACTION_NAV_BACK; break;
+    }
+    
+    if (movian_key) {
+        event_t *ev = event_create_action(movian_key);
+        glw_inject_event(&g->gr, ev);
+    }
+}
+
+static void resize_callback(GLFWwindow *window, int width, int height) {
+    glw_glfw_t *g = glfwGetWindowUserPointer(window);
+    if (!g) return;
+    glViewport(0, 0, width, height);
+    glw_lock(&g->gr);
+    g->gr.gr_width = width;
+    g->gr.gr_height = height;
+    glw_unlock(&g->gr);
+}
+
+void *glw_glfw_start(void *nav) {
+    glfwSetErrorCallback(error_callback);
+
+    if (!glfwInit()) {
+        exit(1);
+    }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+
+    glw_glfw_t *g = calloc(1, sizeof(glw_glfw_t));
+    g->window = glfwCreateWindow(1280, 720, "Movian", NULL, NULL);
+    if (!g->window) {
+        glfwTerminate();
+        exit(1);
+    }
+
+    glfwSetWindowUserPointer(g->window, g);
+    glfwSetKeyCallback(g->window, key_callback);
+    glfwSetMouseButtonCallback(g->window, mouse_button_callback);
+    glfwSetCursorPosCallback(g->window, cursor_position_callback);
+    glfwSetScrollCallback(g->window, scroll_callback);
+    glfwSetCharCallback(g->window, char_callback);
+    glfwSetFramebufferSizeCallback(g->window, resize_callback);
+
+    glfwMakeContextCurrent(g->window);
+    glfwSwapInterval(1);
+
+    g->gr.gr_prop_ui = prop_create_root("ui");
+    g->gr.gr_prop_nav = nav;
+
+    if (glw_init(&g->gr)) {
+        glfwTerminate();
+        exit(1);
+    }
+
+    glfwGetFramebufferSize(g->window, &g->width, &g->height);
+    resize_callback(g->window, g->width, g->height);
+
+    glw_lock(&g->gr);
+    glw_load_universe(&g->gr);
+    glw_unlock(&g->gr);
+
+    while (!glfwWindowShouldClose(g->window)) {
+        glfwPollEvents();
+
+        glw_lock(&g->gr);
+        glw_prepare_frame(&g->gr, 0);
+        int refresh = g->gr.gr_need_refresh;
+        g->gr.gr_need_refresh = 0;
+
+        if (refresh) {
+            glw_rctx_t rc;
+            int zmax = 0;
+            glw_rctx_init(&rc, g->gr.gr_width, g->gr.gr_height, 1, &zmax);
+            glw_layout0(&g->gr, &rc);
+            glw_rctx_init(&rc, g->gr.gr_width, g->gr.gr_height, 1, &zmax);
+            glw_render0(&g->gr, &rc);
+        }
+        glw_unlock(&g->gr);
+
+        if (refresh) {
+            glfwSwapBuffers(g->window);
+        } else {
+            usleep(10000); // 10ms
+        }
+    }
+
+    glfwDestroyWindow(g->window);
+    glfwTerminate();
+    exit(0);
+    return NULL;
+}

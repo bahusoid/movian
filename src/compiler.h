@@ -20,6 +20,8 @@
 #pragma once
 #ifdef _MSC_VER
 #define attribute_printf(a, b)
+#elif defined(__MINGW32__)
+#define attribute_printf(a, b) __attribute__((format(gnu_printf, a, b)))
 #else
 #define attribute_printf(a, b) __attribute__((format(printf, a, b)))
 #endif
@@ -85,8 +87,11 @@
 #define HTS_GLUE(a, b) a ## b
 #define HTS_JOIN(a, b) HTS_GLUE(a, b)
 #ifndef _MSC_VER
+#ifndef ARRAYSIZE
 #define ARRAYSIZE(x) (sizeof(x) / sizeof(x[0]))
 #endif
+#endif
+
 
 
 

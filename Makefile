@@ -954,3 +954,17 @@ include support/mklicense.mk
 
 license: ${BUILDDIR}/LICENSE
 licensepdf: ${BUILDDIR}/LICENSE.pdf
+
+print-prog:
+	@echo "PROG is '$(PROG)'"
+
+
+# Windows release target
+.PHONY: windows_release
+windows_release: ${PROG}
+	@mkdir -p ${BUILDDIR}/release
+	cp ${PROG}${PROG_EXT} ${BUILDDIR}/release/
+	cp ${BUILDDIR}/inst/bin/*.dll ${BUILDDIR}/release/ || true
+	cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll ${BUILDDIR}/release/ || true
+	# Also package any zip or plugins if needed later
+	@echo "Created windows release in ${BUILDDIR}/release/"

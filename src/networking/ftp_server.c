@@ -20,11 +20,15 @@
 #include <assert.h>
 #include <stdio.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <unistd.h>
-#include <errno.h>
-
 #include <netinet/in.h>
+#endif
+#include <errno.h>
 
 #include "main.h"
 #include "asyncio.h"

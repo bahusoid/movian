@@ -22,14 +22,22 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifdef _WIN32
+#include <direct.h>
+#endif
 
 #include "main.h"
 #include "prop/prop.h"
 #include "misc/str.h"
 
 #if ENABLE_NETLOG
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <netinet/in.h>
 #include <sys/socket.h>
+#endif
 #endif
 
 
@@ -307,7 +315,11 @@ trace_init(void)
     gconf.trace_level = TRACE_INFO;
 
   snprintf(p1, sizeof(p1), "%s/log", gconf.cache_path);
+#ifdef _WIN32
+  _mkdir(p1);
+#else
   mkdir(p1, 0777);
+#endif
 
   // Remove legacy logfile names. This can be removed some time in the future
   for(i = 0; i <= 5; i++) {

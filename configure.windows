@@ -85,11 +85,19 @@ glfw_setup()
 
 angle_setup()
 {
-    # Example ANGLE binaries placeholder. A known release can be embedded here.
-    # For now, let's just make ensure we just skip building ANGLE and rely on placeholders
-    # In reality, we'd pull a specific ANGLE binary package:
-    # download_file https://github.com/microsoft/angle/releases/download/... anglezip
-    echo "ANGLE setup bypassed: Assuming ANGLE headers/libs are either in ext or to be bundled."
+    ANGLE_URL="https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-angleproject-2.1.r21358.2e285bb5-7-any.pkg.tar.zst"
+    if [ ! -f "${BUILDDIR}/angle.tar.zst" ]; then
+        echo "Downloading ANGLE..."
+        curl -sL "${ANGLE_URL}" -o "${BUILDDIR}/angle.tar.zst"
+        tar --zstd -xf "${BUILDDIR}/angle.tar.zst" -C "${BUILDDIR}"
+    fi
+    mkdir -p "${EXT_INSTALL_DIR}/include"
+    mkdir -p "${EXT_INSTALL_DIR}/lib"
+    cp -r "${BUILDDIR}/mingw64/include/"* "${EXT_INSTALL_DIR}/include/"
+    cp "${BUILDDIR}/mingw64/lib/"*.a "${EXT_INSTALL_DIR}/lib/"
+    mkdir -p "${EXT_INSTALL_DIR}/bin"
+    cp -f "${BUILDDIR}/mingw64/bin/libGLESv2.dll" "${EXT_INSTALL_DIR}/bin/"
+    cp -f "${BUILDDIR}/mingw64/bin/libEGL.dll" "${EXT_INSTALL_DIR}/bin/"
 }
 
 glfw_setup
@@ -116,3 +124,10 @@ EOF
 
 finalize
 
+
+cat >> ${BUILDDIR}/config.mak <<INNEREOF
+# Need ws2_32 for networking, etc. MUST be after libav.
+LDFLAGS_cfg += -lws2_32 -lwinmm -lpthread -lsecur32 -lcrypt32 -lbcrypt -lncrypt
+# Missing opengl stuff
+LDFLAGS_cfg += -L\${EXT_INSTALL_DIR}/lib -lGLESv2 -lEGL -lglfw3 -lgdi32 -liphlpapi
+INNEREOF

@@ -18,7 +18,9 @@
  *  For more information, contact andreas@lonelycoder.com
  */
 #include <assert.h>
+#ifndef _WIN32
 #include <sys/mman.h>
+#endif
 #include <unistd.h>
 #include <string.h>
 

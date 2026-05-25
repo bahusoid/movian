@@ -20,11 +20,24 @@
 #include <assert.h>
 #include <stdio.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <io.h>
+#define sleep(x) Sleep((x)*1000)
+#define poll WSAPoll
+#ifndef POLLIN
+#define POLLIN POLLRDNORM
+#define POLLOUT POLLWRNORM
+#define POLLERR POLLRDBAND
+#endif
+#else
 #include <sys/socket.h>
 #include <unistd.h>
 #include <poll.h>
 #include <errno.h>
 #include <netinet/in.h>
+#endif
 
 #include "main.h"
 #include "arch/arch.h"
@@ -1489,12 +1502,12 @@ struct ip_mreq {
  */
 int
 asyncio_udp_add_membership(asyncio_fd_t *af, const net_addr_t *group,
-                           const net_addr_t *interface)
+                           const net_addr_t *iface)
 {
   struct ip_mreq imr = {};
   memcpy(&imr.imr_multiaddr.s_addr, group->na_addr, 4);
-  if(interface != NULL)
-    memcpy(&imr.imr_interface.s_addr, interface->na_addr, 4);
+  if(iface != NULL)
+    memcpy(&imr.imr_interface.s_addr, iface->na_addr, 4);
   return setsockopt(af->af_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &imr,
                     sizeof(struct ip_mreq));
 }

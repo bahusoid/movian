@@ -22,7 +22,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include <sys/queue.h>
+#include "misc/queue.h"
 #include "redblack.h"
 #include "extents.h"
 
