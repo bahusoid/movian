@@ -1,4 +1,7 @@
 #include <unistd.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include "arch/arch.h"
 #include "glw.h"
 #include <GLFW/glfw3.h>
@@ -106,19 +109,32 @@ void *glw_glfw_start(void *nav) {
     glfwSetErrorCallback(error_callback);
 
     if (!glfwInit()) {
+        fprintf(stderr, "glfwInit failed\n");
+        fflush(stderr);
         exit(1);
     }
 
+    fprintf(stderr, "glfwInit success\n");
+    fflush(stderr);
+
     glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#ifdef _WIN32
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
+#endif
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
     glw_glfw_t *g = calloc(1, sizeof(glw_glfw_t));
     g->window = glfwCreateWindow(1280, 720, "Movian", NULL, NULL);
     if (!g->window) {
+        fprintf(stderr, "glfwCreateWindow failed\n");
+        fflush(stderr);
         glfwTerminate();
         exit(1);
     }
+
+    fprintf(stderr, "GLFW window created successfully!\n");
+    fflush(stderr);
 
     glfwSetWindowUserPointer(g->window, g);
     glfwSetKeyCallback(g->window, key_callback);
@@ -130,23 +146,39 @@ void *glw_glfw_start(void *nav) {
 
     glfwMakeContextCurrent(g->window);
     glfwSwapInterval(1);
+    
+    fprintf(stderr, "GLFW OpenGL context created and made current\n");
+    fflush(stderr);
 
+    fprintf(stderr, "Creating ui prop...\n"); fflush(stderr);
     g->gr.gr_prop_ui = prop_create_root("ui");
     g->gr.gr_prop_nav = nav;
 
+    fprintf(stderr, "Calling glw_init...\n"); fflush(stderr);
     if (glw_init(&g->gr)) {
+        fprintf(stderr, "glw_init failed\n");
+        fflush(stderr);
         glfwTerminate();
         exit(1);
     }
 
+    fprintf(stderr, "glw_init success\n");
+    fflush(stderr);
+
     glfwGetFramebufferSize(g->window, &g->width, &g->height);
     resize_callback(g->window, g->width, g->height);
 
+    fprintf(stderr, "[GLFW] Loading universe...\n");
+    fflush(stderr);
     glw_lock(&g->gr);
     glw_load_universe(&g->gr);
     glw_unlock(&g->gr);
+    fprintf(stderr, "[GLFW] Universe loaded. Entering loop.\n");
+    fflush(stderr);
 
+    int frames = 0;
     while (!glfwWindowShouldClose(g->window)) {
+        if (frames < 10) { fprintf(stderr, "Frame %d: glfwPollEvents()\n", frames); fflush(stderr); }
         glfwPollEvents();
 
         glw_lock(&g->gr);
@@ -154,23 +186,43 @@ void *glw_glfw_start(void *nav) {
         int refresh = g->gr.gr_need_refresh;
         g->gr.gr_need_refresh = 0;
 
+        if (frames < 10) { fprintf(stderr, "Frame %d: refresh=%d\n", frames, refresh); fflush(stderr); }
+
         if (refresh) {
             glw_rctx_t rc;
             int zmax = 0;
+            if (frames < 10) { fprintf(stderr, "Frame %d: glw_rctx_init layout...\n", frames); fflush(stderr); }
             glw_rctx_init(&rc, g->gr.gr_width, g->gr.gr_height, 1, &zmax);
-            glw_layout0(&g->gr, &rc);
-            glw_rctx_init(&rc, g->gr.gr_width, g->gr.gr_height, 1, &zmax);
-            glw_render0(&g->gr, &rc);
+            
+            if (frames < 10) { fprintf(stderr, "Frame %d: glw_layout0...\n", frames); fflush(stderr); }
+            glw_layout0(g->gr.gr_universe, &rc);
+            
+            if (refresh & GLW_REFRESH_FLAG_RENDER) {
+                if (frames < 10) { fprintf(stderr, "Frame %d: glw_rctx_init render...\n", frames); fflush(stderr); }
+                glw_rctx_init(&rc, g->gr.gr_width, g->gr.gr_height, 1, &zmax);
+                
+                glViewport(0, 0, g->gr.gr_width, g->gr.gr_height);
+                glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
+                if (frames < 10) { fprintf(stderr, "Frame %d: glw_render0...\n", frames); fflush(stderr); }
+                glw_render0(g->gr.gr_universe, &rc);
+            }
         }
         glw_unlock(&g->gr);
 
-        if (refresh) {
+        if (frames < 10) { fprintf(stderr, "Frame %d: after render. Swapping or sleeping...\n", frames); fflush(stderr); }
+
+        if (refresh & GLW_REFRESH_FLAG_RENDER) {
             glfwSwapBuffers(g->window);
         } else {
-            usleep(10000); // 10ms
+            glfwWaitEventsTimeout(0.010);
         }
+        if (frames < 10) { fprintf(stderr, "Frame %d: done.\n", frames); fflush(stderr); }
+        frames++;
     }
 
+    fprintf(stderr, "Exited loop. Terminating.\n");
+    fflush(stderr);
     glfwDestroyWindow(g->window);
     glfwTerminate();
     exit(0);

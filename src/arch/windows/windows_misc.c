@@ -128,11 +128,15 @@ void arch_get_random_bytes(void *ptr, size_t n) {
 void trace_arch(int level, const char *prefix, const char *buf) {}
 
 void arch_exit(void) {
+    fprintf(stderr, "\n=== arch_exit() CALLED ===\n");
+    fflush(stderr);
     exit(0);
 }
 
 int arch_stop_req(void) {
-    exit(0);
+    fprintf(stderr, "\n=== arch_stop_req() CALLED ===\n");
+    fflush(stderr);
+    return 2; // ARCH_STOP_CALLER_MUST_HANDLE
 }
 
 struct net_iface;
@@ -145,6 +149,8 @@ netif_t *net_get_interfaces(void) {
 int arch_pipe(int fd[2]) {
     SOCKET lst = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (lst == INVALID_SOCKET) return -1;
+    
+    // Bind to localhost
     struct sockaddr_in inaddr;
     memset(&inaddr, 0, sizeof(inaddr));
     inaddr.sin_family = AF_INET;
@@ -163,21 +169,36 @@ int arch_pipe(int fd[2]) {
         closesocket(lst);
         return -1;
     }
+
     SOCKET src = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (src == INVALID_SOCKET) {
         closesocket(lst);
         return -1;
     }
-    // Set non-blocking to prevent connect from hanging forever, though loopback should be fast
-    // Actually blocking is fine for this local loopback connection setup
+
+    // Must set connect socket non-blocking so connect() doesn't deadlock waiting for accept()
+    // in the same thread.
+    unsigned long mode = 1;
+    ioctlsocket(src, FIONBIO, &mode);
+    
     connect(src, (struct sockaddr *)&inaddr, len);
+    
     SOCKET dst = accept(lst, NULL, NULL);
     closesocket(lst);
     if (dst == INVALID_SOCKET) {
         closesocket(src);
         return -1;
     }
+    
+    // Revert src to blocking since the rest of the app might assume write() blocks
+    // Oh wait, reading from pipes usually needs to be non-blocking in poll loops
+    // But let's leave it as is or revert to blocking.
+    mode = 0;
+    ioctlsocket(src, FIONBIO, &mode);
+
     fd[0] = (int)dst;
     fd[1] = (int)src;
     return 0;
 }
+
+#include "windows_crash.c"

@@ -251,7 +251,11 @@ static void
 asyncio_wakeup(int id)
 {
   char x = id;
+#ifdef _WIN32
+  int r = send(asyncio_pipe[1], &x, 1, 0);
+#else
   int r = write(asyncio_pipe[1], &x, 1);
+#endif
 
   if(r != 1)
     TRACE(TRACE_ERROR, "TCP", "Pipe problems r=%d errno=%d", r, errno);
@@ -598,7 +602,11 @@ static int
 asyncio_handle_pipe(asyncio_fd_t *af, void *opaque, int event, int error)
 {
   char x;
+#ifdef _WIN32
+  if(recv(asyncio_pipe[0], &x, 1, 0) != 1)
+#else
   if(read(asyncio_pipe[0], &x, 1) != 1)
+#endif
     return 0;
 
   if(x == 0) {

@@ -963,8 +963,17 @@ print-prog:
 .PHONY: windows_release
 windows_release: ${PROG}
 	@mkdir -p ${BUILDDIR}/release
-	cp ${PROG}${PROG_EXT} ${BUILDDIR}/release/
+	$(if $(STRIP_orig),$(STRIP_orig),$(STRIP)) ${PROG}${PROG_EXT} -o ${BUILDDIR}/release/movian${PROG_EXT} || cp ${PROG}${PROG_EXT} ${BUILDDIR}/release/movian${PROG_EXT}
 	cp ${BUILDDIR}/inst/bin/*.dll ${BUILDDIR}/release/ || true
-	cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll ${BUILDDIR}/release/ || true
+	cp $(shell ${CC} -print-file-name=libwinpthread-1.dll) ${BUILDDIR}/release/ || true
+	cp $(shell ${CC} -print-file-name=libgcc_s_seh-1.dll) ${BUILDDIR}/release/ || true
+	cp $(shell ${CC} -print-file-name=libstdc++-6.dll) ${BUILDDIR}/release/ || true
+	cp -r glwskins res lang ${BUILDDIR}/release/
 	# Also package any zip or plugins if needed later
 	@echo "Created windows release in ${BUILDDIR}/release/"
+
+.PHONY: windows_release_zip
+windows_release_zip: windows_release
+	@rm -f ${BUILDDIR}/movian-windows.zip
+	cd ${BUILDDIR}/release && zip -9qr ../movian-windows.zip .
+	@echo "Created windows release zip in ${BUILDDIR}/movian-windows.zip"
