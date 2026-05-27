@@ -418,7 +418,7 @@ media_codec_create_lavc(media_codec_t *cw, const media_codec_params_t *mcp,
   // cw->ctx->debug = FF_DEBUG_PICT_INFO | FF_DEBUG_BUGS;
 
   if(mcp != NULL && mcp->extradata != NULL && !cw->ctx->extradata) {
-    cw->ctx->extradata = calloc(1, mcp->extradata_size +
+    cw->ctx->extradata = av_mallocz(mcp->extradata_size +
 				AV_INPUT_BUFFER_PADDING_SIZE);
     memcpy(cw->ctx->extradata, mcp->extradata, mcp->extradata_size);
     cw->ctx->extradata_size = mcp->extradata_size;
@@ -576,5 +576,4 @@ mp_set_mq_meta(media_queue_t *mq, const AVCodec *codec,
     prop_set_string(mq->mq_prop_codec, buf);
   }
 }
-
 
