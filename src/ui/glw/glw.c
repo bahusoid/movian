@@ -443,9 +443,7 @@ update_in_path(glw_t *w)
 void
 glw_layout0(glw_t *w, const glw_rctx_t *rc)
 {
-  fprintf(stderr, "glw_layout0: START %p\n", w); fflush(stderr);
   glw_root_t *gr = w->glw_root;
-  fprintf(stderr, "glw_layout0: gr=%p\n", gr); fflush(stderr);
   int mask = GLW_VIEW_EVAL_LAYOUT;
 
   if(likely(!rc->rc_invisible)) {
@@ -483,12 +481,8 @@ glw_layout0(glw_t *w, const glw_rctx_t *rc)
     if(rc0.rc_width < 1 || rc0.rc_height < 1)
       return;
 
-    fprintf(stderr, "glw_layout0: %s (margin)\n", w->glw_class->gc_name);
-    fflush(stderr);
     w->glw_class->gc_layout(w, &rc0);
   } else {
-    fprintf(stderr, "glw_layout0: %s\n", w->glw_class->gc_name);
-    fflush(stderr);
     w->glw_class->gc_layout(w, rc);
   }
 }

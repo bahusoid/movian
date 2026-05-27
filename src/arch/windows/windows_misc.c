@@ -45,7 +45,14 @@ void hfree(void *ptr, size_t size) {
 void *mymalloc(size_t size) { return malloc(size); }
 void *myrealloc(void *ptr, size_t size) { return realloc(ptr, size); }
 void *mycalloc(size_t count, size_t size) { return calloc(count, size); }
-void *mymemalign(size_t align, size_t size) { return _aligned_malloc(size, align); }
+
+void *mymemalign(size_t align, size_t size) {
+    return _aligned_malloc(size, align);
+}
+
+void mymemalign_free(void *ptr) {
+    _aligned_free(ptr);
+}
 
 void arch_localtime(const time_t *now, struct tm *tm) {
 #ifdef __MINGW32__
@@ -125,7 +132,10 @@ void arch_get_random_bytes(void *ptr, size_t n) {
 }
 
 
-void trace_arch(int level, const char *prefix, const char *buf) {}
+void trace_arch(int level, const char *prefix, const char *buf) {
+    fprintf(stderr, "%s %s\n", prefix, buf);
+    fflush(stderr);
+}
 
 void arch_exit(void) {
     fprintf(stderr, "\n=== arch_exit() CALLED ===\n");
@@ -200,4 +210,3 @@ int arch_pipe(int fd[2]) {
     fd[1] = (int)src;
     return 0;
 }
-

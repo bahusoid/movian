@@ -6,7 +6,7 @@ SRCS += src/arch/windows/windows_main.c \
         src/arch/windows/windows_misc.c \
         src/arch/windows/windows_threads.c \
         src/arch/windows/windows_fs.c \
-        src/networking/asyncio_posix.c \
+        src/networking/asyncio_windows.c \
         src/networking/net_windows.c \
         src/htsmsg/persistent_file.c \
         src/ui/glw/glw_glfw.c \

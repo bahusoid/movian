@@ -4,6 +4,7 @@
 #endif
 #include "arch/arch.h"
 #include "glw.h"
+#include "glw_opengl.h"
 #include <GLFW/glfw3.h>
 #include "main.h"
 
@@ -84,13 +85,14 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
         case GLFW_KEY_LEFT:  movian_key = ACTION_LEFT; break;
         case GLFW_KEY_UP:    movian_key = ACTION_UP; break;
         case GLFW_KEY_DOWN:  movian_key = ACTION_DOWN; break;
-        case GLFW_KEY_ENTER: movian_key = ACTION_ENTER; break;
+        case GLFW_KEY_ENTER: movian_key = ACTION_ACTIVATE; break;
         case GLFW_KEY_ESCAPE:
         case GLFW_KEY_BACKSPACE: movian_key = ACTION_NAV_BACK; break;
     }
     
     if (movian_key) {
         event_t *ev = event_create_action(movian_key);
+        ev->e_flags |= EVENT_KEYPRESS;
         glw_inject_event(&g->gr, ev);
     }
 }
@@ -161,6 +163,7 @@ void *glw_glfw_start(void *nav) {
         glfwTerminate();
         exit(1);
     }
+    glw_opengl_init_context(&g->gr);
 
     fprintf(stderr, "glw_init success\n");
     fflush(stderr);
@@ -178,7 +181,6 @@ void *glw_glfw_start(void *nav) {
 
     int frames = 0;
     while (!glfwWindowShouldClose(g->window)) {
-        if (frames < 10) { fprintf(stderr, "Frame %d: glfwPollEvents()\n", frames); fflush(stderr); }
         glfwPollEvents();
 
         glw_lock(&g->gr);
@@ -186,38 +188,32 @@ void *glw_glfw_start(void *nav) {
         int refresh = g->gr.gr_need_refresh;
         g->gr.gr_need_refresh = 0;
 
-        if (frames < 10) { fprintf(stderr, "Frame %d: refresh=%d\n", frames, refresh); fflush(stderr); }
 
         if (refresh) {
             glw_rctx_t rc;
             int zmax = 0;
-            if (frames < 10) { fprintf(stderr, "Frame %d: glw_rctx_init layout...\n", frames); fflush(stderr); }
             glw_rctx_init(&rc, g->gr.gr_width, g->gr.gr_height, 1, &zmax);
             
-            if (frames < 10) { fprintf(stderr, "Frame %d: glw_layout0...\n", frames); fflush(stderr); }
             glw_layout0(g->gr.gr_universe, &rc);
             
             if (refresh & GLW_REFRESH_FLAG_RENDER) {
-                if (frames < 10) { fprintf(stderr, "Frame %d: glw_rctx_init render...\n", frames); fflush(stderr); }
                 glw_rctx_init(&rc, g->gr.gr_width, g->gr.gr_height, 1, &zmax);
                 
                 glViewport(0, 0, g->gr.gr_width, g->gr.gr_height);
                 glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
-                if (frames < 10) { fprintf(stderr, "Frame %d: glw_render0...\n", frames); fflush(stderr); }
                 glw_render0(g->gr.gr_universe, &rc);
             }
         }
         glw_unlock(&g->gr);
 
-        if (frames < 10) { fprintf(stderr, "Frame %d: after render. Swapping or sleeping...\n", frames); fflush(stderr); }
 
         if (refresh & GLW_REFRESH_FLAG_RENDER) {
+            glw_post_scene(&g->gr);
             glfwSwapBuffers(g->window);
         } else {
             glfwWaitEventsTimeout(0.010);
         }
-        if (frames < 10) { fprintf(stderr, "Frame %d: done.\n", frames); fflush(stderr); }
         frames++;
     }
 

@@ -53,7 +53,7 @@ tcp_write(tcpcon_t *tc, const void *data, size_t len)
 #else
     r = send(tc->fd, data, len, 0);
 #endif
-    if(r == -1 && (errno == EINTR))
+    if(r == -1 && (WSAGetLastError() == WSAEINTR))
       continue;
 
     return r != len ? ECONNRESET : 0;
@@ -76,7 +76,7 @@ tcp_read(tcpcon_t *tc, void *buf, size_t len, int all,
 
     x = recv(tc->fd, buf + off, len - off, flags);
     if(x <= 0) {
-      if(errno == EINTR)
+      if(x == -1 && WSAGetLastError() == WSAEINTR)
         continue;
       return -1;
     }
@@ -107,8 +107,8 @@ getstreamsocket(int family, char *errbuf, size_t errbufsize)
 
   fd = socket(family, SOCK_STREAM, 0);
   if(fd == -1) {
-    snprintf(errbuf, errbufsize, "Unable to create socket: %s",
-	     strerror(errno));
+    snprintf(errbuf, errbufsize, "Unable to create socket (WSA: %d)",
+       WSAGetLastError());
     return -1;
   }
 
@@ -311,7 +311,8 @@ tcp_connect_arch(const net_addr_t *addr,
   tcp_set_cancellable(tc, c);
 
   if(r == -1) {
-    if(errno == EINPROGRESS) {
+    int wsaerr = WSAGetLastError();
+    if(wsaerr == WSAEWOULDBLOCK) {
       struct pollfd pfd;
 
       pfd.fd = fd;
@@ -325,22 +326,22 @@ tcp_connect_arch(const net_addr_t *addr,
         if(!r)
           snprintf(errbuf, errbufsize, "Connection attempt timed out");
         else
-          snprintf(errbuf, errbufsize, "poll() error: %s", strerror(errno));
+          snprintf(errbuf, errbufsize, "poll() error: %d", WSAGetLastError());
 
         tcp_close(tc);
 	return NULL;
       }
 
-      getsockopt(fd, SOL_SOCKET, SO_ERROR, (void *)&err, &errlen);
+      getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&err, &errlen);
     } else {
-      err = errno;
+      err = wsaerr;
     }
   } else {
     err = 0;
   }
 
   if(err != 0) {
-    snprintf(errbuf, errbufsize, "%s", strerror(err));
+    snprintf(errbuf, errbufsize, "Connection error WSA: %d", err);
     tcp_close(tc);
     return NULL;
   }
@@ -416,8 +417,8 @@ void
 net_change_ndelay(int fd, int on)
 {
   int val = on;
-  if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &val, sizeof(val)))
-    TRACE(TRACE_ERROR, "NET", "Unable to set ndelay on %x", fd);
+  if(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&val, sizeof(val)))
+    TRACE(TRACE_ERROR, "NET", "Unable to set ndelay on %x (WSAErr: %d)", fd, WSAGetLastError());
 }
 
 

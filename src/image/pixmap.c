@@ -104,7 +104,7 @@ pixmap_release(pixmap_t *pm)
   if(atomic_dec(&pm->pm_refcount))
     return;
 
-  free(pm->pm_data);
+  mymemalign_free(pm->pm_data);
   free(pm);
 }
 

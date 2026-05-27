@@ -178,7 +178,11 @@ static __inline void *myreallocf(void *ptr, size_t size)
 void *mycalloc(size_t count, size_t size);
 
 void *mymemalign(size_t align, size_t size);
-
+#ifdef _WIN32
+void mymemalign_free(void *ptr);
+#else
+#define mymemalign_free(ptr) free(ptr)
+#endif
 void runcontrol_activity(void);
 
 void shutdown_hook_run(int early);

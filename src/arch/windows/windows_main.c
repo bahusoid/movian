@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <io.h>
 #include <fcntl.h>
+#include <shlobj.h>
 #include "main.h"
 #include "navigator.h"
 
@@ -20,6 +21,37 @@ int main(int argc, char **argv) {
     SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);
 
     gconf.binary = argv[0];
+
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    gconf.concurrency = sysinfo.dwNumberOfProcessors;
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    OSVERSIONINFO osvi;
+    ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+    if (GetVersionEx(&osvi)) {
+        snprintf(gconf.os_info, sizeof(gconf.os_info), "Windows %lu.%lu Build %lu", osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
+    }
+#pragma GCC diagnostic pop
+
+    char appdata[MAX_PATH];
+    if (SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appdata))) {
+        for (int i = 0; appdata[i]; i++) {
+            if (appdata[i] == '\\') {
+                appdata[i] = '/';
+            }
+        }
+        char *path = malloc(MAX_PATH + 50);
+        snprintf(path, MAX_PATH + 50, "file://%s/movian", appdata);
+        gconf.cache_path = path;
+        gconf.persistent_path = strdup(path);
+    } else {
+        gconf.cache_path = strdup("file://movian_data");
+        gconf.persistent_path = strdup("file://movian_data");
+    }
+
     parse_opts(argc, argv);
     main_init();
 

@@ -847,7 +847,7 @@ BUNDLE_OBJS=$(BUNDLE_SRCS:%.c=%.o)
 
 # Common CFLAGS for all files
 CFLAGS_com += -g -funsigned-char ${OPTFLAGS} ${CFLAGS_dbg}
-CFLAGS_com += -iquote${BUILDDIR} -iquote${C}/src -iquote${C}
+CFLAGS_com += -iquote ${BUILDDIR} -iquote ${C}/src -iquote ${C}
 
 ifeq "$(GCCVERSIONGTEQ8)" "1"
     CFLAGS_com += -Wno-format-truncation -Wno-incompatible-pointer-types -Wno-int-conversion
@@ -963,11 +963,16 @@ print-prog:
 .PHONY: windows_release
 windows_release: ${PROG}
 	@mkdir -p ${BUILDDIR}/release
-	$(if $(STRIP_orig),$(STRIP_orig),$(STRIP)) ${PROG}${PROG_EXT} -o ${BUILDDIR}/release/movian${PROG_EXT} || cp ${PROG}${PROG_EXT} ${BUILDDIR}/release/movian${PROG_EXT}
+	$(STRIP) ${PROG}${PROG_EXT} -o ${BUILDDIR}/release/movian${PROG_EXT} || cp ${PROG}${PROG_EXT} ${BUILDDIR}/release/movian${PROG_EXT}
 	cp ${BUILDDIR}/inst/bin/*.dll ${BUILDDIR}/release/ || true
-	cp $(shell ${CC} -print-file-name=libwinpthread-1.dll) ${BUILDDIR}/release/ || true
-	cp $(shell ${CC} -print-file-name=libgcc_s_seh-1.dll) ${BUILDDIR}/release/ || true
-	cp $(shell ${CC} -print-file-name=libstdc++-6.dll) ${BUILDDIR}/release/ || true
+	@PURE_CC=$$(echo '$(CC)' | sed 's/.*; //'); \
+	for dll in libwinpthread-1.dll libgcc_s_seh-1.dll libstdc++-6.dll; do \
+		DLL_PATH=$$($$PURE_CC -print-file-name=$$dll); \
+		if [ "$$DLL_PATH" = "$$dll" ]; then \
+			DLL_PATH="$$(dirname "$$(which "$$PURE_CC")")/$$dll"; \
+		fi; \
+		cp "$$DLL_PATH" ${BUILDDIR}/release/ || true; \
+	done
 	cp -r glwskins res lang ${BUILDDIR}/release/
 	# Also package any zip or plugins if needed later
 	@echo "Created windows release in ${BUILDDIR}/release/"
