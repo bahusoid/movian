@@ -854,8 +854,8 @@ smb_dispatch(void *aux)
   SMB_t *h;
   nbt_req_t *nr;
 
-  SMBTRACE("%s:%d Read thread running %lx",
-	   cc->cc_hostname, cc->cc_port, (long)hts_thread_current());
+  SMBTRACE("%s:%d Read thread running %p",
+           cc->cc_hostname, cc->cc_port, (void *)(intptr_t)hts_thread_current());
 
   while(1) {
     if(nbt_read(cc, &buf, &len))
@@ -1156,8 +1156,8 @@ nbt_async_req(cifs_connection_t *cc, void *request, int request_len,
   nbt_write(cc, request, request_len);
 
   LIST_INSERT_HEAD(&cc->cc_pending_nbt_requests, nr, nr_link);
-  SMBTRACE("%s:%d %s sent mid=%d on thread %lx", cc->cc_hostname, cc->cc_port,
-           info, nr->nr_mid, (long)hts_thread_current());
+  SMBTRACE("%s:%d %s sent mid=%d on thread %p", cc->cc_hostname, cc->cc_port,
+           info, nr->nr_mid, (void *)(intptr_t)hts_thread_current());
   return nr;
 }
 

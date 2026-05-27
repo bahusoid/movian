@@ -33,6 +33,7 @@ struct asyncio_fd {
 
     htsbuf_queue_t af_sendq;
     int af_pending_write;
+    asyncio_udp_callback_t *af_udp_callback;
 };
 
 // Global networking state
@@ -391,12 +392,82 @@ int asyncio_get_port(asyncio_fd_t *af) {
 
 void asyncio_set_timeout_delta_sec(asyncio_fd_t *af, int seconds) { }
 
+static int asyncio_udp_event(asyncio_fd_t *af, void *opaque, int events, int error) {
+    static uint8_t udp_recv_buf[8192];
+    if (events & ASYNCIO_ERROR) {
+        return 0;
+    }
+    if (events & ASYNCIO_READ) {
+        struct sockaddr_in sin;
+        int sl;
+        while (1) {
+            sl = sizeof(sin);
+            int r = recvfrom(af->fd, (char*)udp_recv_buf, sizeof(udp_recv_buf), 0, (struct sockaddr *)&sin, &sl);
+            if (r > 0) {
+                net_addr_t na = {0};
+                na.na_family = 4;
+                na.na_port = ntohs(sin.sin_port);
+                memcpy(na.na_addr, &sin.sin_addr, 4);
+                if (af->af_udp_callback) {
+                    af->af_udp_callback(opaque, udp_recv_buf, r, &na);
+                }
+            } else {
+                break;
+            }
+        }
+    }
+    return 0;
+}
+
 asyncio_fd_t *asyncio_udp_bind(const char *name, const net_addr_t *na, asyncio_udp_callback_t *cb, void *opaque, int bind_any_on_fail, int broadcast) {
     SOCKET s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (s == INVALID_SOCKET) return NULL;
 
-    // Bind logic placeholder
-    return asyncio_add_fd(s, ASYNCIO_READ, (asyncio_fd_callback_t*)cb, opaque, name);
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
+    DWORD dwBytesReturned = 0;
+    BOOL bNewBehavior = FALSE;
+    WSAIoctl(s, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior), NULL, 0, &dwBytesReturned, NULL, NULL);
+
+    int one = 1;
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&one, sizeof(one));
+    if (broadcast) {
+        setsockopt(s, SOL_SOCKET, SO_BROADCAST, (char *)&one, sizeof(one));
+    }
+
+    struct sockaddr_in si = {0};
+    si.sin_family = AF_INET;
+
+    if (na) {
+        si.sin_port = htons(na->na_port);
+        memcpy(&si.sin_addr, na->na_addr, 4);
+        if (bind(s, (struct sockaddr *)&si, sizeof(si)) == SOCKET_ERROR) {
+            if (!bind_any_on_fail) {
+                closesocket(s);
+                return NULL;
+            } else {
+                na = NULL;
+            }
+        }
+    }
+    if (na == NULL) {
+        si.sin_port = 0;
+        si.sin_addr.s_addr = INADDR_ANY;
+        if (bind(s, (struct sockaddr *)&si, sizeof(si)) == SOCKET_ERROR) {
+            closesocket(s);
+            return NULL;
+        }
+    }
+
+    unsigned long nonblocking = 1;
+    ioctlsocket(s, FIONBIO, &nonblocking);
+
+    asyncio_fd_t *af = asyncio_add_fd(s, ASYNCIO_READ, asyncio_udp_event, opaque, name);
+    if (af) {
+        af->af_udp_callback = cb;
+    }
+    return af;
 }
 
 void asyncio_udp_send(asyncio_fd_t *af, const void *data, int size, const net_addr_t *remote_addr) {

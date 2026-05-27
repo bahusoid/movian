@@ -38,14 +38,17 @@ static void mouse_button_callback(GLFWwindow* window, int button, int action, in
     gpe.screen_x =  (2.0 * x / g->width) - 1;
     gpe.screen_y = -(2.0 * y / g->height) + 1;
     gpe.ts = arch_get_ts();
-    if (action == GLFW_PRESS) {
+    if (action == GLFW_PRESS)
+    {
         if (button == GLFW_MOUSE_BUTTON_LEFT) gpe.type = GLW_POINTER_LEFT_PRESS;
         else if (button == GLFW_MOUSE_BUTTON_RIGHT) gpe.type = GLW_POINTER_RIGHT_PRESS;
-    } else if (action == GLFW_RELEASE) {
+    }
+    else if (action == GLFW_RELEASE) {
         if (button == GLFW_MOUSE_BUTTON_LEFT) gpe.type = GLW_POINTER_LEFT_RELEASE;
         else if (button == GLFW_MOUSE_BUTTON_RIGHT) gpe.type = GLW_POINTER_RIGHT_RELEASE;
     }
-    if (gpe.type != 0) {
+    //TODO: Fix by adding GLW_POINTER_NONE
+    if (gpe.type != 0 || (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT)) {
         glw_lock(&g->gr);
         glw_pointer_event(&g->gr, &gpe);
         glw_unlock(&g->gr);

@@ -1,11 +1,14 @@
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <windows.h>
 #include "audio2/audio.h"
 #include "networking/net.h"
 #include "arch/arch.h"
 #include "arch/halloc.h"
 #include "main.h"
 #include <malloc.h>
-#include <winsock2.h>
-#include <windows.h>
 #include <time.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -155,7 +158,6 @@ netif_t *net_get_interfaces(void) {
     return NULL;
 }
 
-#include <winsock2.h>
 int arch_pipe(int fd[2]) {
     SOCKET lst = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (lst == INVALID_SOCKET) return -1;

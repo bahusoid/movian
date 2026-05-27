@@ -70,11 +70,11 @@ tcp_read(tcpcon_t *tc, void *buf, size_t len, int all,
 {
   int x;
   size_t off = 0;
-  const int flags = cb == NULL && all ? MSG_WAITALL : 0;
+  const int flags = 0; // MSG_WAITALL is unreliable on Windows
 
   while(1) {
 
-    x = recv(tc->fd, buf + off, len - off, flags);
+    x = recv(tc->fd, (char *)buf + off, len - off, flags);
     if(x <= 0) {
       if(x == -1 && WSAGetLastError() == WSAEINTR)
         continue;
@@ -392,10 +392,8 @@ tcp_huge_buffer(tcpcon_t *tc)
 void
 tcp_set_read_timeout(tcpcon_t *tc, int ms)
 {
-  struct timeval tv;
-  tv.tv_sec  = ms / 1000;
-  tv.tv_usec = (ms % 1000) * 1000;
-  setsockopt(tc->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+  DWORD tv = ms;
+  setsockopt(tc->fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 }
 
 

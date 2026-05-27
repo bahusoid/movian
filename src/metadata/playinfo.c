@@ -34,6 +34,7 @@
 #include "playinfo.h"
 #include "video/video_settings.h"
 #include "notifications.h"
+#include <time.h>
 
 static HTS_MUTEX_DECL(mip_mutex);
 
