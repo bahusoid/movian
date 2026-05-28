@@ -406,8 +406,9 @@ libav_setup() {
 
     # Disable everything by default and assign whitelist what we need
     # Also explicitly disable bzip2 to avoid dependency issues on some platforms
-    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-everything --disable-bzlib"
-    
+    //TODO: Consider using --disable-all
+    LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-everything --disable-bzlib --disable-programs"
+
     # Core components
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-avcodec --enable-avformat --enable-avutil --enable-swresample --enable-swscale"
     
