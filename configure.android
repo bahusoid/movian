@@ -146,11 +146,7 @@ LLVM_TOOLCHAIN="${TOOLCHAIN}llvm-"
 TOOLCHAIN="${LLVM_TOOLCHAIN}"
 
 # Set cross-compilation tools for FFmpeg
-LIBAV_STRIP="${LLVM_TOOLCHAIN}strip"
-LIBAV_NM="${LLVM_TOOLCHAIN}nm"
-LIBAV_AR="${LLVM_TOOLCHAIN}ar"
-LIBAV_RANLIB="${LLVM_TOOLCHAIN}ranlib"
-export LIBAV_STRIP LIBAV_NM LIBAV_AR LIBAV_RANLIB
+LIBAV_ARCH_FLAGS="${LIBAV_ARCH_FLAGS} --cross-prefix=${LLVM_TOOLCHAIN}"
 
 bzip2_setup
 freetype_setup --host=arm-linux-gnueabihf

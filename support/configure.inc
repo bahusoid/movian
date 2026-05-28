@@ -475,21 +475,6 @@ libav_setup() {
         LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --enable-hwaccel=h264_videotoolbox --enable-hwaccel=hevc_videotoolbox"
     fi
 
-    # Add cross-compile tools if specified
-    LIBAV_TOOLS_FLAGS=""
-    if [ -n "${LIBAV_STRIP}" ]; then
-        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --strip=${LIBAV_STRIP}"
-    fi
-    if [ -n "${LIBAV_NM}" ]; then
-        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --nm=${LIBAV_NM}"
-    fi
-    if [ -n "${LIBAV_AR}" ]; then
-        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --ar=${LIBAV_AR}"
-    fi
-    if [ -n "${LIBAV_RANLIB}" ]; then
-        LIBAV_TOOLS_FLAGS="${LIBAV_TOOLS_FLAGS} --ranlib=${LIBAV_RANLIB}"
-    fi
-
     (cd ${LIBAV_BUILD_DIR} && ${TOPDIR}/ext/libav/configure ${LIBAV_ARCH_FLAGS} ${LIBAV_COMMON_FLAGS} ${LIBAV_TOOLS_FLAGS} --prefix=${EXT_INSTALL_DIR} --extra-cflags="${LIBAV_CFLAGS} ${EXTRA_CFLAGS}" --extra-ldflags="${LIBAV_LDFLAGS} ${EXTRA_LDFLAGS}" --cc="${CC}") || die
 
     echo >>${CONFIG_MAK} "LIBAV_BUILD_DIR=${LIBAV_BUILD_DIR}"
