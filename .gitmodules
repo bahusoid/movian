@@ -16,7 +16,8 @@
 	url = https://github.com/andoma/freetype2-ios.git
 [submodule "ext/vmir"]
 	path = ext/vmir
-	url = https://github.com/andoma/vmir
+	url = https://github.com/bahusoid/vmir
+	branch = master
 [submodule "ext/libyuv"]
 	path = ext/libyuv
 	url = https://chromium.googlesource.com/libyuv/libyuv
