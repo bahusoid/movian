@@ -18,24 +18,26 @@
  *  For more information, contact andreas@lonelycoder.com
  */
 #pragma once
-#include "config.h"
+#include "ppapi/c/pp_var.h"
 
-#if defined(_WIN32)
-#include "windows/windows_threads.h"
-#elif defined(linux) || defined(__APPLE__) || defined(__native_client__) || defined(__EMSCRIPTEN__)
-#include "posix/posix_threads.h"
-#elif PS3
-#include "ps3/ps3_threads.h"
-#else
-#error No threading support
-#endif
+const char *pepper_errmsg(int err);
 
+struct net_addr;
+struct rstr;
 
-#if ENABLE_EMU_THREAD_SPECIFICS
-typedef int hts_key_t;
-extern int hts_thread_key_create(unsigned int *k, void (*destrutor)(void *));
-extern int hts_thread_key_delete(unsigned int k);
-extern int hts_thread_set_specific(unsigned int k, void *p);
-extern void *hts_thread_get_specific(unsigned int k);
-extern void hts_thread_exit_specific(void);
-#endif
+int pepper_NetAddress_to_net_addr(struct net_addr *dst, int src);
+int pepper_Resolver_to_net_addr(struct net_addr *dst, int src);
+
+struct rstr *nacl_var_dict_get_str(struct PP_Var dict, const char *key);
+
+int64_t nacl_var_dict_get_int64(struct PP_Var dict, const char *key,
+                                int64_t def);
+
+void nacl_fsinfo(uint64_t *size, uint64_t *avail, const char *fs);
+
+void nacl_dict_set_str(struct PP_Var var_dict, const char *key,
+                       const char *value);
+
+void nacl_dict_set_int(struct PP_Var var_dict, const char *key, int i);
+
+void nacl_dict_set_int64(struct PP_Var var_dict, const char *key, int64_t i);

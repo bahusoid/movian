@@ -18,24 +18,6 @@
  *  For more information, contact andreas@lonelycoder.com
  */
 #pragma once
-#include "config.h"
+void nacl_dnd_open_reply(struct PP_Var var);
 
-#if defined(_WIN32)
-#include "windows/windows_threads.h"
-#elif defined(linux) || defined(__APPLE__) || defined(__native_client__) || defined(__EMSCRIPTEN__)
-#include "posix/posix_threads.h"
-#elif PS3
-#include "ps3/ps3_threads.h"
-#else
-#error No threading support
-#endif
-
-
-#if ENABLE_EMU_THREAD_SPECIFICS
-typedef int hts_key_t;
-extern int hts_thread_key_create(unsigned int *k, void (*destrutor)(void *));
-extern int hts_thread_key_delete(unsigned int k);
-extern int hts_thread_set_specific(unsigned int k, void *p);
-extern void *hts_thread_get_specific(unsigned int k);
-extern void hts_thread_exit_specific(void);
-#endif
+void nacl_dnd_read_reply(struct PP_Var var);

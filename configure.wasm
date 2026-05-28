@@ -1,0 +1,113 @@
+#!/bin/bash
+#
+# Configure script for WebAssembly (Emscripten)
+#
+PLATFORM="wasm"
+DEFAULT_UI="glw"
+CONFIGURE_POSTFIX="wasm"
+
+for opt do
+  optval="${opt#*=}"
+  case "$opt" in
+  --help) show_help
+  ;;
+  --logtarget=*) DEFAULT_LOGTARGET="$optval"
+  ;;
+  --emsdk=*) EMSDK_PATH="$optval"
+  ;;
+  --host=*) HOST="$optval"
+  ;;
+  *)
+  common_opt $opt $optval
+  esac
+done
+if [ -z "${EMSDK_PATH}" ]; then
+    if [ -n "$EMSDK" ]; then
+        EMSDK_PATH="$EMSDK"
+    else
+        echo " --emsdk=PATH argument missing and EMSDK env var not set"
+        echo "Please install Emscripten SDK and activate it or pass --emsdk"
+        exit 1
+    fi
+fi
+
+TOOLCHAIN="${EMSDK_PATH}/upstream/emscripten/em"
+CC="${TOOLCHAIN}cc"
+CXX="${TOOLCHAIN}++"
+AR="${TOOLCHAIN}ar"
+RANLIB="${TOOLCHAIN}ranlib"
+STRIP="${TOOLCHAIN}strip"
+
+source support/configure.inc
+LIBAV_CFLAGS=""
+LIBAV_ARCH_FLAGS=""
+# Override freetype_setup for wasm to use patched config.sub and passed emconfigure
+freetype_setup() {
+    FREETYPE_VER="2.4.9"
+    download_file http://download.savannah.gnu.org/releases/freetype/freetype-old/freetype-${FREETYPE_VER}.tar.gz freetypetarball
+    FREETYPE_SRC_DIR=${BUILDDIR}/freetype-${FREETYPE_VER}
+    FREETYPE_BUILD_DIR=${BUILDDIR}/freetype/build
+    tar -x -C "${BUILDDIR}" -f "${freetypetarball}"
+    mkdir -p "${FREETYPE_BUILD_DIR}"
+    # Replace outdated config.sub and config.guess with modern ones
+    cp /usr/share/misc/config.sub ${FREETYPE_SRC_DIR}/builds/unix/config.sub || true
+    cp /usr/share/misc/config.guess ${FREETYPE_SRC_DIR}/builds/unix/config.guess || true
+    (cd ${FREETYPE_BUILD_DIR} && \
+        CFLAGS="${ARCH_CFLAGS}" CC="${CC}" AR="${AR}" RANLIB="${RANLIB:-ranlib}" \
+        ${EMSDK_PATH}/upstream/emscripten/emconfigure ${FREETYPE_SRC_DIR}/configure \
+        --host=wasm32-linux \
+        --prefix=${EXT_INSTALL_DIR} \
+        --enable-static=yes \
+        --enable-shared=no)
+    echo >>${CONFIG_MAK} "FREETYPE_BUILD_DIR=${FREETYPE_BUILD_DIR}"
+}
+show_help(){
+  common_help
+  echo "  --emsdk=PATH            path to Emscripten SDK"
+  exit 1
+}
+enable sqlite_internal
+enable libfreetype
+enable trex
+enable emu_thread_specifics
+enable glw
+enable polarssl
+enable httpserver
+enable sqlite_vfs
+enable sqlite_locking
+enable glw_backend_opengl_es
+enable vmir
+disable ftpserver
+disable netlog
+[ -f project.config ] && source project.config
+
+
+# Setup environment with WASM build configuration
+setup_env "$@"
+LIBAV_CFLAGS="-I${EXT_INSTALL_DIR}/include"
+LIBAV_LDFLAGS="-L${EXT_INSTALL_DIR}/lib"
+LIBAV_ARCH_FLAGS="--cross-prefix=${TOOLCHAIN}  --enable-cross-compile --arch=wasm32 --target-os=none"
+zlib_setup
+bzip2_setup
+freetype_setup
+libav_setup
+bzip2_setup
+cat >> ${CONFIG_MAK} <<END_OF_CONFIG
+#CC = $CC
+#CXX = $CXX
+#AR = $AR
+#RANLIB = $RANLIB
+#STRIP = $STRIP
+#TOOLCHAIN = $TOOLCHAIN
+
+# -D_FILE_OFFSET_BITS=64 Forces the standard I/O library to use 64-bit structures (like off_t and stat) instead of 32-bit ones. This is critical for any media player so it can support seeking and opening files larger than 2GB. (This is also used globally in configure.linux).
+# -D_GNU_SOURCE Tells the musl standard library to expose non-standard GNU/Linux extensions (like asprintf, getline, or certain socket/threading structs) that Movian's C code utilizes and expects to exist.
+# -D_POSIX_C_SOURCE=200809L Tells the C library to expose the features specified in the POSIX.1-2008 standard (like strnlen or advanced threading extensions).
+# -pthread Instructs the compiler and linker to enable thread support both in the toolchain library paths and WebAssembly outputs (which maps to Web Workers / SharedArrayBuffer under the hood for WebAssembly).
+
+CFLAGS_cfg += -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -pthread
+
+LDFLAGS_cfg += -pthread -s USE_WEBGL2=1
+LDFLAGS_cfg += -s ALLOW_MEMORY_GROWTH=1 -s MAX_WEBGL_VERSION=2
+END_OF_CONFIG
+finalize

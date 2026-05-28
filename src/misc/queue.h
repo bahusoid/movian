@@ -26,6 +26,10 @@
 
 #ifdef _WIN32
 #include "arch/windows/queue.h"
+#elif defined(__EMSCRIPTEN__)
+// Just use copy of bsd queue.h, since Emscripten doesn't have sys/queue.h
+// https://git.alpinelinux.org/aports/plain/main/bsd-compat-headers/queue.h
+#include "arch/wasm/queue.h"
 #else
 #include <sys/queue.h>
 #endif
@@ -123,6 +127,7 @@
 /*
  * Some extra functions for LIST manipulation
  */
+#ifndef LIST_MOVE
 
 #define LIST_MOVE(newhead, oldhead, field) do {			        \
         if((oldhead)->lh_first) {					\
@@ -130,6 +135,7 @@
 	}								\
         (newhead)->lh_first = (oldhead)->lh_first;			\
 } while (0) 
+#endif
 
 #define LIST_INSERT_SORTED(head, elm, field, cmpfunc, type) do {\
         if(LIST_EMPTY(head)) {					\
