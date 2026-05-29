@@ -266,6 +266,10 @@ int main(int argc, char **argv) {
   glw_load_universe(&uiroot->gr);
   glw_unlock(&uiroot->gr);
 
+  if(glw_opengl_init_context(&uiroot->gr)) {
+    panic("GLW OpenGL context init failed");
+  }
+
   emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, uiroot, 0, wasm_resize_cb);
   emscripten_set_mousedown_callback("#canvas", uiroot, 0, wasm_mouse_cb);
   emscripten_set_mouseup_callback("#canvas", uiroot, 0, wasm_mouse_cb);
