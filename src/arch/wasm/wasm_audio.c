@@ -18,6 +18,7 @@
  *  For more information, contact andreas@lonelycoder.com
  */
 #include <unistd.h>
+#include <string.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -42,6 +43,9 @@ typedef struct decoder {
   int rdptr;
   int wrptr;
 
+  float *pass_buf_l;
+  float *pass_buf_r;
+
   double nacl_latency;
   int64_t fifo_latency;
 
@@ -58,17 +62,21 @@ void wasm_audio_process(void *user_data, float *wasm_buf_l, float *wasm_buf_r, i
 
   pthread_mutex_lock(&d->mutex);
 
-  int off = (d->rdptr & SLOTMASK) * 2 * d->ad.ad_tile_size;
-  const float *src = d->samples + off;
+  int have_data = d->rdptr != d->wrptr;
+  if(have_data) {
+    int off = (d->rdptr & SLOTMASK) * 2 * d->ad.ad_tile_size;
+    const float *src = d->samples + off;
+    float s = audio_master_mute ? 0 : audio_master_volume * d->ad.ad_vol_scale;
 
-  float s = audio_master_mute ? 0 : audio_master_volume * d->ad.ad_vol_scale;
-
-  for(int i = 0; i < frames; i++) {
-    wasm_buf_l[i] = src[i * 2 + 0] * s;
-    wasm_buf_r[i] = src[i * 2 + 1] * s;
+    for(int i = 0; i < frames; i++) {
+      wasm_buf_l[i] = src[i * 2 + 0] * s;
+      wasm_buf_r[i] = src[i * 2 + 1] * s;
+    }
+    d->rdptr++;
+  } else {
+    memset(wasm_buf_l, 0, sizeof(float) * frames);
+    memset(wasm_buf_r, 0, sizeof(float) * frames);
   }
-
-  d->rdptr++;
 
   // Note: we can map the ScriptProcessor's latency if needed. For now 0.
   d->nacl_latency = 0;
@@ -78,8 +86,11 @@ void wasm_audio_process(void *user_data, float *wasm_buf_l, float *wasm_buf_r, i
 }
 
 EM_JS(int, init_web_audio, (int sample_rate, int buffer_size, void* userdata, float* wasm_buf_l, float* wasm_buf_r), {
+  if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') {
+    return 0;
+  }
     if (typeof window.audioCtx === 'undefined') {
-        window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({sampleRate: sample_rate});
+    window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({sampleRate: sample_rate, latencyHint: 'interactive'});
     }
     var ctx = window.audioCtx;
     if(ctx.state === 'suspended') {
@@ -145,6 +156,10 @@ nacl_audio_fini(audio_decoder_t *ad)
 
   free(d->samples);
   d->samples = NULL;
+  free(d->pass_buf_l);
+  d->pass_buf_l = NULL;
+  free(d->pass_buf_r);
+  d->pass_buf_r = NULL;
 
   pthread_mutex_destroy(&d->mutex);
   pthread_cond_destroy(&d->cond);
@@ -175,10 +190,14 @@ nacl_audio_reconfig(audio_decoder_t *ad)
   ad->ad_tile_size = tile_size;
 
   // We need to pass float buffers allocated in C for L and R channels
-  float* pass_buf_l = malloc(sizeof(float) * tile_size);
-  float* pass_buf_r = malloc(sizeof(float) * tile_size);
+  d->pass_buf_l = malloc(sizeof(float) * tile_size);
+  d->pass_buf_r = malloc(sizeof(float) * tile_size);
+  if(d->pass_buf_l == NULL || d->pass_buf_r == NULL)
+    return -1;
 
-  sample_rate = init_web_audio(sample_rate, tile_size, d, pass_buf_l, pass_buf_r);
+  sample_rate = init_web_audio(sample_rate, tile_size, d, d->pass_buf_l, d->pass_buf_r);
+  if(sample_rate <= 0)
+    return -1;
   ad->ad_out_sample_rate = sample_rate;
 
   d->samples = calloc(1, SLOTS * 2 * sizeof(float) * ad->ad_tile_size);
@@ -206,14 +225,13 @@ nacl_audio_deliver(audio_decoder_t *ad, int samples, int64_t pts, int epoch)
         d->wrptr != d->rdptr)
     pthread_cond_wait(&d->cond, &d->mutex);
 
-  pthread_mutex_unlock(&d->mutex);
-
   int off = (d->wrptr & SLOTMASK) * 2 /* channels */ * d->ad.ad_tile_size;
 
   uint8_t *data[8] = {0};
   data[0] = (uint8_t *)(d->samples + off);
   swr_convert(ad->ad_avr, data, samples, NULL, 0);
   d->wrptr++;
+  pthread_mutex_unlock(&d->mutex);
 
   if(pts != AV_NOPTS_VALUE) {
 

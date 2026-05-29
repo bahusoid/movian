@@ -10,6 +10,11 @@
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/mman.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "main.h"
 #include "arch/halloc.h"
@@ -73,10 +78,6 @@ void arch_localtime(const time_t *now, struct tm *tm) {
   localtime_r(now, tm);
 }
 
-#include "networking/net.h"
-#include <ifaddrs.h>
-#include <stdarg.h>
-
 void posix_init(void) {
   gconf.cache_path = strdup("/cache");
   gconf.persistent_path = strdup("/persistent");
@@ -94,40 +95,10 @@ void panic(const char *fmt, ...) {
 }
 
 void trace_arch(int level, const char *prefix, const char *str) {
+  (void)level;
   fprintf(stderr, "%s %s\n", prefix, str);
 }
 
 int arch_pipe(int pipefd[2]) {
   return pipe(pipefd);
-}
-
-netif_t *net_get_interfaces(void) {
-  struct ifaddrs *ifa_list, *ifa;
-  struct netif *ni, *n;
-  struct sockaddr_in *sin;
-
-  if (getifaddrs(&ifa_list) < 0)
-    return NULL;
-
-  ni = NULL;
-
-  for (ifa = ifa_list; ifa != NULL; ifa = ifa->ifa_next) {
-    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET)
-      continue;
-    sin = (struct sockaddr_in *)ifa->ifa_addr;
-    n = mycalloc(1, sizeof(struct netif));
-    n->ni_addr.num = sin->sin_addr.s_addr;
-    sin = (struct sockaddr_in *)ifa->ifa_netmask;
-    n->ni_mask.num = sin->sin_addr.s_addr;
-    mystrlcpy(n->ni_name, ifa->ifa_name, sizeof(n->ni_name));
-
-    for(int i = 0; i < 6; i++) {
-        n->ni_hwaddr[i] = i;
-    }
-    n->ni_max_packet_size = 1400;
-    n->ni_next = ni;
-    ni = n;
-  }
-  freeifaddrs(ifa_list);
-  return ni;
 }

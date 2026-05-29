@@ -38,6 +38,9 @@ typedef struct wasm_video_codec {
 
 
 EM_JS(int, js_video_create, (int codec_id, void *opaque), {
+    if (typeof VideoDecoder === 'undefined') {
+        return 0;
+    }
     if(!window.movianDecoders) window.movianDecoders = {};
     const id = Object.keys(window.movianDecoders).length + 1;
     let codecString = 'avc1.4d401e'; // Default to H264 bounds
@@ -55,11 +58,16 @@ EM_JS(int, js_video_create, (int codec_id, void *opaque), {
         }
     };
     
-    const decoder = new VideoDecoder(init);
-    decoder.configure({
-        codec: codecString,
-        hardwareAcceleration: "prefer-hardware"
-    });
+    let decoder;
+    try {
+        decoder = new VideoDecoder(init);
+        decoder.configure({
+            codec: codecString,
+            hardwareAcceleration: "prefer-hardware"
+        });
+    } catch (e) {
+        return 0;
+    }
     
     window.movianDecoders[id] = {
         decoder: decoder,
@@ -95,6 +103,8 @@ EM_JS(void, js_video_close, (int id), {
 
 
 static int wasm_codec_decode(struct media_codec *mc, struct video_decoder *vd, struct media_queue *mq, struct media_buf *mb) {
+    (void)vd;
+    (void)mq;
   wasm_video_codec_t *nvc = mc->opaque;
   int is_keyframe = !!(mb->mb_pkt.flags & AV_PKT_FLAG_KEY) ? 1 : 0;
   
@@ -113,6 +123,7 @@ static int wasm_codec_decode(struct media_codec *mc, struct video_decoder *vd, s
 }
 
 static void wasm_codec_flush(struct media_codec *mc, struct video_decoder *vd) {
+    (void)vd;
   wasm_video_codec_t *nvc = mc->opaque;
   nvc->nvc_annexb.extradata_injected = 0;
   js_video_flush(nvc->decoder_id);

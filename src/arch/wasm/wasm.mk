@@ -8,6 +8,7 @@ SRCS += src/arch/wasm/wasm_main.c \
         src/arch/wasm/wasm_threads.c \
         src/arch/wasm/wasm_dnd.c \
         src/networking/net_posix.c \
+        src/networking/net_ifaddr.c \
         src/networking/asyncio_posix.c \
         src/ui/glw/glw_video_yuvp.c \
         src/ui/glw/glw_video_tex.c \

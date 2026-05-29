@@ -30,8 +30,10 @@
 int running = 0;
 typedef struct wasm_glw_root {
   glw_root_t gr;
-  int mouse_x;
-  int mouse_y;
+  float mouse_x;
+  float mouse_y;
+  int fb_width;
+  int fb_height;
   int full_window;
 } wasm_glw_root_t;
 
@@ -58,11 +60,32 @@ static void glw_in_fullwindow(void *opaque, int fullwindow) {
   }
 }
 
+static void wasm_update_sizes(wasm_glw_root_t *ngr) {
+  double css_w = 0;
+  double css_h = 0;
+  double dpr = emscripten_get_device_pixel_ratio();
+  if(dpr < 1.0)
+    dpr = 1.0;
+
+  emscripten_get_element_css_size("#canvas", &css_w, &css_h);
+  if(css_w <= 0 || css_h <= 0) {
+    css_w = 1280;
+    css_h = 720;
+  }
+
+  ngr->gr.gr_width = (int)css_w;
+  ngr->gr.gr_height = (int)css_h;
+  ngr->fb_width = (int)(css_w * dpr);
+  ngr->fb_height = (int)(css_h * dpr);
+
+  emscripten_set_canvas_element_size("#canvas", ngr->fb_width, ngr->fb_height);
+}
+
 static EM_BOOL wasm_resize_cb(int eventType, const EmscriptenUiEvent *e, void *userData) {
+  (void)eventType;
+  (void)e;
   wasm_glw_root_t *ngr = userData;
-  ngr->gr.gr_width = e->windowInnerWidth;
-  ngr->gr.gr_height = e->windowInnerHeight;
-  emscripten_set_canvas_element_size("#canvas", ngr->gr.gr_width, ngr->gr.gr_height);
+  wasm_update_sizes(ngr);
   
   if (ngr->gr.gr_universe) {
       glw_lock(&ngr->gr);
@@ -110,6 +133,7 @@ static EM_BOOL wasm_mouse_cb(int eventType, const EmscriptenMouseEvent *e, void 
 
 
 static EM_BOOL wasm_wheel_cb(int eventType, const EmscriptenWheelEvent *e, void *userData) {
+  (void)eventType;
   wasm_glw_root_t *ngr = userData;
   glw_pointer_event_t gpe = {0};
   gpe.screen_x = ngr->mouse_x;
@@ -186,7 +210,7 @@ static void mainloop(void)
     glw_layout0(gr->gr_universe, &rc);
 
     if (refresh & GLW_REFRESH_FLAG_RENDER) {
-      glViewport(0, 0, gr->gr_width, gr->gr_height);
+      glViewport(0, 0, ngr->fb_width, ngr->fb_height);
       glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
       glw_render0(gr->gr_universe, &rc);
       glw_post_scene(gr);
@@ -249,11 +273,7 @@ int main(int argc, char **argv) {
   emscripten_set_wheel_callback("#canvas", uiroot, 0, wasm_wheel_cb);
   emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, uiroot, 0, wasm_key_cb);
 
-  // Initial resize
-  double w, h;
-  emscripten_get_element_css_size("#canvas", &w, &h);
-  uiroot->gr.gr_width = w;
-  uiroot->gr.gr_height = h;
+  wasm_update_sizes(uiroot);
 
   emscripten_set_main_loop(mainloop, 0, 1);
   return 0;
