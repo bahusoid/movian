@@ -34,6 +34,10 @@
 #include "misc/bytestream.h"
 #include "arch/arch.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 /**
  *
  */
@@ -71,18 +75,180 @@ typedef struct es_websocket_client {
 
   int ewc_alive;
 
+#ifdef __EMSCRIPTEN__
+  int ewc_browser_ws_id;
+#endif
+
 } es_websocket_client_t;
 
-
-/**
- *
- */
 typedef struct es_websocket_client_xfer_task {
   es_websocket_client_t *ewc;
   int opcode;
   void *buf;
   size_t bufsize;
 } es_websocket_client_xfer_task_t;
+
+static void es_websocket_client_connect_task_fn(void *aux);
+static void es_websocket_client_input_task_fn(void *aux);
+static void es_websocket_client_close(es_websocket_client_t *ewc,
+                                      int statuscode, const char *statusmsg);
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE void wasm_ws_client_onopen(void *opaque);
+EMSCRIPTEN_KEEPALIVE void wasm_ws_client_onmessage(void *opaque, int opcode,
+                                                   const void *data, int len);
+EMSCRIPTEN_KEEPALIVE void wasm_ws_client_onclose(void *opaque, int status,
+                                                 const char *reason);
+
+EMSCRIPTEN_KEEPALIVE void
+wasm_ws_client_onopen(void *opaque)
+{
+  es_websocket_client_t *ewc = opaque;
+  if(ewc == NULL)
+    return;
+
+  ewc->ewc_alive = 1;
+  ewc->ewc_state = EWC_CONNECTED;
+
+  es_resource_retain(&ewc->super);
+  task_run_in_group(es_websocket_client_connect_task_fn, ewc,
+                    ewc->ewc_task_group);
+}
+
+EMSCRIPTEN_KEEPALIVE void
+wasm_ws_client_onmessage(void *opaque, int opcode, const void *data, int len)
+{
+  es_websocket_client_t *ewc = opaque;
+  if(ewc == NULL || ewc->super.er_zombie)
+    return;
+
+  es_websocket_client_xfer_task_t *t = malloc(sizeof(es_websocket_client_xfer_task_t));
+  if(t == NULL)
+    return;
+
+  es_resource_retain(&ewc->super);
+  t->ewc = ewc;
+  t->opcode = opcode;
+  t->buf = malloc(len);
+  t->bufsize = len;
+  if(t->buf == NULL) {
+    es_resource_release(&ewc->super);
+    free(t);
+    return;
+  }
+  memcpy(t->buf, data, len);
+
+  task_run_in_group(es_websocket_client_input_task_fn, t,
+                    ewc->ewc_task_group);
+}
+
+EMSCRIPTEN_KEEPALIVE void
+wasm_ws_client_onclose(void *opaque, int status, const char *reason)
+{
+  es_websocket_client_t *ewc = opaque;
+  if(ewc == NULL)
+    return;
+
+  if(ewc->ewc_state == EWC_CLOSED)
+    return;
+
+  ewc->ewc_state = EWC_CLOSED;
+  es_websocket_client_close(ewc, status ? status : WS_STATUS_ABNORMAL_CLOSE,
+                            reason ? reason : "Closed");
+  es_resource_release(&ewc->super);
+}
+
+EM_JS(int, js_ws_client_create, (const char *url, const char *proto, void *opaque), {
+  if (typeof WebSocket === 'undefined') {
+    return 0;
+  }
+  if (!window.movianWsClients) {
+    window.movianWsClients = {};
+    window.movianWsNextId = 1;
+  }
+
+  var surl = UTF8ToString(url);
+  var sproto = proto ? UTF8ToString(proto) : null;
+  var ws;
+  try {
+    ws = sproto ? new WebSocket(surl, sproto) : new WebSocket(surl);
+  } catch (e) {
+    return 0;
+  }
+
+  ws.binaryType = 'arraybuffer';
+  var id = window.movianWsNextId++;
+  window.movianWsClients[id] = { ws: ws, opaque: opaque };
+
+  ws.onopen = function() {
+    _wasm_ws_client_onopen(opaque);
+  };
+
+  ws.onmessage = function(ev) {
+    if (typeof ev.data === 'string') {
+      var len = lengthBytesUTF8(ev.data);
+      var ptr = _malloc(len + 1);
+      stringToUTF8(ev.data, ptr, len + 1);
+      _wasm_ws_client_onmessage(opaque, 1, ptr, len);
+      _free(ptr);
+      return;
+    }
+
+    if (ev.data instanceof ArrayBuffer) {
+      var arr = new Uint8Array(ev.data);
+      var ptr2 = _malloc(arr.length);
+      HEAPU8.set(arr, ptr2);
+      _wasm_ws_client_onmessage(opaque, 2, ptr2, arr.length);
+      _free(ptr2);
+    }
+  };
+
+  ws.onclose = function(ev) {
+    var reason = ev.reason || "";
+    var len = lengthBytesUTF8(reason);
+    var ptr = _malloc(len + 1);
+    stringToUTF8(reason, ptr, len + 1);
+    _wasm_ws_client_onclose(opaque, ev.code || 1006, ptr);
+    _free(ptr);
+    delete window.movianWsClients[id];
+  };
+
+  ws.onerror = function() {
+  };
+
+  return id;
+});
+
+EM_JS(void, js_ws_client_send, (int id, int opcode, const void *data, int len), {
+  if (!window.movianWsClients || !window.movianWsClients[id]) {
+    return;
+  }
+  var ws = window.movianWsClients[id].ws;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  var bytes = HEAPU8.slice(data, data + len);
+  if (opcode === 1) {
+    ws.send(new TextDecoder('utf-8').decode(bytes));
+  } else {
+    ws.send(bytes);
+  }
+});
+
+EM_JS(void, js_ws_client_close, (int id, int status, const char *msg), {
+  if (!window.movianWsClients || !window.movianWsClients[id]) {
+    return;
+  }
+  var ws = window.movianWsClients[id].ws;
+  var smsg = msg ? UTF8ToString(msg) : "";
+  try {
+    ws.close(status || 1000, smsg);
+  } catch (e) {
+    try { ws.close(); } catch (e2) {}
+  }
+});
+#endif
 
 
 /**
@@ -93,6 +259,11 @@ typedef struct es_websocket_client_close_task {
   int status;
   char *msg;
 } es_websocket_client_close_task_t;
+
+static void es_websocket_client_connect_task_fn(void *aux);
+static void es_websocket_client_input_task_fn(void *aux);
+static void es_websocket_client_close(es_websocket_client_t *ewc,
+                                      int statuscode, const char *statusmsg);
 
 
 /**
@@ -223,6 +394,13 @@ static void
 es_websocket_client_net_destroy(void *aux)
 {
   es_websocket_client_t *ewc = aux;
+#ifdef __EMSCRIPTEN__
+  if(ewc->ewc_browser_ws_id != 0) {
+    js_ws_client_close(ewc->ewc_browser_ws_id, 1000, "");
+    ewc->ewc_browser_ws_id = 0;
+  }
+#endif
+
   if(ewc->ewc_connection != NULL) {
     asyncio_del_fd(ewc->ewc_connection);
     ewc->ewc_connection = NULL;
@@ -264,6 +442,11 @@ es_websocket_client_send_task_fn(void *aux)
   es_websocket_client_xfer_task_t *t = aux;
   es_websocket_client_t *ewc = t->ewc;
 
+#ifdef __EMSCRIPTEN__
+  if(ewc->ewc_browser_ws_id != 0) {
+    js_ws_client_send(ewc->ewc_browser_ws_id, t->opcode, t->buf, t->bufsize);
+  } else
+#endif
   if(ewc->ewc_connection != NULL) {
     htsbuf_queue_t q;
     htsbuf_queue_init(&q, 0);
@@ -526,6 +709,7 @@ es_websocket_client_connected(void *aux, const char *err)
  * Deal with DNS lookup result
  */
 static void
+attribute_unused
 es_websocket_client_connect(void *opaque, int dns_lookup_status,
                             const void *data)
 {
@@ -596,11 +780,25 @@ es_websocket_client_create(duk_context *ctx)
   ewc->ewc_path = strdup(path);
   ewc->ewc_port = port;
 
+#ifdef __EMSCRIPTEN__
+  {
+    char wsurl[2048];
+    snprintf(wsurl, sizeof(wsurl), "%s://%s:%d%s", protostr, hostname, port, path);
+    es_resource_retain(&ewc->super); // held until close callback
+    ewc->ewc_browser_ws_id = js_ws_client_create(wsurl, ewc->ewc_protocol, ewc);
+    if(ewc->ewc_browser_ws_id == 0) {
+      es_resource_release(&ewc->super);
+      es_websocket_client_close(ewc, WS_STATUS_ABNORMAL_CLOSE, "WebSocket init failed");
+    }
+  }
+#else
+
   es_resource_retain(&ewc->super); // for DNS lookup
   ewc->ewc_dns_lookup =
     asyncio_dns_lookup_host(ewc->ewc_hostname,
                             es_websocket_client_connect,
                             ewc);
+#endif
 
   es_resource_push(ctx, &ewc->super);
   return 1;
