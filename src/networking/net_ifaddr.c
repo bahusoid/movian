@@ -41,8 +41,25 @@ net_get_interfaces(void)
   int num = 0;
 
   if(getifaddrs(&ifa_list) != 0) {
+#ifdef __EMSCRIPTEN__
+    // Browser runtimes may not expose native interface enumeration.
+    ni = calloc(2, sizeof(struct netif));
+    if(ni == NULL)
+      return NULL;
+    snprintf(ni[0].ifname, sizeof(ni[0].ifname), "wasm0");
+    ni[0].ipv4_addr[0] = 127;
+    ni[0].ipv4_addr[1] = 0;
+    ni[0].ipv4_addr[2] = 0;
+    ni[0].ipv4_addr[3] = 1;
+    ni[0].ipv4_mask[0] = 255;
+    ni[0].ipv4_mask[1] = 0;
+    ni[0].ipv4_mask[2] = 0;
+    ni[0].ipv4_mask[3] = 0;
+    return ni;
+#else
     TRACE(TRACE_ERROR, "net", "getifaddrs failed: %s", strerror(errno));
     return NULL;
+#endif
   }
 
   for(ifa = ifa_list; ifa != NULL; ifa = ifa->ifa_next)
@@ -71,8 +88,21 @@ net_get_interfaces(void)
   freeifaddrs(ifa_list);
 
   if(ni->ifname[0] == 0) {
+#ifdef __EMSCRIPTEN__
+    snprintf(ni[0].ifname, sizeof(ni[0].ifname), "wasm0");
+    ni[0].ipv4_addr[0] = 127;
+    ni[0].ipv4_addr[1] = 0;
+    ni[0].ipv4_addr[2] = 0;
+    ni[0].ipv4_addr[3] = 1;
+    ni[0].ipv4_mask[0] = 255;
+    ni[0].ipv4_mask[1] = 0;
+    ni[0].ipv4_mask[2] = 0;
+    ni[0].ipv4_mask[3] = 0;
+    return ni;
+#else
     free(ni);
     return NULL;
+#endif
   }
 
   return ni;
