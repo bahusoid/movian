@@ -44,8 +44,10 @@ static EMSCRIPTEN_WEBGL_CONTEXT_HANDLE gl_context;
 void arch_get_random_bytes(void *ptr, size_t size) {
 #ifdef __EMSCRIPTEN__
     EM_ASM_({
-        var buf = new Uint8Array(HEAPU8.buffer, $0, $1);
-        crypto.getRandomValues(buf);
+    // Some browsers reject getRandomValues() on a SharedArrayBuffer-backed view.
+    var tmp = new Uint8Array($1);
+    crypto.getRandomValues(tmp);
+    HEAPU8.set(tmp, $0);
     }, ptr, size);
 #endif
 }
@@ -205,7 +207,7 @@ static void mainloop(void)
   int refresh = gr->gr_need_refresh;
   gr->gr_need_refresh = 0;
 
-  if (refresh) {
+  if (refresh && gr->gr_universe != NULL) {
     glw_rctx_init(&rc, gr->gr_width, gr->gr_height, 1, &zmax);
     glw_layout0(gr->gr_universe, &rc);
 
