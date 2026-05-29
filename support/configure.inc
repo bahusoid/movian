@@ -597,8 +597,14 @@ freetype_setup()
     FREETYPE_BUILD_DIR=${BUILDDIR}/freetype/build
 
     tar -x -C "${BUILDDIR}" -f "${freetypetarball}"
-    cp /usr/share/misc/config.sub ${FREETYPE_SRC_DIR}/builds/unix/config.sub || true
-    cp /usr/share/misc/config.guess ${FREETYPE_SRC_DIR}/builds/unix/config.guess || true
+
+    # WASM-only workaround for old FreeType releases: replace config.{sub,guess}
+    # so wasm triplets are recognized. Not needed for FreeType 2.10.x and newer.
+    if [ "$PLATFORM" = "wasm" ]; then
+        cp /usr/share/misc/config.sub ${FREETYPE_SRC_DIR}/builds/unix/config.sub || true
+        cp /usr/share/misc/config.guess ${FREETYPE_SRC_DIR}/builds/unix/config.guess || true
+    fi
+    
     mkdir -p "${FREETYPE_BUILD_DIR}"
 
     (cd ${FREETYPE_BUILD_DIR} && \
