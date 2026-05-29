@@ -25,7 +25,7 @@ source ./emsdk_env.sh
 ```
 2. Make
 ```bash
-make BUILD=build.wasm
+make BUILD=wasm
 ```
 ## Migration Notes
 - WebAssembly requires specific compilation and linker flags (`-s WASM=1 -s USE_WEBGL2=1 -s USE_PTHREADS=1 -s ASYNCIFY`).

@@ -1,3 +1,5 @@
+#include <limits.h>
+
 /*
  *  Copyright (C) 2007-2015 Lonelycoder AB
  *

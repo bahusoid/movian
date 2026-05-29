@@ -53,6 +53,8 @@ typedef struct fa_dnd {
 } fa_dnd_t;
 
 
+EMSCRIPTEN_KEEPALIVE void wasm_dnd_open_reply(int reqid, int errcode, double size);
+
 EMSCRIPTEN_KEEPALIVE
 void wasm_dnd_open_reply(int reqid, int errcode, double size) {
   fa_dnd_t *dnd;
@@ -70,6 +72,8 @@ void wasm_dnd_open_reply(int reqid, int errcode, double size) {
   hts_mutex_unlock(&dnd_mutex);
 }
 
+
+EMSCRIPTEN_KEEPALIVE void wasm_dnd_read_reply(int reqid, int errcode, int readsize);
 
 EMSCRIPTEN_KEEPALIVE
 void wasm_dnd_read_reply(int reqid, int errcode, int readsize) {

@@ -167,8 +167,8 @@ render_unlocked(glw_root_t *gr)
   glw_backend_root_t *gbr = &gr->gr_be;
   render_state_t rs = {0};
   int64_t ts = arch_get_ts();
-  int uni_calls = 0;
-  int saved_calls = 0;
+  int uni_calls attribute_unused = 0;
+  int saved_calls attribute_unused = 0;
   int current_blendmode = GLW_BLEND_NORMAL;
 
   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,

@@ -18,7 +18,13 @@ Here is a summary of the changes, struggles, and resolutions so far in our migra
 **Struggle D: Missing BSD Headers in Emscripten**
 * **The Problem**: Emscripten’s internal C library (musl) does not ship with BSD's `<sys/queue.h>`. External libraries like `vmir` and parts of Movian core were failing to find it.
 * **The Resolution**: Downloaded a portable `bsd-queue.h` from FreeBSD's source tree directly into the `build.wasm/sys/queue.h` directory, and added `-I$(BUILDDIR)` to the CFLAGS so any `#include <sys/queue.h>` seamlessly routes to the polyfill. Added `-D_GNU_SOURCE` and POSIX standard macros to ensure `gmtime_r` and `strptime` compile correctly.
-### 3. Current Status & Next Steps
-We have successfully managed to compile the vast majority of Movian's core runtime (`src/`) and its heavy external dependencies (`ext/`) into WebAssembly `.o` files. 
-**The Current Blocker**: The compile has reached our newly created `src/arch/wasm/wasm_audio.c` and `wasm_dnd.c`. Because these files were duplicated straight from NACL, they are trying to include `#include "ppapi/c/pp_errors.h"`, which is the deprecated Google Pepper API. 
-**Next Steps**: We must replace all Pepper (`ppapi`) logic from the `wasm_*.c` target files with HTML5/Emscripten equivalents (WebGL2, WebAudio, Browser I/O) to finish the port!
+### 3. Emscripten & HTML5 API Migration (Modernization)
+* **Audio & Drag/Drop (`wasm_audio.c`, `wasm_dnd.c`)**: Removed NaCl dependencies and replaced them with appropriate Emscripten JS interops (`EM_JS`).
+* **OS/System APIs (`wasm_fs.c`, `wasm_threads.c`, `wasm_misc.c`)**: Ported successfully to standard POSIX and Emscripten C standard libraries, stripping out `PPAPI`/Pepper implementations.
+* **Video Decoding (`wasm_video.c`)**: Completely replaced Google Pepper's `PPB_VideoDecoder` with modern HTML5 **WebCodecs API**. Wrote wrappers using `EM_JS` to pass H.264 Annex B frames from Movian directly to the browser's hardware-accelerated video decoder. 
+* **Core Event Loop & UI (`wasm_main.c`)**: Replaced `PPB_Graphics3D` and `PPB_InputEvent` with Emscripten UI events (`<emscripten/html5.h>`) and WebGL2 contexts. Implemented seamless handlers for keyboard, mouse, wheel, and window resizing.
+
+### 4. Current Status & Next Steps
+We are at the very tail end of the migration. The vast majority of Movian's components and the new WebAssembly architecture ports have been properly mapped to web equivalents.
+**The Current Blocker**: We are resolving the final compilation issues. This includes fixing strict Clang checks (e.g., bitfield definitions in `htsp.c`, missing `PATH_MAX` in `vfs.c`) and a missing include path for Freetype (`ft2build.h`) that needs to be propagated via `configure.wasm`. There are also minor API mismatches (like `prop_courier`) remaining in `wasm_main.c`.
+**Next Steps**: Fix the `freetype` include path, resolve the final handful of warnings in core/system files, and link the final `.wasm` JS and HTML payload!

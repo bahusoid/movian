@@ -50,6 +50,8 @@ typedef struct decoder {
 /**
  * Wasm C-side callback
  */
+EMSCRIPTEN_KEEPALIVE void wasm_audio_process(void *user_data, float *wasm_buf_l, float *wasm_buf_r, int frames);
+
 EMSCRIPTEN_KEEPALIVE
 void wasm_audio_process(void *user_data, float *wasm_buf_l, float *wasm_buf_r, int frames) {
   decoder_t *d = user_data;

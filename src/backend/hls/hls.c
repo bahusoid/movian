@@ -459,7 +459,7 @@ hls_variant_update(hls_variant_t *hv, media_pipe_t *mp)
   int byte_offset = -1;
   int byte_size = -1;
   int seq = 1;
-  int items = 0;
+  int items __attribute__((unused)) = 0;
   hls_variant_parser_t hvp;
   int first_seq = -1;
   int discontinuity_seq = -1;

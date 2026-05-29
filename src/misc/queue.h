@@ -127,7 +127,9 @@
 /*
  * Some extra functions for LIST manipulation
  */
-#ifndef LIST_MOVE
+#ifdef LIST_MOVE
+#undef LIST_MOVE
+#endif
 
 #define LIST_MOVE(newhead, oldhead, field) do {			        \
         if((oldhead)->lh_first) {					\
@@ -135,7 +137,7 @@
 	}								\
         (newhead)->lh_first = (oldhead)->lh_first;			\
 } while (0) 
-#endif
+
 
 #define LIST_INSERT_SORTED(head, elm, field, cmpfunc, type) do {\
         if(LIST_EMPTY(head)) {					\

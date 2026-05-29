@@ -2,8 +2,8 @@ FREETYPE_VER="2.4.9"
 BD=${BUILDDIR}/freetype/build
 
 build:
-	${MAKE} -C ${BD}
-	${MAKE} -C ${BD} install
+	${MAKE} -C ${BD} CCraw_build=cc
+	${MAKE} -C ${BD} install CCraw_build=cc
 
 configure:
 	

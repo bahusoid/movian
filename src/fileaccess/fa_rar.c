@@ -260,7 +260,7 @@ rar_archive_load(rar_archive_t *ra)
   uint8_t method, unpver;
   uint16_t flags;
   uint32_t u32;
-  uint64_t packsize, unpsize;
+  uint64_t packsize, unpsize __attribute__((unused));
   int64_t voff;
   rar_volume_t *rv;
   rar_file_t *rf;

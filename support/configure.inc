@@ -406,7 +406,7 @@ libav_setup() {
 
     # Disable everything by default and assign whitelist what we need
     # Also explicitly disable bzip2 to avoid dependency issues on some platforms
-    //TODO: Consider using --disable-all
+    #TODO: Consider using --disable-all
     LIBAV_COMMON_FLAGS="${LIBAV_COMMON_FLAGS} --disable-everything --disable-bzlib --disable-programs"
 
     # Core components
@@ -597,6 +597,8 @@ freetype_setup()
     FREETYPE_BUILD_DIR=${BUILDDIR}/freetype/build
 
     tar -x -C "${BUILDDIR}" -f "${freetypetarball}"
+    cp /usr/share/misc/config.sub ${FREETYPE_SRC_DIR}/builds/unix/config.sub || true
+    cp /usr/share/misc/config.guess ${FREETYPE_SRC_DIR}/builds/unix/config.guess || true
     mkdir -p "${FREETYPE_BUILD_DIR}"
 
     (cd ${FREETYPE_BUILD_DIR} && \

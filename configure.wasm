@@ -41,26 +41,6 @@ STRIP="${TOOLCHAIN}strip"
 source support/configure.inc
 LIBAV_CFLAGS=""
 LIBAV_ARCH_FLAGS=""
-# Override freetype_setup for wasm to use patched config.sub and passed emconfigure
-freetype_setup() {
-    FREETYPE_VER="2.4.9"
-    download_file http://download.savannah.gnu.org/releases/freetype/freetype-old/freetype-${FREETYPE_VER}.tar.gz freetypetarball
-    FREETYPE_SRC_DIR=${BUILDDIR}/freetype-${FREETYPE_VER}
-    FREETYPE_BUILD_DIR=${BUILDDIR}/freetype/build
-    tar -x -C "${BUILDDIR}" -f "${freetypetarball}"
-    mkdir -p "${FREETYPE_BUILD_DIR}"
-    # Replace outdated config.sub and config.guess with modern ones
-    cp /usr/share/misc/config.sub ${FREETYPE_SRC_DIR}/builds/unix/config.sub || true
-    cp /usr/share/misc/config.guess ${FREETYPE_SRC_DIR}/builds/unix/config.guess || true
-    (cd ${FREETYPE_BUILD_DIR} && \
-        CFLAGS="${ARCH_CFLAGS}" CC="${CC}" AR="${AR}" RANLIB="${RANLIB:-ranlib}" \
-        ${EMSDK_PATH}/upstream/emscripten/emconfigure ${FREETYPE_SRC_DIR}/configure \
-        --host=wasm32-linux \
-        --prefix=${EXT_INSTALL_DIR} \
-        --enable-static=yes \
-        --enable-shared=no)
-    echo >>${CONFIG_MAK} "FREETYPE_BUILD_DIR=${FREETYPE_BUILD_DIR}"
-}
 show_help(){
   common_help
   echo "  --emsdk=PATH            path to Emscripten SDK"
@@ -84,12 +64,16 @@ disable netlog
 
 # Setup environment with WASM build configuration
 setup_env "$@"
+
+ARCH_CFLAGS="-pthread -O3"
+
 LIBAV_CFLAGS="-I${EXT_INSTALL_DIR}/include"
 LIBAV_LDFLAGS="-L${EXT_INSTALL_DIR}/lib"
 LIBAV_ARCH_FLAGS="--cross-prefix=${TOOLCHAIN}  --enable-cross-compile --arch=wasm32 --target-os=none"
 zlib_setup
 bzip2_setup
-freetype_setup
+#Alternatvely, we can use emconfigure (inside freetype_setup: emconfigure ${FREETYPE_SRC_DIR}/configure \)
+freetype_setup "--host=wasm32-linux"
 libav_setup
 bzip2_setup
 cat >> ${CONFIG_MAK} <<END_OF_CONFIG

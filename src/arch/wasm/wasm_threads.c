@@ -17,7 +17,6 @@
  *  This program is also available under a commercial proprietary license.
  *  For more information, contact andreas@lonelycoder.com
  */
-#define _GNU_SOURCE  // Needed for PTHREAD_MUTEX_RECURSIVE
 
 #if defined(linux)
 #include <sys/prctl.h>
@@ -25,15 +24,6 @@
 #include <unistd.h>
 #endif
 
-
-#include "ppapi/c/pp_errors.h"
-#include "ppapi/c/pp_module.h"
-#include "ppapi/c/pp_var.h"
-#include "ppapi/c/ppb.h"
-#include "ppapi/c/ppb_message_loop.h"
-
-#include "ui/glw/glw.h"
-#include "ppapi/gles2/gl2ext_ppapi.h"
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -43,9 +33,6 @@
 
 #include <errno.h>
 
-
-extern PPB_MessageLoop *ppb_messageloop;
-extern PP_Instance g_Instance;
 
 int posix_set_thread_priorities;
 
@@ -146,7 +133,6 @@ static void *
 thread_trampoline(void *aux)
 {
   trampoline_t *t = aux;
-  ppb_messageloop->AttachToCurrentThread(ppb_messageloop->Create(g_Instance));
 
   void *r = t->func(t->aux);
   if(gconf.enable_thread_debug)

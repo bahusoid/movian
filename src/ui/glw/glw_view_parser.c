@@ -607,7 +607,7 @@ parse_one_expression(token_t *prev, token_t *first, errorinfo_t *ei,
 		     glw_root_t *gr)
 {
   token_t *t = first, *l = NULL;
-  int balance = 0;
+  int balance attribute_unused = 0;
 
   while(t != NULL) {
 

@@ -5,24 +5,11 @@
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- *  This program is also available under a commercial proprietary license.
- *  For more information, contact andreas@lonelycoder.com
  */
 #include <malloc.h>
 #include <sys/param.h>
 #include <sys/time.h>
 #include <sys/mman.h>
-
-#include "ppapi/c/pp_errors.h"
 
 #include "main.h"
 #include "arch/halloc.h"
@@ -35,158 +22,112 @@
 #include "arch/posix/posix.h"
 #include "arch/arch.h"
 
-#include "nacl.h"
-
-/**
- *
- */
-const char *
-arch_get_system_type(void)
-{
-  return "NaCl";
+const char *arch_get_system_type(void) {
+  return "Wasm";
 }
 
+void arch_sync_path(const char *path) {}
 
-
-/**
- *
- */
-void
-arch_sync_path(const char *path)
-{
-}
-
-
-/**
- *
- */
-size_t
-arch_malloc_size(void *ptr)
-{
+size_t arch_malloc_size(void *ptr) {
   return malloc_usable_size(ptr);
 }
 
-/**
- *
- */
-int64_t
-arch_get_ts(void)
-{
+int64_t arch_get_ts(void) {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (int64_t)tv.tv_sec * 1000000LL + tv.tv_usec;
 }
 
-
-/**
- *
- */
-int64_t
-arch_get_avtime(void)
-{
+int64_t arch_get_avtime(void) {
   return arch_get_ts();
 }
 
-
-/**
- *
- */
-void *
-halloc(size_t size)
-{
-  void *p = mmap(NULL, size, PROT_READ | PROT_WRITE,
-		 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if(p == MAP_FAILED)
-    return NULL;
+void *halloc(size_t size) {
+  void *p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if(p == MAP_FAILED) return NULL;
   return p;
 }
 
-/**
- *
- */
-void
-hfree(void *ptr, size_t size)
-{
+void hfree(void *ptr, size_t size) {
   munmap(ptr, size);
 }
 
-
-void *
-mymalloc(size_t size)
-{
+void *mymalloc(size_t size) {
   return malloc(size);
 }
 
-void *
-myrealloc(void *ptr, size_t size)
-{
+void *myrealloc(void *ptr, size_t size) {
   return realloc(ptr, size);
 }
 
-void *
-mycalloc(size_t count, size_t size)
-{
+void *mycalloc(size_t count, size_t size) {
   return calloc(count, size);
 }
 
-void *
-mymemalign(size_t align, size_t size)
-{
+void *mymemalign(size_t align, size_t size) {
   void *p;
   return posix_memalign(&p, align, size) ? NULL : p;
 }
 
-
-void
-arch_localtime(const time_t *now, struct tm *tm)
-{
+void arch_localtime(const time_t *now, struct tm *tm) {
   localtime_r(now, tm);
 }
 
+#include "networking/net.h"
+#include <ifaddrs.h>
+#include <stdarg.h>
 
-const char *
-pepper_errmsg(int err)
-{
-  switch(err) {
-  case PP_OK: return "OK";
-  case PP_OK_COMPLETIONPENDING: return "Completion pending";
-  case PP_ERROR_FAILED: return "Unspecified error";
-  case PP_ERROR_ABORTED: return "Aborted";
-  case PP_ERROR_BADARGUMENT: return "Bad argument";
-  case PP_ERROR_BADRESOURCE: return "Bad resource";
-  case PP_ERROR_NOINTERFACE: return "No interface";
-  case PP_ERROR_NOACCESS: return "No access";
-  case PP_ERROR_NOMEMORY: return "No memory";
-  case PP_ERROR_NOSPACE:  return "No space";
-  case PP_ERROR_NOQUOTA: return "Out of quota";
-  case PP_ERROR_INPROGRESS: return "In progress";
-  case PP_ERROR_NOTSUPPORTED: return "Not supported";
-  case PP_ERROR_BLOCKS_MAIN_THREAD: return "Blocks main thread";
-  case PP_ERROR_MALFORMED_INPUT: return "Malformed input";
-  case PP_ERROR_RESOURCE_FAILED: return "Resource failed";
-  case PP_ERROR_FILENOTFOUND: return "File not found";
-  case PP_ERROR_FILEEXISTS: return "File exists";
-  case PP_ERROR_FILETOOBIG: return "File too big";
-  case PP_ERROR_FILECHANGED: return "File changed";
-  case PP_ERROR_NOTAFILE: return "Not a file";
-  case PP_ERROR_TIMEDOUT: return "Timeout";
-  case PP_ERROR_USERCANCEL: return "User cancelled";
-  case PP_ERROR_NO_USER_GESTURE: return "No pending user gesture";
-  case PP_ERROR_CONTEXT_LOST: return "Graphics context lost";
-  case PP_ERROR_NO_MESSAGE_LOOP: return "No message loop";
-  case PP_ERROR_WRONG_THREAD: return "Wrong thread";
-  case PP_ERROR_CONNECTION_CLOSED: return "Connection closed";
-  case PP_ERROR_CONNECTION_RESET: return "Connection reset";
-  case PP_ERROR_CONNECTION_REFUSED: return "Connection refused";
-  case PP_ERROR_CONNECTION_ABORTED: return "Connection aborted";
-  case PP_ERROR_CONNECTION_FAILED: return "Connection failed";
-  case PP_ERROR_CONNECTION_TIMEDOUT: return "Connection timed out";
-  case PP_ERROR_ADDRESS_INVALID: return "Invalid address";
-  case PP_ERROR_ADDRESS_UNREACHABLE: return "Address unreachable";
-  case PP_ERROR_ADDRESS_IN_USE: return "Address in use";
-  case PP_ERROR_MESSAGE_TOO_BIG: return "Messagse too big";
-  case PP_ERROR_NAME_NOT_RESOLVED: return "Name not resolved";
-  default:
-    return "Unmapped error";
+void posix_init(void) {
+  gconf.cache_path = strdup("/cache");
+  gconf.persistent_path = strdup("/persistent");
+  snprintf(gconf.os_info, sizeof(gconf.os_info), "WebAssembly");
+}
+
+void panic(const char *fmt, ...) {
+  va_list ap;
+  char buf[1024];
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  fprintf(stderr, "PANIC: %s\n", buf);
+  exit(1);
+}
+
+void trace_arch(int level, const char *prefix, const char *str) {
+  fprintf(stderr, "%s %s\n", prefix, str);
+}
+
+int arch_pipe(int pipefd[2]) {
+  return pipe(pipefd);
+}
+
+netif_t *net_get_interfaces(void) {
+  struct ifaddrs *ifa_list, *ifa;
+  struct netif *ni, *n;
+  struct sockaddr_in *sin;
+
+  if (getifaddrs(&ifa_list) < 0)
+    return NULL;
+
+  ni = NULL;
+
+  for (ifa = ifa_list; ifa != NULL; ifa = ifa->ifa_next) {
+    if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET)
+      continue;
+    sin = (struct sockaddr_in *)ifa->ifa_addr;
+    n = mycalloc(1, sizeof(struct netif));
+    n->ni_addr.num = sin->sin_addr.s_addr;
+    sin = (struct sockaddr_in *)ifa->ifa_netmask;
+    n->ni_mask.num = sin->sin_addr.s_addr;
+    mystrlcpy(n->ni_name, ifa->ifa_name, sizeof(n->ni_name));
+
+    for(int i = 0; i < 6; i++) {
+        n->ni_hwaddr[i] = i;
+    }
+    n->ni_max_packet_size = 1400;
+    n->ni_next = ni;
+    ni = n;
   }
+  freeifaddrs(ifa_list);
+  return ni;
 }

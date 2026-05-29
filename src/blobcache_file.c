@@ -110,7 +110,7 @@ static enum {
   BLOBCACHE_STOPPING,
 } bcstate;
 
-static int loaded_cache_is_from;
+static int loaded_cache_is_from __attribute__((unused));
 
 static int index_dirty;
 
