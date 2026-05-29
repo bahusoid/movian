@@ -788,7 +788,12 @@ es_websocket_client_create(duk_context *ctx)
     ewc->ewc_browser_ws_id = js_ws_client_create(wsurl, ewc->ewc_protocol, ewc);
     if(ewc->ewc_browser_ws_id == 0) {
       es_resource_release(&ewc->super);
-      es_websocket_client_close(ewc, WS_STATUS_ABNORMAL_CLOSE, "WebSocket init failed");
+      // Fallback to existing socket/DNS path for non-browser or constrained runtimes.
+      es_resource_retain(&ewc->super); // for DNS lookup
+      ewc->ewc_dns_lookup =
+        asyncio_dns_lookup_host(ewc->ewc_hostname,
+                                es_websocket_client_connect,
+                                ewc);
     }
   }
 #else
