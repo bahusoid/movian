@@ -89,58 +89,211 @@ EM_JS(int, init_web_audio, (int sample_rate, int buffer_size, void* userdata, fl
   if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') {
     return 0;
   }
-    if (typeof window.audioCtx === 'undefined') {
+
+  if (window.movianAudio) {
+    if (window.movianAudio.pumpTimer) {
+      clearInterval(window.movianAudio.pumpTimer);
+    }
+    if (window.movianAudio.node) {
+      try { window.movianAudio.node.disconnect(); } catch (e) {}
+    }
+    if (window.movianAudio.spr) {
+      try { window.movianAudio.spr.disconnect(); } catch (e) {}
+    }
+  }
+
+  if (typeof window.audioCtx === 'undefined') {
     window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({sampleRate: sample_rate, latencyHint: 'interactive'});
-    }
-    var ctx = window.audioCtx;
-    if(ctx.state === 'suspended') {
-        ctx.resume();
-    }
+  }
+  var ctx = window.audioCtx;
+  if(ctx.state === 'suspended') {
+    ctx.resume();
+  }
 
-    var spr = ctx.createScriptProcessor(buffer_size, 0, 2);
+  var state = {
+    ctx: ctx,
+    spr: null,
+    node: null,
+    pumpTimer: null,
+    queueDepth: 0,
+    queueTarget: 6,
+    bufferSize: buffer_size,
+    userData: userdata,
+    bufL: wasm_buf_l,
+    bufR: wasm_buf_r
+  };
+  window.movianAudio = state;
 
-    spr.onaudioprocess = function(e) {
-        var outL = e.outputBuffer.getChannelData(0);
-        var outR = e.outputBuffer.getChannelData(1);
+  function renderOneChunk() {
+    _wasm_audio_process(state.userData, state.bufL, state.bufR, state.bufferSize);
+  }
 
-        // Pass to C using exported wasm_audio_process
-        _wasm_audio_process(userdata, wasm_buf_l, wasm_buf_r, buffer_size);
+  function copyChunkTo(outL, outR) {
+    renderOneChunk();
+    outL.set(HEAPF32.subarray(state.bufL >> 2, (state.bufL >> 2) + state.bufferSize));
+    outR.set(HEAPF32.subarray(state.bufR >> 2, (state.bufR >> 2) + state.bufferSize));
+  }
 
-        // Copy audio data from the WebAssembly buffer into the Web Audio API buffer
-        outL.set(HEAPF32.subarray(wasm_buf_l >> 2, (wasm_buf_l >> 2) + buffer_size));
-        outR.set(HEAPF32.subarray(wasm_buf_r >> 2, (wasm_buf_r >> 2) + buffer_size));
-    };
+  var spr = ctx.createScriptProcessor(buffer_size, 0, 2);
+  spr.onaudioprocess = function(e) {
+    var outL = e.outputBuffer.getChannelData(0);
+    var outR = e.outputBuffer.getChannelData(1);
+    copyChunkTo(outL, outR);
+  };
+  spr.connect(ctx.destination);
+  state.spr = spr;
 
-    spr.connect(ctx.destination);
-    window.audioSpr = spr;
+  if (ctx.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+    var workletSrc = [
+      'class MovianPcmProcessor extends AudioWorkletProcessor {',
+      '  constructor() {',
+      '    super();',
+      '    this.queue = [];',
+      '    this.off = 0;',
+      '    this.port.onmessage = (e) => {',
+      '      if (e.data && e.data.type === "pcm") {',
+      '        this.queue.push({l: e.data.l, r: e.data.r});',
+      '      }',
+      '    };',
+      '  }',
+      '  process(inputs, outputs) {',
+      '    const out = outputs[0];',
+      '    const L = out[0];',
+      '    const R = out[1] || out[0];',
+      '    let i = 0;',
+      '    while (i < L.length) {',
+      '      if (this.queue.length === 0) {',
+      '        L.fill(0, i);',
+      '        if (R !== L) R.fill(0, i);',
+      '        break;',
+      '      }',
+      '      const cur = this.queue[0];',
+      '      const rem = cur.l.length - this.off;',
+      '      const n = Math.min(rem, L.length - i);',
+      '      L.set(cur.l.subarray(this.off, this.off + n), i);',
+      '      if (R !== L) R.set(cur.r.subarray(this.off, this.off + n), i);',
+      '      i += n;',
+      '      this.off += n;',
+      '      if (this.off >= cur.l.length) {',
+      '        this.queue.shift();',
+      '        this.off = 0;',
+      '        this.port.postMessage({type: "consumed"});',
+      '      }',
+      '    }',
+      '    return true;',
+      '  }',
+      '}',
+      'registerProcessor("movian-pcm-processor", MovianPcmProcessor);'
+    ].join('\n');
 
-    return ctx.sampleRate;
+    var blob = new Blob([workletSrc], {type: 'application/javascript'});
+    var url = URL.createObjectURL(blob);
+
+    ctx.audioWorklet.addModule(url).then(function() {
+      if (!window.movianAudio || window.movianAudio !== state) {
+        return;
+      }
+
+      var node = new AudioWorkletNode(ctx, 'movian-pcm-processor', {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [2]
+      });
+      state.node = node;
+      state.queueDepth = 0;
+
+      node.port.onmessage = function(e) {
+        if (e.data && e.data.type === 'consumed' && state.queueDepth > 0) {
+          state.queueDepth--;
+        }
+      };
+
+      function pump() {
+        if (!window.movianAudio || window.movianAudio !== state || !state.node) {
+          return;
+        }
+        while (state.queueDepth < state.queueTarget) {
+          renderOneChunk();
+          var left = new Float32Array(state.bufferSize);
+          var right = new Float32Array(state.bufferSize);
+          left.set(HEAPF32.subarray(state.bufL >> 2, (state.bufL >> 2) + state.bufferSize));
+          right.set(HEAPF32.subarray(state.bufR >> 2, (state.bufR >> 2) + state.bufferSize));
+          state.node.port.postMessage({type: 'pcm', l: left, r: right}, [left.buffer, right.buffer]);
+          state.queueDepth++;
+        }
+      }
+
+      state.pumpTimer = setInterval(pump, 8);
+      pump();
+      node.connect(ctx.destination);
+
+      if (state.spr) {
+        state.spr.disconnect();
+        state.spr.onaudioprocess = null;
+        state.spr = null;
+      }
+    }).catch(function() {
+    }).finally(function() {
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  return ctx.sampleRate;
 });
 
 EM_JS(void, pause_web_audio, (), {
-    if (typeof window.audioCtx !== 'undefined') {
-        if (window.audioSpr) {
-            window.audioSpr.disconnect();
-        }
-        window.audioCtx.suspend();
+  var a = window.movianAudio;
+  if (a) {
+    if (a.spr) {
+      a.spr.disconnect();
     }
+    if (a.node) {
+      a.node.disconnect();
+    }
+  }
+  if (typeof window.audioCtx !== 'undefined') {
+    window.audioCtx.suspend();
+  }
 });
 
 EM_JS(void, play_web_audio, (), {
-    if (typeof window.audioCtx !== 'undefined') {
-         if (window.audioSpr) {
-             window.audioSpr.connect(window.audioCtx.destination);
-         }
-         window.audioCtx.resume();
-    }
+  var a = window.movianAudio;
+  if (typeof window.audioCtx !== 'undefined') {
+     if (a) {
+       if (a.node) {
+         a.node.connect(window.audioCtx.destination);
+       } else if (a.spr) {
+         a.spr.connect(window.audioCtx.destination);
+       }
+     }
+     window.audioCtx.resume();
+  }
 });
 
 EM_JS(void, finish_web_audio, (), {
-    if (window.audioSpr) {
-        window.audioSpr.disconnect();
-        window.audioSpr.onaudioprocess = null;
-        window.audioSpr = null;
-    }
+  var a = window.movianAudio;
+  if (!a) {
+    return;
+  }
+
+  if (a.pumpTimer) {
+    clearInterval(a.pumpTimer);
+    a.pumpTimer = null;
+  }
+
+  if (a.node) {
+    a.node.disconnect();
+    a.node.port.onmessage = null;
+    a.node = null;
+  }
+
+  if (a.spr) {
+    a.spr.disconnect();
+    a.spr.onaudioprocess = null;
+    a.spr = null;
+  }
+
+  window.movianAudio = null;
 });
 
 
