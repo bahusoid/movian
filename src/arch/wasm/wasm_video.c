@@ -43,10 +43,13 @@ EM_JS(int, js_video_create, (int codec_id, void *opaque), {
     }
     if(!window.movianDecoders) window.movianDecoders = {};
     const id = Object.keys(window.movianDecoders).length + 1;
-    let codecString = 'avc1.4d401e'; // Default to H264 bounds
-    
-    if (codec_id === /* AV_CODEC_ID_HEVC */ 173) codecString = 'hev1.1.6.L93.B0'; // Placeholder for HEVC
-    else if (codec_id === /* AV_CODEC_ID_VP9 */ 167) codecString = 'vp09.00.10.08';
+    let candidates = ['avc1.4d401e', 'avc1.42E01E', 'avc3.4d401e'];
+
+    if (codec_id === /* AV_CODEC_ID_HEVC */ 173) {
+        candidates = ['hev1.1.6.L93.B0', 'hvc1.1.6.L93.B0', 'hev1.1.6.L120.B0'];
+    } else if (codec_id === /* AV_CODEC_ID_VP9 */ 167) {
+        candidates = ['vp09.00.10.08', 'vp09.00.41.08'];
+    }
     
     const init = {
         output: (chunk) => {
@@ -58,21 +61,33 @@ EM_JS(int, js_video_create, (int codec_id, void *opaque), {
         }
     };
     
-    let decoder;
-    try {
-        decoder = new VideoDecoder(init);
-        decoder.configure({
-            codec: codecString,
-            hardwareAcceleration: "prefer-hardware"
-        });
-    } catch (e) {
+    let decoder = new VideoDecoder(init);
+    let configuredCodec = null;
+    for (let i = 0; i < candidates.length; i++) {
+        try {
+            decoder.configure({
+                codec: candidates[i],
+                hardwareAcceleration: "prefer-hardware"
+            });
+            configuredCodec = candidates[i];
+            break;
+        } catch (e) {
+        }
+    }
+
+    if (configuredCodec === null) {
+        try {
+            decoder.close();
+        } catch (e) {
+        }
         return 0;
     }
     
     window.movianDecoders[id] = {
         decoder: decoder,
         readyFrames: [],
-        opaque: opaque
+        opaque: opaque,
+        codec: configuredCodec
     };
     return id;
 });
