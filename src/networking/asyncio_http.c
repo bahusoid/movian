@@ -21,12 +21,17 @@
 #include "fileaccess/http_client.h"
 #include "asyncio.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 LIST_HEAD(asyncio_http_req_list, asyncio_http_req);
 
+#ifndef __EMSCRIPTEN__
 static hts_mutex_t asyncio_http_mutex;
 static int asyncio_http_worker;
 static struct asyncio_http_req_list asyncio_http_completed;
-
+#endif
 
 
 /*************************************************************************
@@ -43,6 +48,20 @@ struct asyncio_http_req {
   void *ahr_opaque;
 };
 
+#ifdef __EMSCRIPTEN__
+static void
+asyncio_http_deliver_one(void *opaque)
+{
+  asyncio_http_req_t *ahr = opaque;
+
+  if(!ahr->ahr_cancelled)
+    ahr->ahr_cb(ahr->ahr_req, ahr->ahr_opaque);
+
+  http_req_release(ahr->ahr_req);
+  free(ahr);
+}
+#endif
+
 
 /**
  *
@@ -53,12 +72,17 @@ asyncio_http_cb(http_req_aux_t *hra, void *opaque, int error)
   asyncio_http_req_t *ahr = opaque;
   ahr->ahr_req = http_req_retain(hra);
 
+#ifdef __EMSCRIPTEN__
+  // Schedule completion on the browser main loop.
+  emscripten_async_call(asyncio_http_deliver_one, ahr, 0);
+#else
   // This arrives on a different thread so we need to reschedule
 
   hts_mutex_lock(&asyncio_http_mutex);
   LIST_INSERT_HEAD(&asyncio_http_completed, ahr, ahr_link);
   hts_mutex_unlock(&asyncio_http_mutex);
   asyncio_wakeup_worker(asyncio_http_worker);
+#endif
 }
 
 
@@ -97,6 +121,7 @@ asyncio_http_cancel(asyncio_http_req_t *ahr)
 /**
  *
  */
+#ifndef __EMSCRIPTEN__
 static void
 ahr_deliver_cb(void)
 {
@@ -120,6 +145,7 @@ ahr_deliver_cb(void)
 
   hts_mutex_unlock(&asyncio_http_mutex);
 }
+#endif
 
 
 /**
@@ -128,8 +154,10 @@ ahr_deliver_cb(void)
 static void
 asyncio_http_init(void)
 {
+#ifndef __EMSCRIPTEN__
   hts_mutex_init(&asyncio_http_mutex);
   asyncio_http_worker = asyncio_add_worker(ahr_deliver_cb);
+#endif
 }
 
 
