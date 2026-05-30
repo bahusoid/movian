@@ -4,17 +4,16 @@ html,body {
     padding:0;
     width: 100vw;
     height: 100vh;
+  overflow: hidden;
+  background: linear-gradient(#141414, #3c3c3c);
 }
 
 
-#appcontainer {
-    height: 100vw;
-    width: 100vh;
-}
-
-embed {
+#canvas {
+  display: block;
     height: 100vh;
     width: 100vw;
+  touch-action: none;
 }
 
 #loader {

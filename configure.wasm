@@ -93,5 +93,7 @@ CFLAGS_cfg += -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L -pt
 
 LDFLAGS_cfg += -pthread -s USE_WEBGL2=1
 LDFLAGS_cfg += -s ALLOW_MEMORY_GROWTH=1 -s MAX_WEBGL_VERSION=2
+LDFLAGS_cfg += --preload-file res@/res --preload-file lang@/lang
+LDFLAGS_cfg += --preload-file glwskins@/glwskins --preload-file guresources@/guresources
 END_OF_CONFIG
 finalize

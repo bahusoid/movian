@@ -1,30 +1,23 @@
-To run Movian from source, first configure
+To run Movian from source with the WebAssembly build:
 
 
-   ./configure --pepper=/PATH/TO/PEPPER_xx
+   source emsdk/emsdk_env.sh
+   ./configure.wasm
+   make BUILD=wasm stage
 
-   make
+Then serve the staged directory:
 
-Then in build.nacl/stage
+   cd build.wasm/stage
+   python3 -m http.server 8000
 
-   python -m SimpleHTTPServer
+Open http://localhost:8000/index.html in a browser.
 
-Then start Chrome from commandline to allows NaCl from any websites and
-also allow full socket access. (The latter can only be done from command line)
+Do not open `index.html` directly via `file://`.
+The WebAssembly runtime fetches `movian.wasm` and other assets, which modern
+browsers block from local file URLs.
 
-On OS/X:
-
-   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --allow-nacl-socket-api=localhost  --enable-logging=stderr --enable-nacl http://localhost:8000/index.html
-
-Go fullscreen with F11
+The old `background.js` and `manifest.json` files are Chrome App / NaCl leftovers
+and are not part of the normal WASM startup path anymore.
 
 For more key bindings see
  https://movian.tv/projects/showtime/wiki/Key_mappings
-
-To debug, add these flags to chrome:
-
-   --enable-nacl-debug --no-sandbox --disable-hang-monitor
-
-And start gdb like:
-
- pepper_xx/toolchain/linux_arm_glibc/bin/i686-nacl-gdb -x gdb-script.txt

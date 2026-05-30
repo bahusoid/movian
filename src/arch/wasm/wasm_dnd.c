@@ -25,6 +25,7 @@
 #endif
 
 #include "main.h"
+#include "event.h"
 #include "fileaccess/fa_proto.h"
 
 // Note: Replaced NaCl PPAPI dependencies with WebAssembly EM_JS integrations
@@ -90,6 +91,13 @@ void wasm_dnd_read_reply(int reqid, int errcode, int readsize) {
     hts_cond_signal(&dnd->cond);
   }
   hts_mutex_unlock(&dnd_mutex);
+}
+
+EMSCRIPTEN_KEEPALIVE void wasm_openurl(const char *url);
+
+EMSCRIPTEN_KEEPALIVE
+void wasm_openurl(const char *url) {
+  event_dispatch(event_create_openurl(url));
 }
 
 

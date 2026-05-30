@@ -1,171 +1,158 @@
+(() => {
+  'use strict';
 
-var stelem;
-var droppedfile;
-var running = false;
-var loaded = false;
+  const appversion = 'development';
+  let loader = null;
+  let crash = null;
+  let crashInfo = null;
+  let versionTag = null;
+  let canvas = null;
+  const encoder = new TextEncoder();
 
+  let runtimeReady = false;
 
-var appversion = "development";
-
-if(typeof chrome.runtime['getManifest'] == 'function') {
-  var manifest = chrome.runtime.getManifest();
-  appversion = manifest.version;
-}
-
-
-console.log("Running version: " + appversion);
-console.log("Browser version: " + navigator.userAgent);
-
-
-
-var loadtimeout = setTimeout(function() {
-  document.getElementById('vertag').innerText = appversion;
-   document.getElementById('loader').style.display='block';
-
-}, 1000);
-
-
-function handleDrop(e) {
-  e.stopPropagation();
-  e.preventDefault();
-
-  var types = e.dataTransfer.types;
-  var files = e.dataTransfer.files;
-  var items = e.dataTransfer.items;
-
-  if(types[0] == 'Files') {
-    droppedfile = files[0];
-    stelem.postMessage({msgtype: 'openurl',
-                        url: 'dragndrop://' + files[0].name});
-    return;
+  function showLoader() {
+    if (versionTag)
+      versionTag.textContent = appversion;
+    if (loader)
+      loader.style.display = 'block';
   }
 
-  if(types[0] == 'text/uri-list' || types[0] == 'text/plain') {
-    items[0].getAsString(function(url) {
-      stelem.postMessage({msgtype:'openurl', url: url});
-    });
-    return;
+  function hideLoader() {
+    if (loader)
+      loader.style.display = 'none';
   }
-}
 
+  function showCrash(reason) {
+    document.body.style.background = '#fff';
+    hideLoader();
+    if (canvas)
+      canvas.style.display = 'none';
+    if (crash)
+      crash.style.display = 'block';
+    if (crashInfo)
+      crashInfo.textContent = [
+      'Version: ' + appversion,
+      'Event: ' + reason,
+      'Running: ' + (runtimeReady ? 'yes' : 'no'),
+      'Browser: ' + navigator.userAgent
+    ].join('\n');
+  }
 
-function handleDragOver(e) {
-  e.stopPropagation();
-  e.preventDefault();
-}
+  function bindUiElements() {
+    loader = document.getElementById('loader');
+    crash = document.getElementById('crash');
+    crashInfo = document.getElementById('crashinfo');
+    versionTag = document.getElementById('vertag');
+    canvas = document.getElementById('canvas');
+  }
 
-function cleanup() {
-    document.body.style.background = "#fff";
-    if(!running)
-      document.getElementById('loader').style.display='none';
-    document.getElementById('appcontainer').style.display='none';
-    document.getElementById('crash').style.display='block';
-}
+  function openUrl(url) {
+    const module = window.Module;
+    const malloc = module && (module._malloc || window._malloc);
+    const free = module && (module._free || window._free);
+    const heap = (module && module.HEAPU8) || window.HEAPU8;
 
-
-
-function displaycrash(reason) {
-  cleanup();
-
-  var dbginfo = "Version: " + appversion + "\nEvent: " + reason + "\nLoaded: " + (loaded ? "yes": "no") +"\nRunning: " + (running ? "yes" : "no") + "\nBrowser: " + navigator.userAgent + "\nDOM LastError: " + stelem.lastError;
-
-  document.getElementById('crashinfo').innerText = dbginfo;
-}
-
-
-function handleMessage(e) {
-
-  switch(e.data.msgtype) {
-  case 'openfile':
-    if(e.data.filename == droppedfile.name) {
-      var m = {msgtype:'dndopenreply',
-               reqid: e.data.reqid,
-               size: droppedfile.size,
-              };
-      stelem.postMessage(m);
-    } else {
-      stelem.postMessage({msgtype:'dndopenreply',
-                          reqid: e.data.reqid,
-                          error: 1});
+    if (!module || typeof module._wasm_openurl !== 'function' || !malloc || !free || !heap) {
+      showCrash('WASM runtime is not ready for URL dispatch');
+      return;
     }
-    break;
-  case 'readfile':
-    var chunk = droppedfile.slice(e.data.fpos, e.data.fpos + e.data.size);
-    var arrayBuffer;
-    var fileReader = new FileReader();
-    fileReader.onload = function() {
-      arrayBuffer = this.result;
-      stelem.postMessage({msgtype:'dndreadreply',
-                          reqid: e.data.reqid,
-                          buf: arrayBuffer});
+
+    const bytes = encoder.encode(url + '\0');
+    const ptr = malloc(bytes.length);
+    if (!ptr) {
+      showCrash('Out of memory while dispatching URL');
+      return;
     }
-    fileReader.readAsArrayBuffer(chunk);
-    break;
 
-  case 'fsinfo':
-    var fn = e.data.fs == 'cache' ? navigator.webkitTemporaryStorage :
-      navigator.webkitPersistentStorage;
-
-    fn.queryUsageAndQuota(function(used, size) {
-      stelem.postMessage({msgtype:'rpcreply',
-                          used: used,
-                          size: size,
-                          reqid: e.data.reqid});
-    });
-    break;
-
-  case 'running':
-    running = true;
-    document.getElementById("loader").parentNode.removeChild(loader);
-    document.body.style.background = "#000";
-    clearTimeout(loadtimeout);
-    break;
-
-  case 'panic':
-    displaycrash('Panic: ' + e.data.reason);
-    break;
+    try {
+      heap.set(bytes, ptr);
+      module._wasm_openurl(ptr);
+    } finally {
+      free(ptr);
+    }
   }
-}
 
+  function handleDragOver(e) {
+    e.preventDefault();
+  }
 
+  function handleDrop(e) {
+    e.preventDefault();
 
-function launch() {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) {
+      window.droppedfile = file;
+      openUrl('dragndrop://' + file.name);
+      return;
+    }
 
-  stelem = document.createElement('embed');
+    const item = e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items[0];
+    if (!item) {
+      return;
+    }
 
-  stelem.src = 'app.nmf';
-  stelem.type = 'application/x-pnacl';
-  stelem.id = 'app';
+    item.getAsString(function(url) {
+      if (url)
+        openUrl(url);
+    });
+  }
 
-  stelem.addEventListener('dragover', handleDragOver, false);
-  stelem.addEventListener('drop', handleDrop, false);
-  stelem.addEventListener('message', handleMessage, true);
+  function startRuntime() {
+    bindUiElements();
 
-  stelem.addEventListener('crash', function(event) {
-    displaycrash('crash');
+    if (!canvas) {
+      showCrash('Canvas element not found in page');
+      return;
+    }
+
+    window.droppedfile = null;
+    window.Module = {
+      canvas: canvas,
+      locateFile: function(path) {
+        return path;
+      },
+      onRuntimeInitialized: function() {
+        runtimeReady = true;
+        hideLoader();
+      },
+      onAbort: function(reason) {
+        showCrash('Abort: ' + reason);
+      },
+      print: function() {
+        console.log.apply(console, arguments);
+      },
+      printErr: function() {
+        console.error.apply(console, arguments);
+      }
+    };
+
+    document.addEventListener('dragover', handleDragOver, false);
+    document.addEventListener('drop', handleDrop, false);
+
+    const script = document.createElement('script');
+    script.src = 'movian.js';
+    script.async = true;
+    script.onerror = function() {
+      showCrash('Failed to load movian.js');
+    };
+    document.head.appendChild(script);
+
+    showLoader();
+    setTimeout(function() {
+      if (!runtimeReady)
+        showLoader();
+    }, 1000);
+  }
+
+  window.addEventListener('error', function(e) {
+    showCrash(e.message || 'Unhandled error');
   });
 
-  stelem.addEventListener('load', function(event) {
-    console.log("Load event fired");
-    loaded = true;
-  });
-
-  stelem.addEventListener('error', function(event) {
-    displaycrash('error');
-  });
-
-  document.getElementById('appcontainer').appendChild(stelem);
-}
-
-navigator.webkitPersistentStorage.requestQuota(128*1024*1024, function(bytes) {
-  console.log('Allocated '+bytes+' bytes of persistant storage.');
-  launch();
-  document.getElementById("app").focus();
-}, function(e) {
-  alert('Failed to allocate disk space, Movian will not start')
-});
-
-document.addEventListener('visibilitychange', function() {
-  stelem.postMessage({msgtype: document.hidden ? 'hidden' : 'visible'});
-}, false);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startRuntime, { once: true });
+  } else {
+    startRuntime();
+  }
+})();
 

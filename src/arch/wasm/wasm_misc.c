@@ -16,6 +16,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include "main.h"
 #include "arch/halloc.h"
 #include "misc/callout.h"
@@ -79,9 +83,25 @@ void arch_localtime(const time_t *now, struct tm *tm) {
 }
 
 void posix_init(void) {
-  gconf.cache_path = strdup("/cache");
-  gconf.persistent_path = strdup("/persistent");
+  gconf.cache_path = strdup("cache:///cache");
+  gconf.persistent_path = strdup("persistent:///persistent");
   snprintf(gconf.os_info, sizeof(gconf.os_info), "WebAssembly");
+
+#ifdef __EMSCRIPTEN__
+  EM_ASM({
+    if(typeof FS !== 'undefined') {
+      try { FS.mkdir('/cache'); } catch (e) {}
+      try { FS.mkdir('/persistent'); } catch (e) {}
+      if(typeof IDBFS !== 'undefined') {
+        try { FS.mount(IDBFS, {}, '/persistent'); } catch (e) {}
+        FS.syncfs(true, function(err) {
+          if(err)
+            console.error('IDBFS initial sync failed', err);
+        });
+      }
+    }
+  });
+#endif
 }
 
 void panic(const char *fmt, ...) {

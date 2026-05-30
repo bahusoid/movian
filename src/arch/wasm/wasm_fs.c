@@ -138,7 +138,15 @@ static int fs_ftruncate(fa_handle_t *fh, uint64_t newsize) {
 static fa_err_code_t fs_mkdir(fa_protocol_t *fap, const char *url) {
   char path[1024];
   build_path(path, sizeof(path), fap, url);
-  return mkdir(path, 0777) < 0 ? FAP_ERROR : 0;
+  if(mkdir(path, 0777) < 0) {
+    switch(errno) {
+    case ENOENT:  return FAP_NOENT;
+    case EPERM:   return FAP_PERMISSION_DENIED;
+    case EEXIST:  return FAP_EXIST;
+    default:      return FAP_ERROR;
+    }
+  }
+  return 0;
 }
 
 static fa_err_code_t fs_fsinfo(struct fa_protocol *fap, const char *url, fa_fsinfo_t *ffi) {
