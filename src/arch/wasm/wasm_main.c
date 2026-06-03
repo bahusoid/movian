@@ -27,6 +27,10 @@
 #include "event.h"
 #include "misc/str.h"
 
+#ifndef EMSCRIPTEN_KEEPALIVE
+#define EMSCRIPTEN_KEEPALIVE
+#endif
+
 int running = 0;
 typedef struct wasm_glw_root {
   glw_root_t gr;
@@ -40,6 +44,8 @@ typedef struct wasm_glw_root {
 static wasm_glw_root_t *uiroot;
 
 static EMSCRIPTEN_WEBGL_CONTEXT_HANDLE gl_context;
+
+EMSCRIPTEN_KEEPALIVE void wasm_start_app(void);
 
 void arch_get_random_bytes(void *ptr, size_t size) {
 #ifdef __EMSCRIPTEN__
@@ -222,17 +228,9 @@ static void mainloop(void)
   glw_unlock(gr);
 }
 
-int arch_stop_req(void) {
-  emscripten_cancel_main_loop();
-  return 0;
-}
-
-void arch_exit(void) {
-  exit(0);
-}
-
-int main(int argc, char **argv) {
-  posix_init();
+EMSCRIPTEN_KEEPALIVE
+void wasm_start_app(void)
+{
   main_init();
 
   uiroot = calloc(1, sizeof(wasm_glw_root_t));
@@ -282,5 +280,32 @@ int main(int argc, char **argv) {
   wasm_update_sizes(uiroot);
 
   emscripten_set_main_loop(mainloop, 0, 1);
+}
+
+int arch_stop_req(void) {
+  emscripten_cancel_main_loop();
+  return 0;
+}
+
+void arch_exit(void) {
+  exit(0);
+}
+
+int main(int argc, char **argv) {
+  posix_init();
+
+  EM_ASM({
+    if(typeof FS !== 'undefined' && typeof FS.syncfs === 'function') {
+      FS.syncfs(true, function(err) {
+        if(err)
+          console.error('IDBFS initial sync failed', err);
+        _wasm_start_app();
+      });
+    } else {
+      _wasm_start_app();
+    }
+  });
+
+  emscripten_exit_with_live_runtime();
   return 0;
 }

@@ -14,6 +14,8 @@ SRCS += src/arch/wasm/wasm_main.c \
         src/ui/glw/glw_video_tex.c \
         src/htsmsg/persistent_file.c
 
+DATAROOT_OBJ := ${BUILDDIR}/support/dataroot/wasm.o
+
 ${BUILDDIR}/stage/%: support/wasm/% ; mkdir -p $(dir $@) && cp $< $@
 
 ${BUILDDIR}/stage/movian.wasm: ${PROG} ; mkdir -p $(dir $@) && cp $<.wasm $@

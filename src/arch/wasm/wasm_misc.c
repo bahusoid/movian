@@ -35,7 +35,21 @@ const char *arch_get_system_type(void) {
   return "Wasm";
 }
 
-void arch_sync_path(const char *path) {}
+void arch_sync_path(const char *path) {
+#ifdef __EMSCRIPTEN__
+  (void)path;
+  EM_ASM({
+    if(typeof FS !== 'undefined' && typeof FS.syncfs === 'function') {
+      FS.syncfs(false, function(err) {
+        if(err)
+          console.error('IDBFS sync failed', err);
+      });
+    }
+  });
+#else
+  (void)path;
+#endif
+}
 
 size_t arch_malloc_size(void *ptr) {
   return malloc_usable_size(ptr);

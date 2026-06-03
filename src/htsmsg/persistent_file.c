@@ -43,7 +43,7 @@
 void
 persistent_store_sync(void)
 {
-#ifdef STOS
+#if defined(STOS) || defined(__EMSCRIPTEN__)
   if(gconf.persistent_path)
     arch_sync_path(gconf.persistent_path);
 #endif

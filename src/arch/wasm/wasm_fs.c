@@ -26,7 +26,31 @@ typedef struct fa_posix {
 } fa_posix_t;
 
 static void build_path(char *dst, size_t dstlen, const fa_protocol_t *fap, const char *url) {
+  if(!strcmp(fap->fap_name, "file")) {
+    if(url[0] == '/')
+      snprintf(dst, dstlen, "%s", url);
+    else
+      snprintf(dst, dstlen, "/%s", url);
+    return;
+  }
+
   snprintf(dst, dstlen, "/%s/%s", fap->fap_name, url);
+}
+
+static void build_url(char *dst, size_t dstlen, const fa_protocol_t *fap, const char *url, const char *name) {
+  if(!strcmp(fap->fap_name, "file")) {
+    size_t len = strlen(url);
+    if(len == 0 || !strcmp(url, "/")) {
+      snprintf(dst, dstlen, "file:///%s", name);
+    } else if(url[len - 1] == '/') {
+      snprintf(dst, dstlen, "file://%s%s", url, name);
+    } else {
+      snprintf(dst, dstlen, "file://%s/%s", url, name);
+    }
+    return;
+  }
+
+  snprintf(dst, dstlen, "%s://%s/%s", fap->fap_name, url, name);
 }
 
 static int fs_scandir(fa_protocol_t *fap, fa_dir_t *fd, const char *url, char *errbuf, size_t errlen, int flags) {
@@ -41,7 +65,7 @@ static int fs_scandir(fa_protocol_t *fap, fa_dir_t *fd, const char *url, char *e
   while((de = readdir(d)) != NULL) {
     if(!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
     char fullurl[2048];
-    snprintf(fullurl, sizeof(fullurl), "%s://%s/%s", fap->fap_name, url, de->d_name);
+    build_url(fullurl, sizeof(fullurl), fap, url, de->d_name);
     int type = CONTENT_FILE;
     if(de->d_type == DT_DIR) type = CONTENT_DIR;
     fa_dir_add(fd, fullurl, de->d_name, type);
@@ -192,3 +216,23 @@ fa_protocol_t fa_protocol_persistent = {
   .fap_fsinfo = fs_fsinfo,
 };
 FAP_REGISTER(persistent);
+
+fa_protocol_t fa_protocol_file = {
+  .fap_name  = "file",
+  .fap_scan  = fs_scandir,
+  .fap_open  = fs_open,
+  .fap_close = fs_close,
+  .fap_read  = fs_read,
+  .fap_write = fs_write,
+  .fap_seek  = fs_seek,
+  .fap_fsize = fs_fsize,
+  .fap_stat  = fs_stat,
+  .fap_unlink= fs_unlink,
+  .fap_rmdir = fs_unlink,
+  .fap_rename = fs_rename,
+  .fap_ftruncate = fs_ftruncate,
+  .fap_makedir = fs_mkdir,
+  .fap_fsinfo = fs_fsinfo,
+};
+FAP_REGISTER(file);
+

@@ -824,6 +824,8 @@ ${BUILDDIR}/ext/gumbo-parser/%.o : CFLAGS = -Wall ${OPTFLAGS} -fstrict-aliasing 
 
 ${BUILDDIR}/support/dataroot/%.o : CFLAGS = -O2
 
+DATAROOT_OBJ ?= ${BUILDDIR}/support/dataroot/wd.o
+
 ##############################################################
 ##############################################################
 ##############################################################
@@ -873,8 +875,8 @@ endif
 
 .PHONY:	clean distclean makever build-%
 
-${PROG}: $(OBJS) $(ALLDEPS)  ${BUILDDIR}/support/dataroot/wd.o
-	$(LINKER) -o $@ $(OBJS) ${BUILDDIR}/support/dataroot/wd.o $(LDFLAGS) ${LDFLAGS_cfg}
+${PROG}: $(OBJS) $(ALLDEPS)  $(DATAROOT_OBJ)
+	$(LINKER) -o $@ $(OBJS) $(DATAROOT_OBJ) $(LDFLAGS) ${LDFLAGS_cfg}
 
 ${PROG}.bundle: $(OBJS) $(BUNDLE_OBJS) $(ALLDEPS) ${BUILDDIR}/support/dataroot/bundle.o
 	$(LINKER) -o $@ $(OBJS) ${BUILDDIR}/support/dataroot/bundle.o $(BUNDLE_OBJS) $(LDFLAGS) ${LDFLAGS_cfg}
