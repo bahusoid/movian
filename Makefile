@@ -41,15 +41,20 @@ include ${BUILDDIR}/config.mak
 CFLAGS_std += -Wall -Wno-attributes -Werror -Wwrite-strings -Wno-deprecated-declarations \
 		-Wmissing-prototypes -Wno-multichar -Iext/dvd -std=gnu99
 
+# Detect compiler via predefined macros, independent of compiler binary name
+CC_MACROS := $(shell printf '\n' | $(CC) -dM -E - 2>/dev/null)
+IS_CLANG  := $(if $(findstring __clang__,$(CC_MACROS)),1,)
+IS_GCC    := $(if $(findstring __GNUC__,$(CC_MACROS)),$(if $(IS_CLANG),,1),)
+
 # GCC-specific warnings
-ifneq ($(findstring gcc,$(CC)),)
+ifeq ($(IS_GCC),1)
 GCCVERSIONGTEQ8 := $(shell expr `$(CC) -dumpversion | cut -f1 -d.` \>= 8)
 ifeq "$(GCCVERSIONGTEQ8)" "1"
-    CFLAGS_std += -Wno-stringop-truncation 
+    CFLAGS_std += -Wno-stringop-truncation
 endif
 endif
 # Clang has stricter unused-but-set-variable warnings
-ifneq (,$(filter clang emcc,$(CC)))
+ifeq ($(IS_CLANG),1)
 # Clang-specific: don't error on unused-but-set-variable, bitfield, and unused functions
 CFLAGS_std += -Wno-error=unused-but-set-variable -Wno-error=single-bit-bitfield-constant-conversion -Wno-error=unused-function
 endif
@@ -781,7 +786,7 @@ SRCS-${CONFIG_VMIR} += \
 
 
 # Use enum-int-mismatch warning suppression only for GCC (not available in Clang)
-ifneq ($(findstring gcc,$(CC)),)
+ifeq ($(IS_GCC),1)
 VMIR_EXTRA_FLAGS = -Wno-error=enum-int-mismatch
 endif
 
