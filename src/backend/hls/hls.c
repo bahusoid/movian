@@ -1940,13 +1940,14 @@ hls_play(hls_t *h, media_pipe_t *mp, char *errbuf, size_t errlen,
     // Compute stop position (in percentage of video length)
 
     int spp = mp->mp_duration ? mp->mp_seek_base * 100 / mp->mp_duration : 0;
+    int eof = e != NULL && event_is_type(e, EVENT_EOF);
 
-    if(spp >= video_settings.played_threshold || event_is_type(e, EVENT_EOF)) {
+    if(spp >= video_settings.played_threshold || eof) {
       playinfo_set_restartpos(canonical_url, -1, 0);
       playinfo_register_play(canonical_url, 1);
       TRACE(TRACE_DEBUG, "Video",
 	    "Playback reached %d%%%s, counting as played (%s)",
-	    spp, event_is_type(e, EVENT_EOF) ? ", EOF detected" : "",
+	    spp, eof ? ", EOF detected" : "",
             canonical_url);
     } else if(h->h_last_timestamp_presented != PTS_UNSET) {
       playinfo_set_restartpos(canonical_url,
