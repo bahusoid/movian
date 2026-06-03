@@ -1249,3 +1249,135 @@ http_req_args_fill_htsmsg(http_connection_t *hc, htsmsg_t *msg)
 
 
 INITME(INIT_GROUP_ASYNCIO, http_server_init, http_server_fini, 0);
+
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+/**
+ * WASM HTTP dispatch bridge
+ *
+ * Allows the host JavaScript page to invoke registered HTTP path handlers
+ * without a real TCP listener.  The contract is:
+ *
+ *   - Must be called from the asyncio thread (or while no other asyncio
+ *     operations are in flight) to avoid races with handler callbacks that
+ *     use asyncio_courier.
+ *   - The returned string is a malloc()'d, NUL-terminated buffer containing
+ *     the raw HTTP/1.1 response (status-line + headers + blank line + body).
+ *     The caller is responsible for calling free() on it.
+ *   - Returns NULL if a fatal allocation error occurs.
+ *
+ * Usage from JavaScript (app.js or a Service Worker):
+ *
+ *   const pathPtr  = Module.allocateUTF8OnStack("/api/prop");
+ *   const bodyPtr  = 0;  // NULL for GET requests
+ *   const respPtr  = Module._movian_http_dispatch(
+ *                        pathPtr, HTTP_CMD_GET, bodyPtr, 0);
+ *   const response = Module.UTF8ToString(respPtr);
+ *   Module._free(respPtr);
+ *
+ * The method_int values mirror http_cmd_t from http.h:
+ *   HTTP_CMD_GET  = 0
+ *   HTTP_CMD_POST = 2
+ */
+EMSCRIPTEN_KEEPALIVE
+char *
+movian_http_dispatch(const char *path, int method_int,
+                     const uint8_t *body, int body_len)
+{
+  if(path == NULL)
+    return NULL;
+
+  http_connection_t *hc = calloc(1, sizeof(http_connection_t));
+  if(hc == NULL)
+    return NULL;
+
+  htsbuf_queue_init(&hc->hc_output, 0);
+  LIST_INIT(&hc->hc_request_headers);
+  LIST_INIT(&hc->hc_req_args);
+  LIST_INIT(&hc->hc_response_headers);
+
+  hc->hc_version = HTTP_VERSION_1_1;
+  hc->hc_cmd     = (http_cmd_t)method_int;
+
+  /* Duplicate the URL; http_resolve may write into it to split args */
+  char *url_copy = strdup(path);
+  if(url_copy == NULL) {
+    free(hc);
+    return NULL;
+  }
+  hc->hc_url      = url_copy;
+  hc->hc_url_orig = url_copy;
+
+  if(body != NULL && body_len > 0) {
+    hc->hc_post_data = malloc(body_len + 1);
+    if(hc->hc_post_data != NULL) {
+      memcpy(hc->hc_post_data, body, body_len);
+      hc->hc_post_data[body_len] = '\0';
+      hc->hc_post_len = body_len;
+    }
+  }
+
+  char *remain = NULL;
+  char *args   = NULL;
+
+  hts_lwmutex_lock(&http_paths_lwmutex);
+  http_path_t *hp = http_resolve(hc, &remain, &args);
+  if(hp == NULL) {
+    hts_lwmutex_unlock(&http_paths_lwmutex);
+    http_error(hc, HTTP_STATUS_NOT_FOUND, NULL);
+  } else {
+    hp = http_path_retain(hp);
+    hts_lwmutex_unlock(&http_paths_lwmutex);
+
+    if(args != NULL)
+      http_parse_uri_args(&hc->hc_req_args, args, 0);
+
+    http_exec(hc, hp, remain, hc->hc_cmd);
+    http_path_release(hp);
+  }
+
+  char *response = htsbuf_to_string(&hc->hc_output);
+
+  http_headers_free(&hc->hc_request_headers);
+  http_headers_free(&hc->hc_req_args);
+  http_headers_free(&hc->hc_response_headers);
+  htsbuf_queue_flush(&hc->hc_output);
+  free(hc->hc_post_data);
+  free(url_copy);
+  free(hc);
+
+  return response;  /* caller must free() */
+}
+
+/**
+ * Expose the registered HTTP paths as a JSON array to JS.
+ * Returns a malloc()'d NUL-terminated JSON string; caller must free().
+ * Example: ["/api/prop","/api/screenshot","/api/done","/api/open"]
+ */
+EMSCRIPTEN_KEEPALIVE
+char *
+movian_http_list_paths(void)
+{
+  htsbuf_queue_t out;
+  htsbuf_queue_init(&out, 0);
+  htsbuf_append(&out, "[", 1);
+
+  hts_lwmutex_lock(&http_paths_lwmutex);
+  http_path_t *hp;
+  int first = 1;
+  LIST_FOREACH(hp, &http_paths, hp_link) {
+    if(!first)
+      htsbuf_append(&out, ",", 1);
+    htsbuf_qprintf(&out, "\"%s\"", hp->hp_path);
+    first = 0;
+  }
+  hts_lwmutex_unlock(&http_paths_lwmutex);
+
+  htsbuf_append(&out, "]", 1);
+  return htsbuf_to_string(&out);
+}
+
+#endif /* __EMSCRIPTEN__ */
+

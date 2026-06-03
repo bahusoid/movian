@@ -59,6 +59,9 @@ enable glw_backend_opengl_es
 enable vmir
 disable ftpserver
 disable netlog
+disable nativesmb
+disable upnp
+disable stpp_discovery
 [ -f project.config ] && source project.config
 
 

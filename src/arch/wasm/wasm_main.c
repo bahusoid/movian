@@ -228,6 +228,19 @@ static void mainloop(void)
   glw_unlock(gr);
 }
 
+static void ui_courier_poll(void *opaque)
+{
+  glw_root_t *gr = opaque;
+  glw_lock(gr);
+  prop_courier_poll(gr->gr_courier);
+  glw_unlock(gr);
+}
+
+static void ui_courier_notify(void *opaque)
+{
+  emscripten_async_call(ui_courier_poll, opaque, 0);
+}
+
 EMSCRIPTEN_KEEPALIVE
 void wasm_start_app(void)
 {
@@ -247,7 +260,12 @@ void wasm_start_app(void)
   gl_context = emscripten_webgl_create_context("#canvas", &attr);
   emscripten_webgl_make_context_current(gl_context);
 
-  prop_courier_t *pc = prop_courier_create_passive();
+
+  uiroot->gr.gr_prop_ui = prop_create_root("ui");
+  uiroot->gr.gr_prop_nav = nav_spawn();
+
+  prop_courier_t *pc = prop_courier_create_notify(ui_courier_notify, uiroot);
+
 
   if(glw_init4(&uiroot->gr, NULL, pc, 0)) {
     panic("GLW failed to initialize");

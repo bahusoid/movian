@@ -1383,6 +1383,12 @@ static backend_t be_stpp = {
 BE_REGISTER(stpp);
 
 
+/* ===================================================================
+ * STPP Discovery (UDP-based peer-to-peer announcements).
+ * Requires CONFIG_STPP_DISCOVERY (disabled on platforms without UDP,
+ * e.g. WASM).  The WebSocket STPP API above compiles independently.
+ * =================================================================== */
+#ifdef CONFIG_STPP_DISCOVERY
 
 LIST_HEAD(stpp_interface_list, stpp_interface);
 
@@ -1769,3 +1775,6 @@ stpp_discover_fini(void)
 
 
 INITME(INIT_GROUP_ASYNCIO, stpp_discover_init, stpp_discover_fini, 10);
+
+#endif /* CONFIG_STPP_DISCOVERY */
+

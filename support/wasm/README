@@ -5,12 +5,37 @@ To run Movian from source with the WebAssembly build:
    ./configure.wasm
    make BUILD=wasm stage
 
-Then serve the staged directory:
+To build a debug-focused wasm stage with stronger runtime diagnostics:
 
-   cd build.wasm/stage
-   python3 -m http.server 8000
+   make BUILD=wasm dbgstage
+
+`dbgstage` enables Emscripten runtime checks (assertions, safe heap,
+stack-overflow checks, and emulated function pointer casts) to make
+`RuntimeError: function signature mismatch` crashes easier to pinpoint.
+It also keeps function names in stack traces and writes `build.wasm/movian.symbols`
+for mapping `funcNNNN` entries to C symbols.
+
+Then serve the staged directory with thread-required isolation headers:
+
+   python3 support/wasm/serve_stage.py --dir build.wasm/stage --port 8000
+
+If you still see `thread pool is exhausted`, rebuild with a larger pool:
+
+   make BUILD=wasm dbgstage WASM_PTHREAD_POOL_SIZE=24
 
 Open http://localhost:8000/index.html in a browser.
+
+In browser DevTools console, verify thread prerequisites:
+
+   window.crossOriginIsolated
+   typeof SharedArrayBuffer !== 'undefined'
+
+`python3 -m http.server` is not enough for pthread-enabled WASM builds because
+it does not add COOP/COEP response headers, so `SharedArrayBuffer` stays
+disabled and thread creation fails.
+
+If your page loads cross-origin assets, those assets must also be embeddable
+under `Cross-Origin-Embedder-Policy: require-corp` (CORS or CORP headers).
 
 Do not open `index.html` directly via `file://`.
 The WebAssembly runtime fetches `movian.wasm` and other assets, which modern

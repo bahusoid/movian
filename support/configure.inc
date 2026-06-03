@@ -98,6 +98,7 @@ CONFIG_LIST="
  sqlite_vfs
  stdin
  stpp
+ stpp_discovery
  timegm
  tlsf
  upgrade
@@ -754,6 +755,7 @@ enable plugins
 enable rar
 enable sqlite
 enable stpp
+enable stpp_discovery
 enable upgrade
 enable upnp
 enable usagereport

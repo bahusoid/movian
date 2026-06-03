@@ -19,14 +19,27 @@ source ./emsdk_env.sh
 1. Set up the project configuration using `configure.wasm`. 
 ```bash
 # If emsdk_env.sh was sourced, EMSDK environment variable will be picked up automatically
-./configure.wasm
+source emsdk/emsdk_env.sh && ./configure.wasm 
 # Otherwise, explicitly define the path
 ./configure.wasm --emsdk=/path/to/emsdk
+
 ```
 2. Make
 ```bash
 make BUILD=wasm
 ```
+
+3. Test
+Inside build.wasm/stage
+
+Run once:
+python3 -m http.server 8000
+
+In browser open:
+http://127.0.0.1:8000/
+
+Check Web Dev tools for errors
+
 ## Migration Notes
 - WebAssembly requires specific compilation and linker flags (`-s WASM=1 -s USE_WEBGL2=1 -s USE_PTHREADS=1 -s ASYNCIFY`).
 - Replaces NaCl implementations with Emscripten's built-in APIs (`GL`, `EGL`, Browser API).
