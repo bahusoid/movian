@@ -111,6 +111,12 @@ function moviePage(page, data) {
       display_season(page);
       display_translate(page);
 //      if (null !== (m = /sof\.tv\.initCDNMoviesEvents\((\d+).*?(\d+).*?({.*?})\);/gm.exec(pageHtml.text.toString()))) {
+      if(data.season)
+      {} //Skip Видео: section
+      else if (data.play_active_is_premium && !service.Premium) {
+        log.d('Default active translator is premium and Premium is disabled — skipping movie "Видео:" section');
+      }
+      else
       if (null !== (m = /sof.tv.initCDNMoviesEvents\((\d+).*?(\d+).*?(\{.*?})\);/gm.exec(pageHtml.text.toString()))) {
         page.metadata.title = page.metadata.title + (undefined == data.play_active ? '' : ' | ' + data.play_active.translator_title);
         page.appendItem('', 'separator', {title: 'Видео:'});
@@ -257,6 +263,7 @@ function moviePage(page, data) {
       });
 */
       display_franchise(page, pageHtml.dom);
+      page.loading = false;
     });
   }
 };
@@ -408,6 +415,16 @@ function data_(dom) {
     data.tr = [];
     data.type = /sof\.tv\.initCDNSeriesEvents\((\d+), (\d+)/.test(pageHtml.text.toString()) ? 'serial' : 'movie';
     tlist.children.forEach(function (element, index) {
+      // Detect if the default/active translator is a premium one (even if we skip it)
+      var classAttr = element.attributes.getNamedItem('class') ? element.attributes.getNamedItem('class').value : '';
+      if (/b-prem_translator/.test(classAttr) && /active/.test(classAttr)) {
+        data.play_active_is_premium = true;
+      }
+      // Skip premium translators when Premium setting is false
+      if (!service.Premium && /b-prem_translator/.test(classAttr)) {
+        log.d('Skipping premium translator due to Premium setting: ' + (element.attributes.getNamedItem('data-translator_id') ? element.attributes.getNamedItem('data-translator_id').value : 'unknown'));
+        return; // continue to next element
+      }
       if (data.type == 'movie') {
         data.tr[index] = {
           title: data.title,
@@ -617,7 +634,12 @@ function display_season(page) {
     type: data.type,
     season_count: data.season ? data.season.length : 0
   });
-
+  // If the page's default/active translator is a premium translator and Premium is disabled,
+  // do not display the default "Сезоны:" section — show only available translations.
+  if (data.play_active_is_premium && !service.Premium && data.season) {
+    log.d('Default active translator is premium and Premium is disabled — skipping seasons display');
+  }
+  else
   if (data.season) {
     page.appendPassiveItem('separator', null, {title: 'Сезоны:'});
 
@@ -672,8 +694,6 @@ function display_season(page) {
   } else {
     log.d('No seasons data found');
   }
-  //page.parent = "c:\\";
-  page.loading = false;
 };
 
 // Export getSeriesDom for use in other modules

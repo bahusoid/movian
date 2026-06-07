@@ -182,6 +182,8 @@ tos += 'Принимаете ли вы эти условия использов�
 //settings.createBool('debug', 'Отладка (debug)', false, function (v) {store.debug = v});
 //settings.createBool('debug', 'Отладка (debug)', true, function (v) {service.debug = v});
 settings.createBool('debug', 'Отладка (debug)', false, function (v) {service.debug = v});
+// Premium filter: when false, filter out premium-only translators
+settings.createBool('Premium', 'Premium', false, function (v) {service.Premium = v});
 function printDebug(message) {
 //  if (store.debug) console.error(message);
   if (service.debug) console.error(message);
