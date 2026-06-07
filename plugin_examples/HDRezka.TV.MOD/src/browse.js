@@ -12,13 +12,25 @@ function scrapeList(href, pageHtml) {
   if ((elements = pageHtml.dom.getElementByClassName('b-content__inline_item'))) {
     for (i = 0; i < elements.length; i++) {
       element = elements[i];
+      // Safely extract link href and fall back if match fails
+      var aElem = element.getElementByTagName('a')[0];
+      var hrefVal = (aElem && aElem.attributes && aElem.attributes.getNamedItem('href')) ? aElem.attributes.getNamedItem('href').value : '';
+      var m = hrefVal.match(/https?:\/\/[^\/]+(\/.*)/);
+      var relPath = m ? m[1] : hrefVal;
+      var imgElem = element.getElementByTagName('img')[0];
+      var iconVal = (imgElem && imgElem.attributes && imgElem.attributes.getNamedItem('src')) ? imgElem.attributes.getNamedItem('src').value : null;
+      var titleElem = element.getElementByClassName('b-content__inline_item-link')[0];
+      var titleText = (titleElem && titleElem.getElementByTagName('a')[0]) ? titleElem.getElementByTagName('a')[0].textContent : '';
+      var yearMatch = (titleElem && titleElem.children[1] && titleElem.children[1].textContent) ? titleElem.children[1].textContent.match(/^\d+/) : null;
+      var yearVal = yearMatch ? parseInt(yearMatch[0], 10) : null;
+
       returnValue.push({
-        url: BASE_URL + element.getElementByTagName('a')[0].attributes.getNamedItem('href').value.match(/http.*?\/\/.*?(\/.*)/)[1],
-        id: element.attributes.getNamedItem('data-id').value,
-        icon: element.getElementByTagName('img')[0].attributes.getNamedItem('src').value,
-        title: element.getElementByClassName('b-content__inline_item-link')[0].getElementByTagName('a')[0].textContent,
-        year: +element.getElementByClassName('b-content__inline_item-link')[0].children[1].textContent.match(/^\d+/),
-//        description: element.getElementByClassName('b-content__inline_item-link')[0].children[1].textContent,
+        url: BASE_URL + relPath,
+        id: (element.attributes && element.attributes.getNamedItem('data-id')) ? element.attributes.getNamedItem('data-id').value : null,
+        icon: iconVal,
+        title: titleText,
+        year: yearVal,
+        // description: titleElem && titleElem.children[1] ? titleElem.children[1].textContent : null,
       });
     }
   }
@@ -88,6 +100,36 @@ exports.searcher = function (page, params) {
   loader();
 };
 function select_cat(params, page, reload) {
+  // Detect if current href is a "best" view (contains /best/<year>/)
+  var bestMatch = (/\/best\/(\d{4})\/?$/.exec(params.href));
+  var isBestView = bestMatch !== null;
+  // Compute default year = current date minus 4 months
+  var _now = new Date();
+  var _dt_minus4 = new Date(_now.getFullYear(), _now.getMonth() - 4, 1);
+  var defaultYear = _dt_minus4.getFullYear();
+  var currentYear = _now.getFullYear();
+  var currentBestYear = isBestView ? parseInt(bestMatch[1], 10) : (store.yearPage || defaultYear);
+  // If this is a best view, expose a page-level year selector in page options
+    if (isBestView) {
+      page.options.createInt('bestYear', 'Год', currentBestYear, currentYear - 99, currentYear, 1, '', function (v) {
+        // Update params.href to use the selected year
+        if (/\/best\/(\d{4})\/?$/.test(params.href)) {
+          params.href = params.href.replace(/\/best\/(\d{4})\/?$/, '/best/' + v + '/');
+        } else {
+          params.href = (params.href.replace(/\/$/, '') + '/best/' + v + '/');
+        }
+        // Persist chosen year to store as well
+        store.yearPage = v;
+        // Update page title immediately so UI reflects chosen year
+        try {
+          page.metadata.title = params.title + ' (' + v + ')';
+        } catch (e) {
+          // If page isn't fully initialized, ignore
+        }
+        if (page.asyncPaginator) reload();
+      });
+    }
+
   if (params.href == '/new/') {
     type = [
       ['0', 'Все', true],
@@ -104,18 +146,21 @@ function select_cat(params, page, reload) {
     }, true);
   }
   if (params.href == '/new/' || !/.*?do=search.*/.test(params.href)) {
-    order = [
-      ['last', 'Последние поступления', true],
-      ['popular', 'Популярные'],
-      ['watching', 'Сейчас смотрят'],
-      ['soon', 'В ожидании'],
-    ];
-    page.options.createMultiOpt('order', 'Выбрать', order, function (filter) {
-      params.args.filter = filter;
-      if (page.asyncPaginator) {
-        reload();
-      }
-    }, true);
+    // Do not show "Выбрать" (order) when browsing Best pages
+    if (!isBestView) {
+      order = [
+        ['last', 'Последние поступления', true],
+        ['popular', 'Популярные'],
+        ['watching', 'Сейчас смотрят'],
+        ['soon', 'В ожидании'],
+      ];
+      page.options.createMultiOpt('order', 'Выбрать', order, function (filter) {
+        params.args.filter = filter;
+        if (page.asyncPaginator) {
+          reload();
+        }
+      }, true);
+    }
     cat = '';
     films_cat = [
       ['/films/', 'Все', true],
@@ -271,7 +316,32 @@ function select_cat(params, page, reload) {
       page.options.createMultiOpt('genres', 'Жанры', cat, function (newhref) {
         log.d(params);
         log.d('params inside genres');
-        params.href = newhref;
+        // Preserve /best/<year>/ only if current view is a best view
+        if (isBestView) {
+          var m = /\/best\/(\d{4})\/?$/.exec(params.href);
+          var yearToUse = m ? m[1] : (store.yearPage || currentBestYear);
+          // Build URL as /<category>/best/<genre?>/<year>/
+          var parts = newhref.split('/').filter(function (p) { return p.length; });
+          var base = parts.length > 0 ? '/' + parts[0] : '';
+          var genreSeg = parts.length > 1 ? parts[1] : '';
+          if (genreSeg) {
+            params.href = base + '/best/' + genreSeg + '/' + yearToUse + '/';
+          } else {
+            params.href = base + '/best/' + yearToUse + '/';
+          }
+          // Update page title to include the selected year
+          try {
+            page.metadata.title = params.title + ' (' + yearToUse + ')';
+          } catch (e) {
+            // ignore if page not ready
+          }
+        } else {
+          params.href = newhref;
+          // Not a best view — ensure title is reset to base title
+          try {
+            page.metadata.title = params.title;
+          } catch (e) {}
+        }
         if (page.asyncPaginator) {
           reload();
         }
@@ -282,7 +352,13 @@ function select_cat(params, page, reload) {
 exports.list = function (page, params) {
   page.loading = true;
   page.metadata.icon = LOGO;
-  page.metadata.title = params.title;
+  // If this is a best view, append year to the page title (e.g. "Лучшие фильмы (2026)")
+  var bestTitleMatch = /\/best\/(\d{4})\/?/.exec(params.href);
+  if (bestTitleMatch) {
+    page.metadata.title = params.title + ' (' + bestTitleMatch[1] + ')';
+  } else {
+    page.metadata.title = params.title;
+  }
   page.model.contents = 'grid';
   page.type = 'directory';
   page.entries = 0;

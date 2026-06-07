@@ -300,6 +300,7 @@ settings.createMultiOpt('qualityFormat', 'Предпочтительный фо�
 settings.createMultiOpt('preferredCdn', 'Предпочтительный CDN', [
   ['voidboost.cc', 'voidboost.cc', true],
   ['ukrtelcdn.net', 'ukrtelcdn.net'],
+  ['All', 'All'],
 ], function (v) {store.preferredCdn = v});
 
 /*
@@ -417,21 +418,21 @@ new page.Route(PREFIX + ':start', function (page) {
 //  page.appendItem(PREFIX + ':search:', 'search', {title: 'Поиск на ' + PREFIX});
   page.appendItem(PREFIX + ':search:', 'search', {title: 'Поиск на ' + BASE_URL});
 //  page.appendItem(PREFIX + ':search:', 'search', {title: 'Поиск на ' + PREFIX + ' (' + BASE_URL + ')'});
-  if (!loginstate) {
-    page.appendItem(PREFIX + ':login', 'directory', {
-      title: new RichText(coloredStr('Войти [ ' + user + ' ]', 'EE0000')),
-      icon: LOGOICON,
-    });
-  } else {
-    page.appendItem(PREFIX + ':logout', 'directory', {
-      title: new RichText(coloredStr('Выйти [ ' + user + ' ]', '555555')),
-      icon: LOGOEXIT,
-    });
+  if (loginstate) {
     page.appendItem(PREFIX + ':continue', 'directory', {
       title: 'Продолжить просмотр',
       icon: LOGOFOLDER,
     });
-  };
+  }
+  // Best (Лучшие) shortcuts for films/series/cartoons — use last used year (stored) or default (current date - 4 months)
+  var _now_for_year = new Date();
+  var _dt_minus4 = new Date(_now_for_year.getFullYear(), _now_for_year.getMonth() - 4, 1);
+  var _default_best_year = _dt_minus4.getFullYear();
+  var _bestYear = (typeof store.yearPage !== 'undefined' && store.yearPage !== null) ? store.yearPage : _default_best_year;
+  // Append entries that point to category/best/<year>/ — browse.list handles the rest
+  page.appendItem(PREFIX + ':list:/films/best/' + _bestYear + '/:Лучшие фильмы', 'directory', {title: 'Лучшие фильмы', icon: LOGOFOLDER});
+  page.appendItem(PREFIX + ':list:/series/best/' + _bestYear + '/:Лучшие сериалы', 'directory', {title: 'Лучшие сериалы', icon: LOGOFOLDER});
+  page.appendItem(PREFIX + ':list:/cartoons/best/' + _bestYear + '/:Лучшие мультфильмы', 'directory', {title: 'Лучшие мультфильмы', icon: LOGOFOLDER});
 //  navmenu = document.getElementById('topnav-menu')
 //  for (i = 0;  i < navmenu.children.length; i++) {
 //    e = navmenu.children[i]
@@ -487,7 +488,19 @@ new page.Route(PREFIX + ':start', function (page) {
 //  page.appendItem(PREFIX + ':list:/show/:Передачи и шоу', 'directory', {title: 'Передачи и шоу'});
 //  page.appendItem(PREFIX + ':list:/show/:Передачи и шоу', 'directory', {title: 'Передачи и шоу', icon: LOGOARROW});
   page.appendItem(PREFIX + ':list:/show/:Передачи и шоу', 'directory', {title: 'Передачи и шоу', icon: LOGOFOLDER});
-/*
+
+  if (!loginstate) {
+    page.appendItem(PREFIX + ':login', 'directory', {
+      title: new RichText(coloredStr('Войти [ ' + user + ' ]', 'EE0000')),
+      icon: LOGOICON,
+    });
+  } else {
+    page.appendItem(PREFIX + ':logout', 'directory', {
+      title: new RichText(coloredStr('Выйти [ ' + user + ' ]', '555555')),
+      icon: LOGOEXIT,
+    });
+  }
+  /*
 //  page.appendItem(PREFIX + ':list:/collections/:Подборки', 'directory', {title: 'Подборки'});
 //  page.appendItem(PREFIX + ':list:/collections/:Подборки', 'directory', {title: 'Подборки', icon: LOGOARROW});
   page.appendItem(PREFIX + ':list:/collections/:Подборки', 'directory', {title: 'Подборки', icon: LOGOFOLDER});
@@ -872,7 +885,7 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
       }
       // Skip it to avoid account ban
       // Use at own risk, to update watch history on site
-      //sendSaveAsync();
+      sendSaveAsync();
     }
 
     if (data.translator_id) {
@@ -975,27 +988,55 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
     if (!askQuality) {
       // Auto-select best quality based on settings
       if (selectedItem) {
-        var url;
-        if (qualityFormat === 'hls') {
-          url = 'hls:' + bestQuality.itemUrl;
-        } else if(qualityFormat === 'drm') {
-          url = 'hls:' + bestQuality.itemUrl;
-          if (service.movianDRM) {
-            url = 'movianDRM:' + url + '::HLS ' + selectedItem.q + ' | ' + data.title;
-            page.redirect(url);
+        if (preferredCdn === 'All') {
+          var sources = [];
+          var urlMap = null;
+          var formatPrefix = '';
+          if (qualityFormat === 'hls' || qualityFormat === 'drm') {
+            urlMap = selectedItem.hlsUrls;
+            formatPrefix = 'hls:';
+          } else if (qualityFormat === 'mp4') {
+            urlMap = selectedItem.mp4Urls;
           }
-        }
-        else if (qualityFormat === 'mp4')
-        {
-          url = bestQuality.itemUrl;
-        }
-        if(url) {
-          videoparams.sources = [{
-            url: url
-          }];
-          video = 'videoparams:' + JSON.stringify(videoparams);
-          page.redirect(video);
-          return;
+          if (urlMap) {
+            var cdns = Object.keys(urlMap);
+            for (var c = 0; c < cdns.length; c++) {
+              sources.push({
+                url: formatPrefix + urlMap[cdns[c]],
+                quality: selectedItem.q
+              });
+            }
+          }
+          if (sources.length > 0) {
+            videoparams.sources = sources;
+            videoparams.quality = selectedItem.q;
+            video = 'videoparams:' + JSON.stringify(videoparams);
+            page.redirect(video);
+            return;
+          }
+        } else {
+          var url;
+          if (qualityFormat === 'hls') {
+            url = 'hls:' + bestQuality.itemUrl;
+          } else if(qualityFormat === 'drm') {
+            url = 'hls:' + bestQuality.itemUrl;
+            if (service.movianDRM) {
+              url = 'movianDRM:' + url + '::HLS ' + selectedItem.q + ' | ' + data.title;
+              page.redirect(url);
+            }
+          }
+          else if (qualityFormat === 'mp4')
+          {
+            url = bestQuality.itemUrl;
+          }
+          if(url) {
+            videoparams.sources = [{
+              url: url
+            }];
+            video = 'videoparams:' + JSON.stringify(videoparams);
+            page.redirect(video);
+            return;
+          }
         }
       }
     }
@@ -1004,24 +1045,42 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
 
     //HLS options
     for (i = 0; i < list.length; i++) {
-      var hlsCdns = Object.keys(list[i].hlsUrls || {});
-      // Resolve effective CDN: preferred if available, else first
-      for (var ci = 0; ci < hlsCdns.length; ci++) {
-        var cdn = hlsCdns[ci];
-        var itemUrl = list[i].hlsUrls[cdn];
-        videoparams.sources = [{
-          url: 'hls:' + itemUrl,
-        }];
-        video = 'videoparams:' + JSON.stringify(videoparams);
-        var isPreferred =  preferredItem === list[i] &&  bestQuality.itemUrl === itemUrl && (qualityFormat === 'hls' || !service.movianDRM);
-        page.appendItem(video, 'item', {
-          title: 'HLS ' + list[i].q + ' (' + cdn + ') | ' + data.title,
-          description: '',
-          icon: data.icon,
-          autofocus: isPreferred
-        });
-        page.entries++;
-      }
+        var hlsCdns = Object.keys(list[i].hlsUrls || {});
+        if (preferredCdn === 'All') {
+          var sources = [];
+          for (var ci = 0; ci < hlsCdns.length; ci++) {
+            sources.push({ url: 'hls:' + list[i].hlsUrls[hlsCdns[ci]], quality: list[i].q });
+          }
+          videoparams.sources = sources;
+          videoparams.quality = list[i].q;
+          video = 'videoparams:' + JSON.stringify(videoparams);
+          var isPreferred = preferredItem === list[i] && (qualityFormat === 'hls' || !service.movianDRM);
+          page.appendItem(video, 'item', {
+            title: 'HLS ' + list[i].q + ' (All CDNs) | ' + data.title,
+            description: '',
+            icon: data.icon,
+            autofocus: isPreferred
+          });
+          page.entries++;
+        } else {
+          // Resolve effective CDN: preferred if available, else first
+          for (var ci = 0; ci < hlsCdns.length; ci++) {
+            var cdn = hlsCdns[ci];
+            var itemUrl = list[i].hlsUrls[cdn];
+            videoparams.sources = [{
+              url: 'hls:' + itemUrl,
+            }];
+            video = 'videoparams:' + JSON.stringify(videoparams);
+            var isPreferred =  preferredItem === list[i] &&  bestQuality.itemUrl === itemUrl && (qualityFormat === 'hls' || !service.movianDRM);
+            page.appendItem(video, 'item', {
+              title: 'HLS ' + list[i].q + ' (' + cdn + ') | ' + data.title,
+              description: '',
+              icon: data.icon,
+              autofocus: isPreferred
+            });
+            page.entries++;
+          }
+        }
     }
   }
   catch (error) {
@@ -1034,31 +1093,45 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
       // Show all DRM quality options
       for (i = 0; i < list.length; i++) {
         var drmHlsCdns = Object.keys(list[i].hlsUrls || {});
-        // Resolve effective CDN: preferred if available, else first
-        var drmEffectiveCdn = list[i].hlsUrls[preferredCdn] ? preferredCdn : (drmHlsCdns[0] || null);
-        for (var dci = 0; dci < drmHlsCdns.length; dci++) {
-          var drmCdn = drmHlsCdns[dci];
-          var itemUrl = list[i].hlsUrls[drmCdn];
-          var uri = 'movianDRM:hls:' + itemUrl;
-          uri += '::';
-          uri += 'HLS';
-          uri += ' ';
-          uri += list[i].q;
-          uri += ' (' + drmCdn + ')';
-          uri += ' | ';
-          uri += data.title;
-          
-          // Check if this is the preferred DRM quality+CDN when asking
-          var isPreferred =  preferredItem === list[i] &&  bestQuality.itemUrl === itemUrl;
-
-          page.appendItem(uri, 'item', {
-            title: 'DRM ' + list[i].q + ' (' + drmCdn + ') | ' + data.title,
+        if (preferredCdn === 'All') {
+          var sources = [];
+          for (var ci = 0; ci < drmHlsCdns.length; ci++) {
+            sources.push({ url: 'movianDRM:hls:' + list[i].hlsUrls[drmHlsCdns[ci]] + '::', quality: list[i].q });
+          }
+          videoparams.sources = sources;
+          videoparams.quality = list[i].q;
+          video = 'videoparams:' + JSON.stringify(videoparams);
+          var isPreferred = preferredItem === list[i] && qualityFormat === 'drm';
+          page.appendItem(video, 'item', {
+            title: 'DRM ' + list[i].q + ' (All CDNs) | ' + data.title,
             description: '',
             icon: data.icon,
             autofocus: isPreferred,
-            focusable: isPreferred ? 1.5 : 1.0, 
+            focusable: isPreferred ? 1.5 : 1.0,
           });
           page.entries++;
+        } else {
+          // Resolve effective CDN: preferred if available, else first
+          var drmEffectiveCdn = list[i].hlsUrls[preferredCdn] ? preferredCdn : (drmHlsCdns[0] || null);
+          for (var dci = 0; dci < drmHlsCdns.length; dci++) {
+            var drmCdn = drmHlsCdns[dci];
+            var itemUrl = list[i].hlsUrls[drmCdn];
+            var uri = 'movianDRM:hls:' + itemUrl;
+            uri += '::';
+            videoparams.sources = [{
+              url: uri,
+            }];
+            video = 'videoparams:' + JSON.stringify(videoparams);
+            var isPreferred =  preferredItem === list[i] &&  bestQuality.itemUrl === itemUrl && (qualityFormat === 'hls' || !service.movianDRM);
+            page.appendItem(video, 'item', {
+              title: 'DRM ' + list[i].q + ' (' + drmCdn + ') | ' + data.title,
+              description: '',
+              icon: data.icon,
+              autofocus: isPreferred,
+              focusable: isPreferred ? 1.5 : 1.0,
+            });
+            page.entries++;
+          }
         }
       }
     }
@@ -1071,27 +1144,43 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
     // Show all MP4 quality options
     for (i = 0; i < list.length; i++) {
       var mp4Cdns = Object.keys(list[i].mp4Urls || {});
-      // Resolve effective CDN: preferred if available, else first
-      var mp4EffectiveCdn = list[i].mp4Urls[preferredCdn] ? preferredCdn : (mp4Cdns[0] || null);
-      for (var mci = 0; mci < mp4Cdns.length; mci++) {
-        var mp4Cdn = mp4Cdns[mci];
-        var itemUrl = list[i].mp4Urls[mp4Cdn];
-        videoparams.sources = [{
-          url: itemUrl,
-        }];
+      if (preferredCdn === 'All') {
+        var sources = [];
+        for (var ci = 0; ci < mp4Cdns.length; ci++) {
+          sources.push({ url: list[i].mp4Urls[mp4Cdns[ci]], quality: list[i].q });
+        }
+        videoparams.sources = sources;
+        videoparams.quality = list[i].q;
         video = 'videoparams:' + JSON.stringify(videoparams);
-        
-        // Check if this is the preferred MP4 quality+CDN when asking
-        var isPreferred =  preferredItem === list[i] &&  bestQuality.itemUrl === itemUrl;
-
+        var isPreferred = preferredItem === list[i] && qualityFormat === 'mp4';
         page.appendItem(video, 'item', {
-          title: 'MP4 ' + list[i].q + ' (' + mp4Cdn + ') | ' + data.title,
+          title: 'MP4 ' + list[i].q + ' (All CDNs) | ' + data.title,
           description: '',
           icon: data.icon,
           autofocus: isPreferred,
-          focusable: isPreferred ? 1.5 : 1.0, 
+          focusable: isPreferred ? 1.5 : 1.0,
         });
         page.entries++;
+      } else {
+        // Resolve effective CDN: preferred if available, else first
+        var mp4EffectiveCdn = list[i].mp4Urls[preferredCdn] ? preferredCdn : (mp4Cdns[0] || null);
+        for (var mci = 0; mci < mp4Cdns.length; mci++) {
+          var mp4Cdn = mp4Cdns[mci];
+          var itemUrl = list[i].mp4Urls[mp4Cdn];
+          videoparams.sources = [{
+            url: itemUrl,
+          }];
+          video = 'videoparams:' + JSON.stringify(videoparams);
+          var isPreferred =  preferredItem === list[i] &&  bestQuality.itemUrl === itemUrl && (qualityFormat === 'hls' || !service.movianDRM);
+          page.appendItem(video, 'item', {
+            title: 'MP4 ' + list[i].q + ' (' + mp4Cdn + ') | ' + data.title,
+            description: '',
+            icon: data.icon,
+            autofocus: isPreferred,
+            focusable: isPreferred ? 1.5 : 1.0,
+          });
+          page.entries++;
+        }
       }
     }
   }

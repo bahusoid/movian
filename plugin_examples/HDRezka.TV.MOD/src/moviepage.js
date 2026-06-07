@@ -671,6 +671,7 @@ function display_season(page) {
   } else {
     log.d('No seasons data found');
   }
+  //page.parent = "c:\\";
   page.loading = false;
 };
 
