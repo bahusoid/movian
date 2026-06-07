@@ -21,7 +21,8 @@ function scrapeList(href, pageHtml) {
       var iconVal = (imgElem && imgElem.attributes && imgElem.attributes.getNamedItem('src')) ? imgElem.attributes.getNamedItem('src').value : null;
       var titleElem = element.getElementByClassName('b-content__inline_item-link')[0];
       var titleText = (titleElem && titleElem.getElementByTagName('a')[0]) ? titleElem.getElementByTagName('a')[0].textContent : '';
-      var yearMatch = (titleElem && titleElem.children[1] && titleElem.children[1].textContent) ? titleElem.children[1].textContent.match(/^\d+/) : null;
+      var descrText = (titleElem && titleElem.children[1] && titleElem.children[1].textContent) ? titleElem.children[1].textContent.trim() : null;
+      var yearMatch = descrText ? descrText.match(/^\d+/) : null;
       var yearVal = yearMatch ? parseInt(yearMatch[0], 10) : null;
 
       returnValue.push({
@@ -30,7 +31,7 @@ function scrapeList(href, pageHtml) {
         icon: iconVal,
         title: titleText,
         year: yearVal,
-        // description: titleElem && titleElem.children[1] ? titleElem.children[1].textContent : null,
+        description: descrText,
       });
     }
   }
@@ -100,8 +101,8 @@ exports.searcher = function (page, params) {
   loader();
 };
 function select_cat(params, page, reload) {
-  // Detect if current href is a "best" view (contains /best/<year>/)
-  var bestMatch = (/\/best\/(\d{4})\/?$/.exec(params.href));
+  // Detect if current href is a "best" view (contains /best/<year>/ or /best/<genre>/<year>/)
+  var bestMatch = (/\/best\/(?:[^\/]+\/)?(\d{4})\/?$/.exec(params.href));
   var isBestView = bestMatch !== null;
   // Compute default year = current date minus 4 months
   var _now = new Date();
@@ -111,18 +112,53 @@ function select_cat(params, page, reload) {
   var currentBestYear = isBestView ? parseInt(bestMatch[1], 10) : (store.yearPage || defaultYear);
   // If this is a best view, expose a page-level year selector in page options
     if (isBestView) {
-      page.options.createInt('bestYear', 'Год', currentBestYear, currentYear - 99, currentYear, 1, '', function (v) {
-        // Update params.href to use the selected year
-        if (/\/best\/(\d{4})\/?$/.test(params.href)) {
-          params.href = params.href.replace(/\/best\/(\d{4})\/?$/, '/best/' + v + '/');
+      page.options.createInt('bestYear', 'Год', currentBestYear, currentYear - 100, currentYear, 1, ' головаыолждфываложд.', function (v) {
+        // Coerce and validate the selected value. If reset/invalid, use the defaultYear (current date - 4 months).
+        var selYear = parseInt(v, 10);
+        if (!isFinite(selYear) || selYear === 0) selYear = defaultYear;
+        var minYear = currentYear - 99;
+        if (selYear < minYear) selYear = minYear;
+        if (selYear > currentYear) selYear = currentYear;
+
+        // Update params.href to use the selected year. Support both /best/<year>/ and /best/<genre>/<year>/ forms.
+        var bestYearRegex = /\/best\/(?:[^\/]+\/)?(\d{4})\/?$/;
+        if (bestYearRegex.test(params.href)) {
+          // Replace the trailing year component
+          params.href = params.href.replace(bestYearRegex, function (match, p1) {
+            var prefix = match.replace(/(\d{4})\/?$/, '');
+            return prefix + selYear + '/';
+          });
+        } else if (params.href.indexOf('/best/') !== -1) {
+          // If somehow /best/ present but different format, append year
+          params.href = params.href.replace(/\/$/, '') + '/' + selYear + '/';
         } else {
-          params.href = (params.href.replace(/\/$/, '') + '/best/' + v + '/');
+          // No best segment present, append standard /best/<year>/ suffix
+          params.href = params.href.replace(/\/$/, '') + '/best/' + selYear + '/';
         }
         // Persist chosen year to store as well
-        store.yearPage = v;
-        // Update page title immediately so UI reflects chosen year
+        store.yearPage = selYear;
+        // Update page title immediately so UI reflects chosen year and genre (if selected)
         try {
-          page.metadata.title = params.title + ' (' + v + ')';
+          var currentGenreLabel = null;
+          try {
+            var partsNow = params.href.split('/').filter(function (p) { return p.length; });
+            // Expect partsNow like ['films','best','western','2026']
+            if (partsNow.length >= 4 && partsNow[1] === 'best') {
+              var baseNow = '/' + partsNow[0];
+              var genreNow = partsNow[2];
+              if (genreNow && cat) {
+                var selPathNow = baseNow + '/' + genreNow + '/';
+                for (var cj = 0; cj < cat.length; cj++) {
+                  if (cat[cj][0] === selPathNow) { currentGenreLabel = cat[cj][1]; break; }
+                }
+              }
+            }
+          } catch (e) { /* ignore */ }
+          if (currentGenreLabel && currentGenreLabel !== 'Все') {
+            page.metadata.title = params.title + ' - ' + currentGenreLabel + ' (' + selYear + ')';
+          } else {
+            page.metadata.title = params.title + ' (' + selYear + ')';
+          }
         } catch (e) {
           // If page isn't fully initialized, ignore
         }
@@ -154,12 +190,12 @@ function select_cat(params, page, reload) {
         ['watching', 'Сейчас смотрят'],
         ['soon', 'В ожидании'],
       ];
-      page.options.createMultiOpt('order', 'Выбрать', order, function (filter) {
-        params.args.filter = filter;
-        if (page.asyncPaginator) {
-          reload();
-        }
-      }, true);
+       page.options.createMultiOpt('order', 'Выбрать', order, function (filter) {
+         params.args.filter = filter;
+         if (page.asyncPaginator) {
+           reload();
+         }
+       }, true);
     }
     cat = '';
     films_cat = [
@@ -312,13 +348,45 @@ function select_cat(params, page, reload) {
     if (/animation/.test(params.href)) {
       cat = animation_cat;
     }
+    // If URL already contains a genre (best or regular), update the page title now to include it
+    if (cat) {
+      try {
+        var partsNow = params.href.split('/').filter(function (p) { return p.length; });
+        // Best URL form: ['films','best','western','2026']
+        if (partsNow.length >= 4 && partsNow[1] === 'best') {
+          var genreNow = partsNow[2];
+          var yearNow = partsNow[3];
+          var selPathNow = '/' + partsNow[0] + '/' + genreNow + '/';
+          var genreLabelNow = null;
+          for (var gi = 0; gi < cat.length; gi++) {
+            if (cat[gi][0] === selPathNow) { genreLabelNow = cat[gi][1]; break; }
+          }
+          if (genreLabelNow && genreLabelNow !== 'Все') {
+            page.metadata.title = params.title + ' - ' + genreLabelNow + ' (' + yearNow + ')';
+          } else if (yearNow) {
+            page.metadata.title = params.title + ' (' + yearNow + ')';
+          }
+        }
+        // Regular URL form: ['films','comedy']
+        else if (partsNow.length >= 2) {
+          var selPathReg = '/' + partsNow[0] + '/' + partsNow[1] + '/';
+          var genreLabelReg = null;
+          for (var gk = 0; gk < cat.length; gk++) {
+            if (cat[gk][0] === selPathReg) { genreLabelReg = cat[gk][1]; break; }
+          }
+          if (genreLabelReg && genreLabelReg !== 'Все') {
+            page.metadata.title = params.title + ' - ' + genreLabelReg;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
     if (cat) {
       page.options.createMultiOpt('genres', 'Жанры', cat, function (newhref) {
         log.d(params);
         log.d('params inside genres');
         // Preserve /best/<year>/ only if current view is a best view
         if (isBestView) {
-          var m = /\/best\/(\d{4})\/?$/.exec(params.href);
+          var m = /\/best\/(?:[^\/]+\/)?(\d{4})\/?$/.exec(params.href);
           var yearToUse = m ? m[1] : (store.yearPage || currentBestYear);
           // Build URL as /<category>/best/<genre?>/<year>/
           var parts = newhref.split('/').filter(function (p) { return p.length; });
@@ -329,9 +397,20 @@ function select_cat(params, page, reload) {
           } else {
             params.href = base + '/best/' + yearToUse + '/';
           }
-          // Update page title to include the selected year
+          // Update page title to include the selected year and genre (if any)
           try {
-            page.metadata.title = params.title + ' (' + yearToUse + ')';
+            var genreLabel = null;
+            if (genreSeg && cat) {
+              var selPath = base + '/' + genreSeg + '/';
+              for (var ci = 0; ci < cat.length; ci++) {
+                if (cat[ci][0] === selPath) { genreLabel = cat[ci][1]; break; }
+              }
+            }
+            if (genreLabel && genreLabel !== 'Все') {
+              page.metadata.title = params.title + ' - ' + genreLabel + ' (' + yearToUse + ')';
+            } else {
+              page.metadata.title = params.title + ' (' + yearToUse + ')';
+            }
           } catch (e) {
             // ignore if page not ready
           }
@@ -347,13 +426,13 @@ function select_cat(params, page, reload) {
         }
       }, true);
     }
-  }
+    }
 };
 exports.list = function (page, params) {
   page.loading = true;
   page.metadata.icon = LOGO;
   // If this is a best view, append year to the page title (e.g. "Лучшие фильмы (2026)")
-  var bestTitleMatch = /\/best\/(\d{4})\/?/.exec(params.href);
+  var bestTitleMatch = /\/best\/(?:[^\/]+\/)?(\d{4})\/?/.exec(params.href);
   if (bestTitleMatch) {
     page.metadata.title = params.title + ' (' + bestTitleMatch[1] + ')';
   } else {
@@ -538,3 +617,12 @@ exports.season = function (page, data) {
 //  return options.proto + options.host + i + r + u;
 //};
 function fix_0(n) {return n > 9 ? '' + n : '0' + n};
+
+
+
+
+
+
+
+
+

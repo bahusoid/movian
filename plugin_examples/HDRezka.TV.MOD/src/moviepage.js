@@ -240,6 +240,7 @@ function moviePage(page, data) {
 //        icon: '',
         icon: LOGOARROW,
       });
+      /*
       page.appendItem('youtube:search:' + data.title + ' ' + data.year, 'directory', {
 //        title: '\u043d\u0430\u0439\u0442\u0438 \u043d\u0430 YouTube',
         title: 'Найти на YouTube',
@@ -254,7 +255,7 @@ function moviePage(page, data) {
 //        icon: '',
         icon: LOGOARROW,
       });
-
+*/
       display_franchise(page, pageHtml.dom);
     });
   }
