@@ -5,9 +5,10 @@ var moviepage = require('./moviepage');
 
 data = {};
 //data = [];
-function scrapeList(href, pageHtml) {
+function scrapeList(page, href, pageHtml) {
   var returnValue = [];
   content = pageHtml.dom.getElementByClassName('b-content__inline_items');
+  var filterCountriesPage = page.model.options.filterCountries && page.model.options.filterCountries.value == '1';
 //  document.getElementsByClassName('b-content__inline_item')
   if ((elements = pageHtml.dom.getElementByClassName('b-content__inline_item'))) {
     for (i = 0; i < elements.length; i++) {
@@ -24,6 +25,21 @@ function scrapeList(href, pageHtml) {
       var descrText = (titleElem && titleElem.children[1] && titleElem.children[1].textContent) ? titleElem.children[1].textContent.trim() : null;
       var yearMatch = descrText ? descrText.match(/^\d+/) : null;
       var yearVal = yearMatch ? parseInt(yearMatch[0], 10) : null;
+
+      // If this is a Best view and the page-level country filter is enabled, filter list items
+      var skipMovie = false;
+      if (filterCountriesPage) {
+        var countries = ['Россия', 'Казахстан', 'Китай', 'Корея Южная'];
+        var desc = descrText.toLowerCase();
+        for (var ci = 0; ci < countries.length; ci++) {
+          skipMovie = desc.indexOf(countries[ci].toLowerCase()) !== -1;
+          if (skipMovie)
+             break;
+        }
+      }
+
+      if(skipMovie)
+        continue;
 
       returnValue.push({
         url: BASE_URL + relPath,
@@ -90,7 +106,7 @@ exports.searcher = function (page, params) {
     url = params.page ? params.href + params.page : params.href; // + "/";
     log.d('url=' + url);
     api.call(page, BASE_URL + url, params.args, function (pageHtml) {
-      list = scrapeList(url, pageHtml);
+      list = scrapeList(page, url, pageHtml);
       populateItemsFromList(page, list);
       nPage++;
       params.page = '&page=' + nPage;
@@ -162,6 +178,11 @@ function select_cat(params, page, reload) {
         } catch (e) {
           // If page isn't fully initialized, ignore
         }
+        if (page.asyncPaginator) reload();
+      });
+      // Page-level option: filter by countries in item description
+      // When enabled, only show items whose description contains one of the specified countries
+      page.options.createBool('filterCountries', 'Фильтр стран', (typeof store.filterCountriesPage !== 'undefined' ? store.filterCountriesPage : false), function (v) {
         if (page.asyncPaginator) reload();
       });
     }
@@ -454,7 +475,7 @@ exports.list = function (page, params) {
       if (/person/.test(url)) {
         page.metadata.icon = pageHtml.dom.getElementByTagName('img')[0].attributes.getNamedItem('src').value;
       }
-      list = scrapeList(url, pageHtml);
+      list = scrapeList(page, url, pageHtml);
       populateItemsFromList(page, list);
       nPage++;
       params.page = 'page/' + nPage + '/';
