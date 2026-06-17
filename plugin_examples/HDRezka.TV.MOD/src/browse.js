@@ -182,7 +182,8 @@ function select_cat(params, page, reload) {
       });
       // Page-level option: filter by countries in item description
       // When enabled, only show items whose description contains one of the specified countries
-      page.options.createBool('filterCountries', 'Фильтр стран', (typeof store.filterCountriesPage !== 'undefined' ? store.filterCountriesPage : false), function (v) {
+      page.options.createBool('filterCountries', 'Фильтр стран', store.filterCountriesPage == true, function (v) {
+        store.filterCountriesPage = v;
         if (page.asyncPaginator) reload();
       });
     }
