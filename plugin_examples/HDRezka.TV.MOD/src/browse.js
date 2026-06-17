@@ -128,13 +128,11 @@ function select_cat(params, page, reload) {
   var currentBestYear = isBestView ? parseInt(bestMatch[1], 10) : (store.yearPage || defaultYear);
   // If this is a best view, expose a page-level year selector in page options
     if (isBestView) {
-      page.options.createInt('bestYear', 'Год', currentBestYear, currentYear - 100, currentYear, 1, ' головаыолждфываложд.', function (v) {
+      page.options.createInt('bestYear', 'Год', currentBestYear, currentYear - 100, currentYear, 1, ' г.', function (v) {
         // Coerce and validate the selected value. If reset/invalid, use the defaultYear (current date - 4 months).
         var selYear = parseInt(v, 10);
-        if (!isFinite(selYear) || selYear === 0) selYear = defaultYear;
-        var minYear = currentYear - 99;
-        if (selYear < minYear) selYear = minYear;
-        if (selYear > currentYear) selYear = currentYear;
+        // Persist chosen year to store as well
+        store.yearPage = selYear;
 
         // Update params.href to use the selected year. Support both /best/<year>/ and /best/<genre>/<year>/ forms.
         var bestYearRegex = /\/best\/(?:[^\/]+\/)?(\d{4})\/?$/;
@@ -151,8 +149,7 @@ function select_cat(params, page, reload) {
           // No best segment present, append standard /best/<year>/ suffix
           params.href = params.href.replace(/\/$/, '') + '/best/' + selYear + '/';
         }
-        // Persist chosen year to store as well
-        store.yearPage = selYear;
+
         // Update page title immediately so UI reflects chosen year and genre (if selected)
         try {
           var currentGenreLabel = null;
