@@ -427,14 +427,10 @@ new page.Route(PREFIX + ':start', function (page) {
     });
   }
   // Best (Лучшие) shortcuts for films/series/cartoons — use last used year (stored) or default (current date - 4 months)
-  var _now_for_year = new Date();
-  var _dt_minus4 = new Date(_now_for_year.getFullYear(), _now_for_year.getMonth() - 4, 1);
-  var _default_best_year = _dt_minus4.getFullYear();
-  var _bestYear = (typeof store.yearPage !== 'undefined' && store.yearPage !== null) ? store.yearPage : _default_best_year;
   // Append entries that point to category/best/<year>/ — browse.list handles the rest
-  page.appendItem(PREFIX + ':list:/films/best/' + _bestYear + '/:Лучшие фильмы', 'directory', {title: 'Лучшие фильмы', icon: LOGOFOLDER});
-  page.appendItem(PREFIX + ':list:/series/best/' + _bestYear + '/:Лучшие сериалы', 'directory', {title: 'Лучшие сериалы', icon: LOGOFOLDER});
-  page.appendItem(PREFIX + ':list:/cartoons/best/' + _bestYear + '/:Лучшие мультфильмы', 'directory', {title: 'Лучшие мультфильмы', icon: LOGOFOLDER});
+  page.appendItem(PREFIX + ':list:/films/best/:Лучшие фильмы', 'directory', {title: 'Лучшие фильмы', icon: LOGOFOLDER});
+  page.appendItem(PREFIX + ':list:/series/best/:Лучшие сериалы', 'directory', {title: 'Лучшие сериалы', icon: LOGOFOLDER});
+  page.appendItem(PREFIX + ':list:/cartoons/best/:Лучшие мультфильмы', 'directory', {title: 'Лучшие мультфильмы', icon: LOGOFOLDER});
 //  navmenu = document.getElementById('topnav-menu')
 //  for (i = 0;  i < navmenu.children.length; i++) {
 //    e = navmenu.children[i]

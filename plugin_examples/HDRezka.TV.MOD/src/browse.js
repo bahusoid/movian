@@ -3,12 +3,159 @@
 /* eslint-disable no-var */
 var moviepage = require('./moviepage');
 
+var russian_genre = 'russian/';
+var ukrainian_genre = 'ukrainian/';
+
+films_cat = [
+  ['', 'Все', true],
+  ['arthouse/', 'Арт-хаус'],
+  ['biographical/', 'Биографические'],
+  ['action/', 'Боевики'],
+  ['western/', 'Вестерны'],
+  ['military/', 'Военные'],
+  ['detective/', 'Детективы'],
+  ['kids/', 'Детские'],
+  ['documentary/', 'Документальные'],
+  ['drama/', 'Драмы'],
+  ['historical/', 'Исторические'],
+  ['comedy/', 'Комедии'],
+  ['concert/', 'Концерт'],
+  ['short/', 'Короткометражные'],
+  ['crime/', 'Криминал'],
+  ['melodrama/', 'Мелодрамы'],
+  ['musical/', 'Мюзиклы'],
+  ['cognitive/', 'Познавательные'],
+  ['adventures/', 'Приключения'],
+  ['travel/', 'Путешествия'],
+  ['family/', 'Семейные'],
+  ['sport/', 'Спортивные'],
+  ['standup/', 'Стендап'],
+  ['theatre/', 'Театр'],
+  ['thriller/', 'Триллеры'],
+  ['horror/', 'Ужасы'],
+  ['fiction/', 'Фантастика'],
+  ['fantasy/', 'Фэнтези'],
+  ['erotic/', 'Эротика'],
+  ['foreign/', 'Зарубежные'],
+  [russian_genre, 'Русские'],
+  [ukrainian_genre, 'Украинские'],
+];
+series_cat = [
+  ['', 'Все', true],
+  ['foreign/', 'Зарубежные'],
+  ['russian/', 'Русские'],
+  ['ukrainian/', 'Украинские'],
+  ['arthouse/', 'Арт-хаус'],
+  ['biographical/', 'Биографические'],
+  ['action/', 'Боевики'],
+  ['western/', 'Вестерны'],
+  ['military/', 'Военные'],
+  ['detective/', 'Детективы'],
+  ['documentary/', 'Документальные'],
+  ['drama/', 'Драмы'],
+  ['historical/', 'Исторические'],
+  ['comedy/', 'Комедии'],
+  ['crime/', 'Криминал'],
+  ['melodrama/', 'Мелодрамы'],
+  ['musical/', 'Музыкальные'],
+  ['adventures/', 'Приключения'],
+  ['realtv/', 'Реальное ТВ'],
+  ['family/', 'Семейные'],
+  ['sport/', 'Спортивные'],
+  ['standup/', 'Стендап'],
+  ['telecasts/', 'Телепередачи'],
+  ['thriller/', 'Триллеры'],
+  ['horror/', 'Ужасы'],
+  ['fiction/', 'Фантастика'],
+  ['fantasy/', 'Фэнтези'],
+  ['erotic/', 'Эротика'],
+];
+cartoons_cat = [
+  ['', 'Все', true],
+  ['anime/', 'Аниме'],
+  ['arthouse/', 'Арт-хаус'],
+  ['biographical/', 'Биографические'],
+  ['action/', 'Боевики'],
+  ['western/', 'Вестерны'],
+  ['military/', 'Военные'],
+  ['detective/', 'Детективы'],
+  ['kids/', 'Детские'],
+  ['adult/', 'Для взрослых'],
+  ['documentary/', 'Документальные'],
+  ['drama/', 'Драмы'],
+  ['historical/', 'Исторические'],
+  ['comedy/', 'Комедии'],
+  ['short/', 'Короткометражные'],
+  ['crime/', 'Криминал'],
+  ['melodrama/', 'Мелодрамы'],
+  ['multseries/', 'Мультсериалы'],
+  ['musical/', 'Мюзиклы'],
+  ['cognitive/', 'Познавательные'],
+  ['full-length/', 'Полнометражные'],
+  ['adventures/', 'Приключения'],
+  ['family/', 'Семейные'],
+  ['fairytale/', 'Сказки'],
+  ['sport/', 'Спортивные'],
+  ['thriller/', 'Триллеры'],
+  ['horror/', 'Ужасы'],
+  ['fiction/', 'Фантастика'],
+  ['fantasy/', 'Фэнтези'],
+  ['erotic/', 'Эротика'],
+  ['foreign/', 'Зарубежные'],
+  [russian_genre, 'Русские'],
+  ['soyzmyltfilm/', 'Советские'],
+  [ukrainian_genre, 'Украинские'],
+];
+animation_cat = [
+  ['', 'Все', true],
+  ['action/', 'Боевики'],
+  ['fighting/', 'Боевые искусства'],
+  ['military/', 'Военные'],
+  ['detective/', 'Детективы'],
+  ['kids/', 'Детские'],
+  ['drama/', 'Драмы'],
+  ['historical/', 'Исторические'],
+  ['kodomo/', 'Кодомо'],
+  ['comedy/', 'Комедии'],
+  ['mahoushoujo/', 'Махо-сёдзё'],
+  ['mecha/', 'Меха'],
+  ['mystery/', 'Мистические'],
+  ['musical/', 'Музыкальные'],
+  ['educational/', 'Образовательные'],
+  ['parody/', 'Пародия'],
+  ['everyday/', 'Повседневность'],
+  ['adventures/', 'Приключения'],
+  ['romance/', 'Романтические'],
+  ['samurai/', 'Самурайский боевик'],
+  ['shoujo/', 'Сёдзё'],
+  ['shoujoai/', 'Сёдзё-ай'],
+  ['shounen/', 'Сёнэн'],
+  ['shounenai/', 'Сёнэн-ай'],
+  ['fairytale/', 'Сказки'],
+  ['sport/', 'Спортивные'],
+  ['thriller/', 'Триллеры'],
+  ['horror/', 'Ужасы'],
+  ['fiction/', 'Фантастика'],
+  ['fantasy/', 'Фэнтези'],
+  ['school/', 'Школа'],
+  ['erotic/', 'Эротика'],
+  ['ecchi/', 'Этти'],
+];
+
+var categories = [
+  { hrefPrefix: '/films/', cat: films_cat },
+  { hrefPrefix: '/series/', cat: series_cat },
+  { hrefPrefix: '/cartoons/', cat: cartoons_cat },
+  { hrefPrefix: '/animation/', cat: animation_cat },
+];
+
+var skip_country_filter = false;
 data = {};
 //data = [];
 function scrapeList(page, href, pageHtml) {
   var returnValue = [];
   content = pageHtml.dom.getElementByClassName('b-content__inline_items');
-  var filterCountriesPage = page.model.options.filterCountries && page.model.options.filterCountries.value == '1';
+  var filterCountriesPage = !skip_country_filter &&  page.model.options.filterCountries && page.model.options.filterCountries.value == '1';
 //  document.getElementsByClassName('b-content__inline_item')
   if ((elements = pageHtml.dom.getElementByClassName('b-content__inline_item'))) {
     for (i = 0; i < elements.length; i++) {
@@ -65,6 +212,19 @@ function scrapeList(page, href, pageHtml) {
   log.d(returnValue.endOfData);
   return returnValue;
 };
+
+function startsWith(str, prefix, position) {
+  position = position || 0;
+  if (str.length < prefix.length + position)
+    return false;
+
+  for (var i = 0; i < prefix.length; i++) {
+    if (str[position + i] !== prefix[i])
+      return false;
+  }
+  return true;
+}
+
 function populateItemsFromList(page, list) {
 //  page.metadata.logo ='https://static.hdrezka.ac/i/2016/10/25/r7ee1f9b6161fvo87q99i.jpg';
   page.metadata.logo = LOGO;
@@ -117,90 +277,76 @@ exports.searcher = function (page, params) {
   loader();
 };
 function select_cat(params, page, reload) {
-  // Detect if current href is a "best" view (contains /best/<year>/ or /best/<genre>/<year>/)
-  var bestMatch = (/\/best\/(?:[^\/]+\/)?(\d{4})\/?$/.exec(params.href));
-  var isBestView = bestMatch !== null;
-  // Compute default year = current date minus 4 months
-  var _now = new Date();
-  var _dt_minus4 = new Date(_now.getFullYear(), _now.getMonth() - 4, 1);
-  var defaultYear = _dt_minus4.getFullYear();
-  var currentYear = _now.getFullYear();
-  var currentBestYear = isBestView ? parseInt(bestMatch[1], 10) : (store.yearPage || defaultYear);
-  // If this is a best view, expose a page-level year selector in page options
-    if (isBestView) {
-      page.options.createInt('bestYear', 'Год', currentBestYear, currentYear - 100, currentYear, 1, ' г.', function (v) {
-        // Coerce and validate the selected value. If reset/invalid, use the defaultYear (current date - 4 months).
-        var selYear = parseInt(v, 10);
-        // Persist chosen year to store as well
-        store.yearPage = selYear;
+  var initialization = true;
 
-        // Update params.href to use the selected year. Support both /best/<year>/ and /best/<genre>/<year>/ forms.
-        var bestYearRegex = /\/best\/(?:[^\/]+\/)?(\d{4})\/?$/;
-        if (bestYearRegex.test(params.href)) {
-          // Replace the trailing year component
-          params.href = params.href.replace(bestYearRegex, function (match, p1) {
-            var prefix = match.replace(/(\d{4})\/?$/, '');
-            return prefix + selYear + '/';
-          });
-        } else if (params.href.indexOf('/best/') !== -1) {
-          // If somehow /best/ present but different format, append year
-          params.href = params.href.replace(/\/$/, '') + '/' + selYear + '/';
-        } else {
-          // No best segment present, append standard /best/<year>/ suffix
-          params.href = params.href.replace(/\/$/, '') + '/best/' + selYear + '/';
-        }
-
-        // Update page title immediately so UI reflects chosen year and genre (if selected)
-        try {
-          var currentGenreLabel = null;
-          try {
-            var partsNow = params.href.split('/').filter(function (p) { return p.length; });
-            // Expect partsNow like ['films','best','western','2026']
-            if (partsNow.length >= 4 && partsNow[1] === 'best') {
-              var baseNow = '/' + partsNow[0];
-              var genreNow = partsNow[2];
-              if (genreNow && cat) {
-                var selPathNow = baseNow + '/' + genreNow + '/';
-                for (var cj = 0; cj < cat.length; cj++) {
-                  if (cat[cj][0] === selPathNow) { currentGenreLabel = cat[cj][1]; break; }
-                }
-              }
-            }
-          } catch (e) { /* ignore */ }
-          if (currentGenreLabel && currentGenreLabel !== 'Все') {
-            page.metadata.title = params.title + ' - ' + currentGenreLabel + ' (' + selYear + ')';
-          } else {
-            page.metadata.title = params.title + ' (' + selYear + ')';
-          }
-        } catch (e) {
-          // If page isn't fully initialized, ignore
-        }
-        if (page.asyncPaginator) reload();
-      });
-      // Page-level option: filter by countries in item description
-      // When enabled, only show items whose description contains one of the specified countries
-      page.options.createBool('filterCountries', 'Фильтр стран', store.filterCountriesPage == true, function (v) {
-        store.filterCountriesPage = v;
-        if (page.asyncPaginator) reload();
-      });
+  var result = null;
+  for (var i = 0; i < categories.length; i++) {
+    if (startsWith(params.href, categories[i].hrefPrefix)) {
+      result = categories[i];
+      break;
     }
+  }
 
-  if (params.href == '/new/') {
+  // Detect if current href is a "best" view (contains /best/<year>/ or /best/<genre>/<year>/)
+  var isBestView = result && startsWith(params.href, 'best/', result.hrefPrefix.length);
+  var genre = null;
+  function page_reload() {
+    if (!initialization ) {
+      var genreFilter = page.model.options.genres;
+      var genreTitle = genreFilter && genreFilter.current.title;
+      page.metadata.title = params.title
+          + (genre ?  ' - ' + genreTitle : '')
+      ;
+
+      if (isBestView) {
+        page.metadata.title += ' (' + store.yearPage + ')';
+        //[series/films/cartoons/animation]/[genre/]
+        //[series/films/cartoons/animation]/best/[genre/][year/]
+        params.href = result.hrefPrefix + 'best/'
+            + (genre ? genre + '/' : '')
+            + store.yearPage + '/';
+      }
+      if (page.asyncPaginator)
+        reload();
+    }
+  }
+
+  // If this is a best view, expose a page-level year selector in page options
+  if (isBestView) {
+    // Compute default year = current date minus 4 months
+    var now = new Date();
+    var dt_minus4 = new Date(now.getFullYear(), now.getMonth() - 4, 1);
+    var defaultYear = dt_minus4.getFullYear();
+    var currentYear = now.getFullYear();
+
+    page.options.createInt('bestYear', 'Год', defaultYear, currentYear - 100, currentYear, 1, ' г.', function (v) {
+      store.yearPage = v;
+      page_reload();
+    });
+    // Page-level option: filter by countries in item description
+    // When enabled, only show items whose description contains one of the specified countries
+    page.options.createBool('filterCountries', 'Фильтр стран', store.filterCountriesPage == true, function (v) {
+      store.filterCountriesPage = v;
+      page_reload();
+    });
+  }
+
+  var cat_new = params.href == '/new/';
+  if (cat_new) {
     type = [
       ['0', 'Все', true],
       ['1', 'Фильмы'],
       ['2', 'Сериалы'],
       ['3', 'Мультфильмы'],
       ['82', 'Аниме'],
-//      ['4', 'ТВ шоу'],
       ['4', 'Передачи и шоу'],
     ];
     page.options.createMultiOpt('genre', 'Тип', type, function (genre) {
       genre > 0 ? (params.args.genre = genre) : delete params.args.genre;
-      if (page.asyncPaginator) reload();
+      page_reload();
     }, true);
   }
-  if (params.href == '/new/' || !/.*?do=search.*/.test(params.href)) {
+  if (cat_new || !/.*?do=search.*/.test(params.href)) {
     // Do not show "Выбрать" (order) when browsing Best pages
     if (!isBestView) {
       order = [
@@ -209,254 +355,30 @@ function select_cat(params, page, reload) {
         ['watching', 'Сейчас смотрят'],
         ['soon', 'В ожидании'],
       ];
-       page.options.createMultiOpt('order', 'Выбрать', order, function (filter) {
-         params.args.filter = filter;
-         if (page.asyncPaginator) {
-           reload();
-         }
-       }, true);
-    }
-    cat = '';
-    films_cat = [
-      ['/films/', 'Все', true],
-      ['/films/foreign/', 'Зарубежные'],
-//      ['/films/our/', 'Наши'],
-      ['/films/our/', 'Отечественные'],
-      ['/films/ukrainian/', 'Украинские'],
-      ['/films/arthouse/', 'Арт-хаус'],
-      ['/films/biographical/', 'Биографические'],
-      ['/films/action/', 'Боевики'],
-      ['/films/western/', 'Вестерны'],
-      ['/films/military/', 'Военные'],
-      ['/films/detective/', 'Детективы'],
-      ['/films/kids/', 'Детские'],
-      ['/films/documentary/', 'Документальные'],
-      ['/films/drama/', 'Драмы'],
-      ['/films/historical/', 'Исторические'],
-      ['/films/comedy/', 'Комедии'],
-      ['/films/concert/', 'Концерт'],
-      ['/films/short/', 'Короткометражные'],
-      ['/films/crime/', 'Криминал'],
-      ['/films/melodrama/', 'Мелодрамы'],
-      ['/films/musical/', 'Мюзиклы'],
-      ['/films/cognitive/', 'Познавательные'],
-      ['/films/adventures/', 'Приключения'],
-      ['/films/travel/', 'Путешествия'],
-      ['/films/family/', 'Семейные'],
-      ['/films/sport/', 'Спортивные'],
-      ['/films/standup/', 'Стендап'],
-      ['/films/theatre/', 'Театр'],
-      ['/films/thriller/', 'Триллеры'],
-      ['/films/horror/', 'Ужасы'],
-      ['/films/fiction/', 'Фантастика'],
-      ['/films/fantasy/', 'Фэнтези'],
-      ['/films/erotic/', 'Эротика'],
-    ];
-    series_cat = [
-      ['/series/', 'Все', true],
-      ['/series/foreign/', 'Зарубежные'],
-//      ['/series/russian/', 'Русские'],
-      ['/series/russian/', 'Отечественные'],
-      ['/series/ukrainian/', 'Украинские'],
-      ['/series/arthouse/', 'Арт-хаус'],
-      ['/series/biographical/', 'Биографические'],
-      ['/series/action/', 'Боевики'],
-      ['/series/western/', 'Вестерны'],
-      ['/series/military/', 'Военные'],
-      ['/series/detective/', 'Детективы'],
-      ['/series/documentary/', 'Документальные'],
-      ['/series/drama/', 'Драмы'],
-      ['/series/historical/', 'Исторические'],
-      ['/series/comedy/', 'Комедии'],
-      ['/series/crime/', 'Криминал'],
-      ['/series/melodrama/', 'Мелодрамы'],
-      ['/series/musical/', 'Музыкальные'],
-      ['/series/adventures/', 'Приключения'],
-      ['/series/realtv/', 'Реальное ТВ'],
-      ['/series/family/', 'Семейные'],
-      ['/series/sport/', 'Спортивные'],
-      ['/series/standup/', 'Стендап'],
-      ['/series/telecasts/', 'Телепередачи'],
-      ['/series/thriller/', 'Триллеры'],
-      ['/series/horror/', 'Ужасы'],
-      ['/series/fiction/', 'Фантастика'],
-      ['/series/fantasy/', 'Фэнтези'],
-      ['/series/erotic/', 'Эротика'],
-    ];
-    cartoons_cat = [
-      ['/cartoons/', 'Все', true],
-      ['/cartoons/foreign/', 'Зарубежные'],
-//      ['/cartoons/our/', 'Наши'],
-      ['/cartoons/our/', 'Отечественные'],
-      ['/cartoons/soyzmyltfilm/', 'Советские'],
-      ['/cartoons/ukrainian/', 'Украинские'],
-      ['/cartoons/anime/', 'Аниме'],
-      ['/cartoons/arthouse/', 'Арт-хаус'],
-      ['/cartoons/biographical/', 'Биографические'],
-      ['/cartoons/action/', 'Боевики'],
-      ['/cartoons/western/', 'Вестерны'],
-      ['/cartoons/military/', 'Военные'],
-      ['/cartoons/detective/', 'Детективы'],
-      ['/cartoons/kids/', 'Детские'],
-      ['/cartoons/adult/', 'Для взрослых'],
-      ['/cartoons/documentary/', 'Документальные'],
-      ['/cartoons/drama/', 'Драмы'],
-      ['/cartoons/historical/', 'Исторические'],
-      ['/cartoons/comedy/', 'Комедии'],
-      ['/cartoons/short/', 'Короткометражные'],
-      ['/cartoons/crime/', 'Криминал'],
-      ['/cartoons/melodrama/', 'Мелодрамы'],
-      ['/cartoons/multseries/', 'Мультсериалы'],
-      ['/cartoons/musical/', 'Мюзиклы'],
-      ['/cartoons/cognitive/', 'Познавательные'],
-      ['/cartoons/full-length/', 'Полнометражные'],
-      ['/cartoons/adventures/', 'Приключения'],
-      ['/cartoons/family/', 'Семейные'],
-      ['/cartoons/fairytale/', 'Сказки'],
-      ['/cartoons/sport/', 'Спортивные'],
-      ['/cartoons/thriller/', 'Триллеры'],
-      ['/cartoons/horror/', 'Ужасы'],
-      ['/cartoons/fiction/', 'Фантастика'],
-      ['/cartoons/fantasy/', 'Фэнтези'],
-      ['/cartoons/erotic/', 'Эротика'],
-    ];
-    animation_cat = [
-      ['/animation/', 'Все', true],
-      ['/animation/action/', 'Боевики'],
-      ['/animation/fighting/', 'Боевые искусства'],
-      ['/animation/military/', 'Военные'],
-      ['/animation/detective/', 'Детективы'],
-      ['/animation/kids/', 'Детские'],
-      ['/animation/drama/', 'Драмы'],
-      ['/animation/historical/', 'Исторические'],
-      ['/animation/kodomo/', 'Кодомо'],
-      ['/animation/comedy/', 'Комедии'],
-      ['/animation/mahoushoujo/', 'Махо-сёдзё'],
-      ['/animation/mecha/', 'Меха'],
-      ['/animation/mystery/', 'Мистические'],
-      ['/animation/musical/', 'Музыкальные'],
-      ['/animation/educational/', 'Образовательные'],
-      ['/animation/parody/', 'Пародия'],
-      ['/animation/everyday/', 'Повседневность'],
-      ['/animation/adventures/', 'Приключения'],
-      ['/animation/romance/', 'Романтические'],
-      ['/animation/samurai/', 'Самурайский боевик'],
-      ['/animation/shoujo/', 'Сёдзё'],
-      ['/animation/shoujoai/', 'Сёдзё-ай'],
-      ['/animation/shounen/', 'Сёнэн'],
-      ['/animation/shounenai/', 'Сёнэн-ай'],
-      ['/animation/fairytale/', 'Сказки'],
-      ['/animation/sport/', 'Спортивные'],
-      ['/animation/thriller/', 'Триллеры'],
-      ['/animation/horror/', 'Ужасы'],
-      ['/animation/fiction/', 'Фантастика'],
-      ['/animation/fantasy/', 'Фэнтези'],
-      ['/animation/school/', 'Школа'],
-      ['/animation/erotic/', 'Эротика'],
-      ['/animation/ecchi/', 'Этти'],
-    ];
-    if (/films/.test(params.href)) {
-      cat = films_cat;
-    }
-    if (/series/.test(params.href)) {
-      cat = series_cat;
-    }
-    if (/cartoons/.test(params.href)) {
-      cat = cartoons_cat;
-    }
-    if (/animation/.test(params.href)) {
-      cat = animation_cat;
-    }
-    // If URL already contains a genre (best or regular), update the page title now to include it
-    if (cat) {
-      try {
-        var partsNow = params.href.split('/').filter(function (p) { return p.length; });
-        // Best URL form: ['films','best','western','2026']
-        if (partsNow.length >= 4 && partsNow[1] === 'best') {
-          var genreNow = partsNow[2];
-          var yearNow = partsNow[3];
-          var selPathNow = '/' + partsNow[0] + '/' + genreNow + '/';
-          var genreLabelNow = null;
-          for (var gi = 0; gi < cat.length; gi++) {
-            if (cat[gi][0] === selPathNow) { genreLabelNow = cat[gi][1]; break; }
-          }
-          if (genreLabelNow && genreLabelNow !== 'Все') {
-            page.metadata.title = params.title + ' - ' + genreLabelNow + ' (' + yearNow + ')';
-          } else if (yearNow) {
-            page.metadata.title = params.title + ' (' + yearNow + ')';
-          }
-        }
-        // Regular URL form: ['films','comedy']
-        else if (partsNow.length >= 2) {
-          var selPathReg = '/' + partsNow[0] + '/' + partsNow[1] + '/';
-          var genreLabelReg = null;
-          for (var gk = 0; gk < cat.length; gk++) {
-            if (cat[gk][0] === selPathReg) { genreLabelReg = cat[gk][1]; break; }
-          }
-          if (genreLabelReg && genreLabelReg !== 'Все') {
-            page.metadata.title = params.title + ' - ' + genreLabelReg;
-          }
-        }
-      } catch (e) { /* ignore */ }
-    }
-    if (cat) {
-      page.options.createMultiOpt('genres', 'Жанры', cat, function (newhref) {
-        log.d(params);
-        log.d('params inside genres');
-        // Preserve /best/<year>/ only if current view is a best view
-        if (isBestView) {
-          var m = /\/best\/(?:[^\/]+\/)?(\d{4})\/?$/.exec(params.href);
-          var yearToUse = m ? m[1] : (store.yearPage || currentBestYear);
-          // Build URL as /<category>/best/<genre?>/<year>/
-          var parts = newhref.split('/').filter(function (p) { return p.length; });
-          var base = parts.length > 0 ? '/' + parts[0] : '';
-          var genreSeg = parts.length > 1 ? parts[1] : '';
-          if (genreSeg) {
-            params.href = base + '/best/' + genreSeg + '/' + yearToUse + '/';
-          } else {
-            params.href = base + '/best/' + yearToUse + '/';
-          }
-          // Update page title to include the selected year and genre (if any)
-          try {
-            var genreLabel = null;
-            if (genreSeg && cat) {
-              var selPath = base + '/' + genreSeg + '/';
-              for (var ci = 0; ci < cat.length; ci++) {
-                if (cat[ci][0] === selPath) { genreLabel = cat[ci][1]; break; }
-              }
-            }
-            if (genreLabel && genreLabel !== 'Все') {
-              page.metadata.title = params.title + ' - ' + genreLabel + ' (' + yearToUse + ')';
-            } else {
-              page.metadata.title = params.title + ' (' + yearToUse + ')';
-            }
-          } catch (e) {
-            // ignore if page not ready
-          }
-        } else {
-          params.href = newhref;
-          // Not a best view — ensure title is reset to base title
-          try {
-            page.metadata.title = params.title;
-          } catch (e) {}
-        }
-        if (page.asyncPaginator) {
-          reload();
-        }
+      page.options.createMultiOpt('order', 'Выбрать', order, function (filter) {
+        params.args.filter = filter;
+        page_reload();
       }, true);
     }
+
+    if (result) {
+      page.options.createMultiOpt('genres', 'Жанры', result.cat, function (v) {
+        genre = v;
+        params.href = result.hrefPrefix + (genre ? genre : '');
+
+        skip_country_filter = genre === russian_genre  || genre === ukrainian_genre;
+        page_reload();
+      }, true);
     }
-};
+  }
+
+  initialization = false;
+  page_reload();
+}
 exports.list = function (page, params) {
   page.loading = true;
   page.metadata.icon = LOGO;
-  // If this is a best view, append year to the page title (e.g. "Лучшие фильмы (2026)")
-  var bestTitleMatch = /\/best\/(?:[^\/]+\/)?(\d{4})\/?/.exec(params.href);
-  if (bestTitleMatch) {
-    page.metadata.title = params.title + ' (' + bestTitleMatch[1] + ')';
-  } else {
-    page.metadata.title = params.title;
-  }
+  page.metadata.title = params.title;
   page.model.contents = 'grid';
   page.type = 'directory';
   page.entries = 0;
