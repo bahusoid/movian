@@ -332,14 +332,14 @@ sp.createMultiOpt = function(id, title, options, callback, persistent) {
 
     opt.title = opt_title;
 
-    if(initial == null && opt_default)
+    if (initial === null && opt_default)
       initial = opt_id;
   }
 
-  if(!initial)
+  if (initial === null)
     initial = options[0][0].toString();
 
-  if(initial) {
+  if (initial !== null) {
     var opt = model.options[initial];
     prop.select(opt);
     prop.link(opt, model.current);
@@ -348,7 +348,7 @@ sp.createMultiOpt = function(id, title, options, callback, persistent) {
   }
 
   prop.subscribe(model.options, function(type, a) {
-    if(type == 'selectchild') {
+    if (type === 'selectchild') {
       var selected = prop.getName(a);
       group.setvalue(id, selected, persistent);
       prop.link(a, model.current);
