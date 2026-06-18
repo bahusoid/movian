@@ -241,6 +241,12 @@ sp.createInt = function(id, title, def, min, max, step, unit,
     if(group.zombie)
       return;
 
+    // reset action
+    if(newval === null) {
+      item.model.value = def;
+      return;
+    }
+
     newval = parseInt(newval);
     group.setvalue(id, newval, persistent);
     callback(newval);
