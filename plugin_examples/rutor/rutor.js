@@ -242,7 +242,6 @@ new page.Route(plugin.id + ":start", function(page) {
     var searchHtml = http.request(service.baseURL + '/search/').toString();
     var sel = searchHtml.match(/<select[^>]*(?:id="category_id"|name="category")[^>]*>([\s\S]*?)<\/select>/);
 
-    sel = false;
     if (sel) {
         var optRe = /<option\s+value="([^"]*)">([\s\S]*?)<\/option>/g;
         var m;
