@@ -114,6 +114,7 @@
 
             widget(slider_x, {
               alwaysGrabKnob: true;
+              disableTrackClick: true;
               focusable: select($self.metadata.autofocus, 1.5, 1.0);
               min: MIN;
               max: MAX;
