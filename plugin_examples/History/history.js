@@ -105,15 +105,17 @@ function safePlayUrl(url) {
   return v;
 }
 function safeString(v, fallback) {
-  if (v == null) {
+  if (!v) {
     return fallback !== undefined ? fallback : null;
   }
+  /* //Seems we don't need this.
   try {
     if (typeof v === 'object' && typeof v.valueOf === 'function') {
       v = v.valueOf();
     }
   } catch (e) {
   }
+   */
   v = String(v);
   return (v !== '' && v !== 'null') ? v : (fallback !== undefined ? fallback : null);
 }
