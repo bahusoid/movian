@@ -4,12 +4,12 @@
   "id": "HDRezka.TV.MOD",
   "file": "HDRezka.TV.js",
   "showtimeVersion": "5",
-  "version": "2.6.10.1-mod4",
-  "author": "Buksa (fix by kovalDN) (bahusoid mod)",
+  "version": "3.0.0",
+  "author": "bahusoid",
   "title": "HDRezka.TV.MOD",
   "icon": "HDRezka.TV.png",
   "synopsis": "Онлайн кинотеатр HDRezka для просмотра фильмов, мультфильмов, сериалов и прочего контента",
   "category": "video",
-  "description": "Плагин для Movian для доступа к онлайн кинотеатру HDRezka",
+  "description": "Based on HDRezka.TV v2.6.10.1  by Buksa (fix by kovalDN)\nПлагин для Movian для доступа к онлайн кинотеатру HDRezka",
   "homepage": "https://4pda.to/forum/index.php?showtopic=669064&view=findpost&p=139978030"
 }

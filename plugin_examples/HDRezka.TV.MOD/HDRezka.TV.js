@@ -171,7 +171,8 @@ var settings = require('movian/settings');
 settings.globalSettings(PREFIX, TTL, LOGO, SYN);
 //settings.createInfo('info', config.LOGO, 'Plugin developed by ' + config.AUT + '. \n');
 //settings.createInfo('info', LOGO, 'Plugin developed by ' + AUT + '. \n');
-settings.createInfo('info', LOGO, 'Plugin developed by ' + AUT + ', \n' + PREFIX + ', \n' + 'ver. ' + VER + ' \n');
+var t = 'Based on HDRezka.TV v2.6.10.1  by Buksa (fix by kovalDN)';
+settings.createInfo('info', LOGO, 'Plugin developed by ' + AUT + ', \n' + t +  ', \n' + 'ver. ' + VER + ' \n');
 settings.createDivider('Настройки:');
 //settings.createBool('tosaccepted', 'Принятие условий использования (при открытии плагина)', true, function (v) {service.tosaccepted = v});
 settings.createBool('tosaccepted', 'Принятие условий использования (при открытии плагина)', false, function (v) {service.tosaccepted = v});
@@ -184,6 +185,8 @@ tos += 'Принимаете ли вы эти условия использов�
 settings.createBool('debug', 'Отладка (debug)', false, function (v) {service.debug = v});
 // Premium filter: when false, filter out premium-only translators
 settings.createBool('Premium', 'Premium', false, function (v) {service.Premium = v});
+
+settings.createString("bestPageCountryFilter", "Фильтр стран (Лучшие)", "Россия, Казахстан, Китай, Корея Южная", function (v) {service.filterCountries = v.split(',').map(function(item) { return item.trim(); });});
 function printDebug(message) {
 //  if (store.debug) console.error(message);
   if (service.debug) console.error(message);
@@ -300,7 +303,8 @@ settings.createMultiOpt('qualityFormat', 'Предпочтительный фо�
   ['drm', 'DRM'],
 ], function (v) {store.qualityFormat = v});
 settings.createMultiOpt('preferredCdn', 'Предпочтительный CDN', [
-  ['voidboost.cc', 'voidboost.cc', true],
+  ['default', 'Default', true],
+  ['voidboost.cc', 'voidboost.cc'],
   ['ukrtelcdn.net', 'ukrtelcdn.net'],
   ['All', 'All'],
 ], function (v) {store.preferredCdn = v});
@@ -416,6 +420,11 @@ new page.Route(PREFIX + ':start', function (page) {
   var user = 'Авторизация';
   if (loginstate) {
     user = currentUser || 'Пользователь';
+
+    //Plugin data reset?
+    if(!currentUser)
+      store.currentUser = currentUser = user;
+
   }
 //  page.appendItem(PREFIX + ':search:', 'search', {title: 'Поиск на ' + PREFIX});
   page.appendItem(PREFIX + ':search:', 'search', {title: 'Поиск на ' + BASE_URL});
@@ -899,7 +908,7 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
         action: 'get_stream',
       };
     }
-    if (data.type == 'movie') {
+    if (data.type === 'movie') {
       postdata = {
         id: data.series_id || data.id,
         translator_id: data.translator_id,
@@ -980,7 +989,7 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   var askQuality = store.askQuality !== undefined ? store.askQuality : false;
   var qualityResolution = store.qualityResolution || '1080p';
   var qualityFormat = store.qualityFormat || 'hls';
-  var preferredCdn = store.preferredCdn || 'voidboost.cc';
+  var preferredCdn = store.preferredCdn || 'default';
 
   var bestQuality = selectBestQuality(list, qualityResolution, qualityFormat, preferredCdn);
   var selectedItem = bestQuality.item;
@@ -1438,7 +1447,8 @@ function scrapeSourceLinks(streams) {
     var block = blocks[b];
     var qMatch = block.match(/^(\[.*?\])([\s\S]*)$/);
     if (!qMatch) continue;
-    var q = qMatch[1];
+    //var q = qMatch[1];
+    var q = qMatch[1].match(/\d+[pP]( Ultra)?/)[0] || qMatch[1];
     var urlList = qMatch[2].split(' or ');
     var hlsUrls = {};
     var mp4Urls = {};
@@ -1478,15 +1488,15 @@ function selectBestQuality(list, maxResolution, preferredFormat, preferredCdn) {
     maxResolution = '480p';
   }
   var maxResIndex = resolutionOrder.indexOf(maxResolution);
-  preferredCdn = preferredCdn || 'voidboost.cc';
+  preferredCdn = preferredCdn || 'default`';
   
   var bestMatch = null;
   var bestResIndex = -1;
   
   for (var i = 0; i < list.length; i++) {
     var item = list[i];
-    var quality = item.q.replace(/\[|\]/g, '').toLowerCase();
-    var resIndex = resolutionOrder.indexOf(quality);
+    //var quality = item.q.replace(/\[|\]/g, '').toLowerCase();
+    var resIndex = resolutionOrder.indexOf(item.q.toLowerCase());
 
     // Check if this quality is within our limit and better than current best
     if (resIndex <= maxResIndex && resIndex > bestResIndex) {

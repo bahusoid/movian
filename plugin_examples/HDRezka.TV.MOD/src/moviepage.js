@@ -441,12 +441,20 @@ function data_(dom) {
         log.d('Skipping premium translator due to Premium setting: ' + (element.attributes.getNamedItem('data-translator_id') ? element.attributes.getNamedItem('data-translator_id').value : 'unknown'));
         return; // continue to next element
       }
-      if (data.type == 'movie') {
+      var translatorTitle = element.attributes.getNamedItem('title').value;
+      var firstChild = element.getElementByTagName('img')[0];
+      console.log("First child of translator element:", translatorTitle, "first child: ", firstChild);
+      var langTittle = firstChild && firstChild.attributes.getNamedItem('title').value;
+      if (langTittle && translatorTitle.indexOf(langTittle) === -1)
+      {
+        translatorTitle += ' (' + langTittle   + ')';
+      }
+      if (data.type === 'movie') {
         data.tr[index] = {
           title: data.title,
           id: element.attributes.getNamedItem('data-id').value,
           translator_id: element.attributes.getNamedItem('data-translator_id').value,
-          translator_title: element.attributes.getNamedItem('title').value,
+          translator_title: translatorTitle,
           icon: data.icon,
           camrip: element.attributes.getNamedItem('data-camrip').value,
           ads: element.attributes.getNamedItem('data-ads').value,
@@ -461,7 +469,7 @@ function data_(dom) {
 //           title: element.attributes.getNamedItem('title').value,
           id: data.id,
           translator_id: element.attributes.getNamedItem('data-translator_id').value,
-          translator_title: element.attributes.getNamedItem('title').value,
+          translator_title: translatorTitle,
           type: /sof\.tv\.initCDNSeriesEvents\((\d+), (\d+)/.test(pageHtml.text.toString()) ? 'serial' : 'movie',
           cdn_url: element.attributes.getNamedItem('data-cdn_url') == null ? 0 : element.attributes.getNamedItem('data-cdn_url').value,
           active: 0,

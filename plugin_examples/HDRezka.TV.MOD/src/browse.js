@@ -176,7 +176,7 @@ function scrapeList(page, href, pageHtml) {
       // If this is a Best view and the page-level country filter is enabled, filter list items
       var skipMovie = false;
       if (filterCountriesPage) {
-        var countries = ['Россия', 'Казахстан', 'Китай', 'Корея Южная'];
+        var countries = service.filterCountries;
         var desc = descrText.toLowerCase();
         for (var ci = 0; ci < countries.length; ci++) {
           skipMovie = desc.indexOf(countries[ci].toLowerCase()) !== -1;
@@ -292,8 +292,19 @@ function select_cat(params, page, reload) {
   var genre = null;
   function page_reload() {
     if (!initialization ) {
-      var genreFilter = page.model.options.genres;
-      var genreTitle = genreFilter && genreFilter.current.title;
+      var genreFilter = genre && page.model.options.genres;
+      var genreTitle = genreFilter && String(genreFilter.current.title);
+      if (genre && genreTitle === 'null')
+      {
+        //shouldn't be here if movian works properly
+        for (var i = 0; i < result.cat.length; i++) {
+          if (result.cat[i][0] === genre) {
+            genreTitle = result.cat[i][1];
+            break;
+          }
+        }
+      }
+
       page.metadata.title = params.title
           + (genre ?  ' - ' + genreTitle : '')
       ;
