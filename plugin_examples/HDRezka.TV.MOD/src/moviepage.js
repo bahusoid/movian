@@ -443,7 +443,6 @@ function data_(dom) {
       }
       var translatorTitle = element.attributes.getNamedItem('title').value;
       var firstChild = element.getElementByTagName('img')[0];
-      console.log("First child of translator element:", translatorTitle, "first child: ", firstChild);
       var langTittle = firstChild && firstChild.attributes.getNamedItem('title').value;
       if (langTittle && translatorTitle.indexOf(langTittle) === -1)
       {
