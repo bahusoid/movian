@@ -1,6 +1,6 @@
 #import "skin://theme.view"
 #import "sidebar_include.view"
-
+#import "skin://styles/style_sidebar.view"
 
 
 widget(container_x, {
