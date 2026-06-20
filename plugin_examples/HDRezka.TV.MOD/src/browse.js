@@ -512,21 +512,22 @@ exports.season = function (page, data) {
     var season_id = data.season_id;
     var episode_id = episodeElement.episode_id;
 
-    var uri = JSON.stringify({
-        season_id: season_id,
-        episode_id: episode_id,
-        title: episode_title,
-        series_id: data.id,
-        translator_id: data.translator_id,
-        type: 'serial'
-  });
-
+    var uriData = {
+      season_id: season_id,
+      episode_id: episode_id,
+      title: episode_title,
+      series_id: data.id,
+      translator_id: data.translator_id,
+      type: 'serial'
+    };
+    var uri = JSON.stringify(uriData);
     var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
       title: episode_title,
       icon: data.icon,
       autofocus: (episodeIndex === focusEpisodeIndex),
       focusable: (episodeIndex === focusEpisodeIndex) ? 1.5 : 1.0,
     });
+    moviepage.bindPlayInfo(item, uriData);
 
     if (episodeIndex === focusEpisodeIndex) {
       log.d('Setting autofocus on episode:', episode_title);

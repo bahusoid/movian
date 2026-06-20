@@ -819,7 +819,6 @@ new page.Route(PREFIX + ':SEASON:(.*)', function (page, data) {
 //}
 //plugin.addURI(PREFIX + ':play:(.*)', function (page, data) {
 new page.Route(PREFIX + ':play:(.*)', function (page, data) {
-  var canonicalUrl = PREFIX + ':play:' + data;
   page.loading = true;
   page.type = 'directory';
 //  page.type = 'video';
@@ -829,6 +828,9 @@ new page.Route(PREFIX + ':play:(.*)', function (page, data) {
   log.d({
     'play:data': data
   });
+
+  var canonicalUrl = moviepage.getCanonicalUrl(data);
+  page.metadata.canonical_url = canonicalUrl;
 
   // Store last watched episode for resume functionality
   if (data.type === 'serial' && data.season_id && data.episode_id && (data.series_id || data.id)) {

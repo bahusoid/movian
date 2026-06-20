@@ -1,4 +1,6 @@
-﻿/* eslint-disable camelcase */
+﻿var metadata = require('native/metadata');
+
+/* eslint-disable camelcase */
 /* eslint-disable require-jsdoc */
 /* eslint-disable max-len */
 /* eslint-disable no-var */
@@ -64,86 +66,102 @@ function getTitleYear(data) {
   return data.title + (data.year ? ' (' + data.year + ')' : '');
 }
 
+function getCanonicalUrl(data) {
+  return PREFIX + ':play:'
+      + 'type=' + data.type
+      + '&id=' + (data.series_id || data.id)
+      + '&tr_id=' + data.translator_id
+      + '&s=' + (data.season_id || '')
+      + '&e=' + (data.episode_id || '');
+}
+exports.getCanonicalUrl = getCanonicalUrl;
+function bindPlayInfo(item, data) {
+  item.root.canonical_url = getCanonicalUrl(data);
+  metadata.bindPlayInfo(item.root, item.root.canonical_url);
+}
+exports.bindPlayInfo = bindPlayInfo;
+
 function moviePage(page, data) {
   log.d({
     function: 'moviePage(page, data)',
     data: data,
   });
-  if (data.url) {
-    api.call(page, data.url, null, function(pageHtml) {
-      getOrigtitle();
-      getYear();
-      getIcon();
-      getkpID();
-      var desc = pageHtml.dom.getElementByClassName('b-post__description_text')[0].textContent;
-      data.description = desc;
-      yoData = {
-        title: data.title,
-        icon: data.icon,
-        title_en: data.title_en,
-        kpID: data.kpID,
-        favs: /favs.*?="([^"]+)/.exec(pageHtml.text.toString())[1]
-      };
-      data.yoData = yoData;
-      data.title_year = getTitleYear(data);
-      page.metadata.title = data.title_year;
-      page.metadata.logo = data.icon;
-      page.type = 'directory';
-      data.type = /sof\.tv\.initCDNSeriesEvents\((\d+), (\d+)/.test(pageHtml.text.toString()) ? 'serial' : 'movie';
+  if (!data.url)
+    return;
+
+  api.call(page, data.url, null, function (pageHtml) {
+    getOrigtitle();
+    getYear();
+    getIcon();
+    getkpID();
+    var desc = pageHtml.dom.getElementByClassName('b-post__description_text')[0].textContent;
+    data.description = desc;
+    yoData = {
+      title: data.title,
+      icon: data.icon,
+      title_en: data.title_en,
+      kpID: data.kpID,
+      favs: /favs.*?="([^"]+)/.exec(pageHtml.text.toString())[1]
+    };
+    data.yoData = yoData;
+    data.title_year = getTitleYear(data);
+    page.metadata.title = data.title_year;
+    page.metadata.logo = data.icon;
+    page.type = 'directory';
+    data.type = /sof\.tv\.initCDNSeriesEvents\((\d+), (\d+)/.test(pageHtml.text.toString()) ? 'serial' : 'movie';
 //      log.d({data77: data});
 //      data.favs = /favs.*?="([^"]+)/.exec(pageHtml.text.toString())[1];
 //      log.d({data79: data});
-      if (data.trID) {
-        page.metadata.title = page.metadata.title + ' | ' + data.trID.translator_title;
-        data.translator_id = data.trID.translator_id; // Update translator_id for selected translator
-        if (data.type == 'serial') {
-          dom = getSeriesDom(data.id, data.trID.translator_id, null);//,data.favs);
-        }
-        data_(dom);
-      }
-      else {
-        dom = pageHtml.dom;
-        if (null !== (m = /sof\.tv\.initCDNSeriesEvents\((\d+), (\d+)/.exec(pageHtml.text.toString()))) {
-          data.translator_id = m[2];
-        }
+    if (data.trID) {
+      page.metadata.title = page.metadata.title + ' | ' + data.trID.translator_title;
+      data.translator_id = data.trID.translator_id; // Update translator_id for selected translator
+      if (data.type == 'serial') {
+        dom = getSeriesDom(data.id, data.trID.translator_id, null);//,data.favs);
       }
       data_(dom);
-      display_season(page);
-      display_translate(page);
-//      if (null !== (m = /sof\.tv\.initCDNMoviesEvents\((\d+).*?(\d+).*?({.*?})\);/gm.exec(pageHtml.text.toString()))) {
-      if(data.season)
-      {} //Skip Видео: section
-      else if (data.play_active_is_premium && !service.Premium) {
-        log.d('Default active translator is premium and Premium is disabled — skipping movie "Видео:" section');
-      }
-      else
-      if (null !== (m = /sof.tv.initCDNMoviesEvents\((\d+).*?(\d+).*?(\{.*?})\);/gm.exec(pageHtml.text.toString()))) {
-        page.metadata.title = page.metadata.title + (undefined == data.play_active ? '' : ' | ' + data.play_active.translator_title);
-        page.appendItem('', 'separator', {title: 'Видео:'});
-//        log.d({data94: data});
-        log.d({data100: data});
+    } else {
+      dom = pageHtml.dom;
+      if (null !== (m = /sof\.tv\.initCDNSeriesEvents\((\d+), (\d+)/.exec(pageHtml.text.toString()))) {
         data.translator_id = m[2];
-        if (undefined !== data.play_active) {
-          playData = data.play_active;
-          log.e('********************************');
+      }
+    }
+    data_(dom);
+    display_season(page);
+    display_translate(page);
+//      if (null !== (m = /sof\.tv\.initCDNMoviesEvents\((\d+).*?(\d+).*?({.*?})\);/gm.exec(pageHtml.text.toString()))) {
+    if (data.season) {
+    } //Skip Видео: section
+    else if (data.play_active_is_premium && !service.Premium) {
+      log.d('Default active translator is premium and Premium is disabled — skipping movie "Видео:" section');
+    } else if (null !== (m = /sof.tv.initCDNMoviesEvents\((\d+).*?(\d+).*?(\{.*?})\);/gm.exec(pageHtml.text.toString()))) {
+      var active_translator_title =
+          (data.play_active && data.play_active.translator_title) || '';
+      if (active_translator_title)
+         active_translator_title = '  | ' + active_translator_title;
+      page.appendItem('', 'separator', {title: 'Видео' + active_translator_title + ':'});
+//        log.d({data94: data});
+      log.d({data100: data});
+      data.translator_id = m[2];
+      if (undefined !== data.play_active) {
+        playData = data.play_active;
+        log.e('********************************');
 //          log.e({'playData106': playData});
 //          log.e({'playData107': playData});
-        }
-        else {
-          playData = {
-            type: data.type,
-            id: data.id,
+      } else {
+        playData = {
+          type: data.type,
+          id: data.id,
 //            favs: data.favs,
 //            favs: yoData.favs,
-            translator_id: data.translator_id,
-            title: data.title,
-            year: data.year,
-            description: data.description,
+          translator_id: data.translator_id,
+          title: data.title,
+          year: data.year,
+          description: data.description,
 //            icon: pageHtml.dom.getElementByTagName('img')[0].attributes.getNamedItem('src').value,
 //            icon: data.icon,
-          };
+        };
 //          log.e({'playData117': playData});
-        }
+      }
 //            title: data.title,
 //            id: data.id,
 //            translator_id: m[2],
@@ -176,97 +194,95 @@ function moviePage(page, data) {
 //            action: 'get_movie',
 //          };
 //        uri = showtime.JSONEncode(playData);
-        uri = JSON.stringify(playData);
-//        log.d({playData: playData});
-//        log.d({playData147: playData});
-        log.d({playData157: playData});
-//         item =
-//        page.appendItem(PREFIX + ':play:' + uri, 'video', {
-        var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
-          title: data.title,
+      uri = JSON.stringify(playData);
+      log.d({playData157: playData});
+      var item = page.appendItem(PREFIX + ':play:' + uri, service.list, {
+        title: data.title,
 //          icon: pageHtml.dom.getElementByTagName('img')[0].attributes.getNamedItem('src').value,
-          icon: data.icon,
+        icon: data.icon,
 //          url: 'url',
-          description: data.description,
-/*
-          rating: pageHtml.dom.getElementByClassName('bold')[0].textContent*10,
-*/
-        });
-        if(service.tvdb) {
-          item
-              .bindVideoMetadata({
-                title: data.title_en ? data.title_en : data.title,
-                year: +data.year,
-              });
+        description: data.description,
+        /*
+                rating: pageHtml.dom.getElementByClassName('bold')[0].textContent*10,
+        */
+      });
+      bindPlayInfo(item, data);
+      //console.log("MOVIE CANONICAL URL: " + item.root.canonical_url);
+
+      if (service.tvdb) {
+        item
+            .bindVideoMetadata({
+              title: data.title_en ? data.title_en : data.title,
+              year: +data.year,
+            });
+      }
+    }
+    getPerson(page, data);
+    /*~
+        plist = dom.getElementByClassName('b-post__info');
+        var bob = plist[0].getElementByTagName('td').length;
+        var re = /\/\/[\s\S]*?\/([\s\S]*?)$/;
+        plist = plist[0].getElementByTagName('td')[bob-2].getElementByTagName('a');
+        if (plist.length >0) {
+          page.appendItem('', 'separator', {title: 'Из серии:'});
         }
-      }
-      getPerson(page, data);
-/*~
-      plist = dom.getElementByClassName('b-post__info');
-      var bob = plist[0].getElementByTagName('td').length;
-      var re = /\/\/[\s\S]*?\/([\s\S]*?)$/;
-      plist = plist[0].getElementByTagName('td')[bob-2].getElementByTagName('a');
-      if (plist.length >0) {
-        page.appendItem('', 'separator', {title: 'Из серии:'});  
-      }
-      log.d(plist);
-      plist.forEach(function (person) {
-        log.d(person.textContent);
-        log.d(person.attributes.getNamedItem('href').value);
-        page.appendItem(PREFIX + ':list:' +  '/' + re.exec(person.attributes.getNamedItem('href').value)[1] + ':' + person.textContent, 'directory', {title: person.textContent});
-//        page.appendItem(PREFIX + ':list:' +  '/' + re.exec(person.attributes.getNamedItem('href').value)[1] + ':' + person.textContent, service.list, {title: person.textContent});
-      });
-*/
-/*
-      var pi = dom.getElementByClassName('b-post__info');
-      var td = pi[0].getElementByTagName('td').length;
-      var piretd = /\/\/[\s\S]*?\/([\s\S]*?)$/;
-      var pi = pi[0].getElementByTagName('td')[td-2].getElementByTagName('a');
-      if (pi.length >0) {
-        page.appendItem('', 'separator', {title: 'Из серии:'});  
-      }
-      log.d(pi);
-      pi.forEach(function (pi) {
-        log.d(pi.textContent);
-        log.d(pi.attributes.getNamedItem('href').value);
-        page.appendItem(PREFIX + ':list:' +  '/' + piretd.exec(pi.attributes.getNamedItem('href').value)[1] + ':' + pi.textContent, 'directory', {title: pi.textContent});
-//        page.appendItem(PREFIX + ':list:' +  '/' + piretd.exec(pi.attributes.getNamedItem('href').value)[1] + ':' + pi.textContent, service.list, {title: pi.textContent});
-      });
-*/
+        log.d(plist);
+        plist.forEach(function (person) {
+          log.d(person.textContent);
+          log.d(person.attributes.getNamedItem('href').value);
+          page.appendItem(PREFIX + ':list:' +  '/' + re.exec(person.attributes.getNamedItem('href').value)[1] + ':' + person.textContent, 'directory', {title: person.textContent});
+    //        page.appendItem(PREFIX + ':list:' +  '/' + re.exec(person.attributes.getNamedItem('href').value)[1] + ':' + person.textContent, service.list, {title: person.textContent});
+        });
+    */
+    /*
+        var pi = dom.getElementByClassName('b-post__info');
+        var td = pi[0].getElementByTagName('td').length;
+        var piretd = /\/\/[\s\S]*?\/([\s\S]*?)$/;
+        var pi = pi[0].getElementByTagName('td')[td-2].getElementByTagName('a');
+        if (pi.length >0) {
+          page.appendItem('', 'separator', {title: 'Из серии:'});
+        }
+        log.d(pi);
+        pi.forEach(function (pi) {
+          log.d(pi.textContent);
+          log.d(pi.attributes.getNamedItem('href').value);
+          page.appendItem(PREFIX + ':list:' +  '/' + piretd.exec(pi.attributes.getNamedItem('href').value)[1] + ':' + pi.textContent, 'directory', {title: pi.textContent});
+    //        page.appendItem(PREFIX + ':list:' +  '/' + piretd.exec(pi.attributes.getNamedItem('href').value)[1] + ':' + pi.textContent, service.list, {title: pi.textContent});
+        });
+    */
 //      page.appendItem('', 'separator', {title: 'ну или:'});
-      page.appendItem('', 'separator', {title: 'Поиск:'});
-      page.appendItem(PREFIX + ':search:' + data.title, 'directory', {
-        title: 'Найти в плагине',
+    page.appendItem('', 'separator', {title: 'Поиск:'});
+    page.appendItem(PREFIX + ':search:' + data.title, 'directory', {
+      title: 'Найти в плагине',
 //        icon: '',
-        icon: LOGOARROW,
-      });
-      page.appendItem('search:' + data.title + ' ' + data.year, 'directory', {
-//        title: 'найти ' + data.title + ' ' + data.year + ' в других плагинах',
-        title: 'Найти в мовиан',
-//        icon: '',
-        icon: LOGOARROW,
-      });
-      /*
-      page.appendItem('youtube:search:' + data.title + ' ' + data.year, 'directory', {
-//        title: '\u043d\u0430\u0439\u0442\u0438 \u043d\u0430 YouTube',
-        title: 'Найти на YouTube',
-//        icon: '',
-        icon: LOGOARROW,
-      });
-      log.d({yoData139: yoData});
-//      page.appendItem('yo:search:' + showtime.JSONEncode(yoData), 'directory', {
-      page.appendItem('yo:search:' + JSON.stringify(yoData), 'directory', {
-//        title: 'найти другой плеер',
-        title: 'Найти из Yohoho',
-//        icon: '',
-        icon: LOGOARROW,
-      });
-*/
-      display_franchise(page, pageHtml.dom);
-      page.loading = false;
+      icon: LOGOARROW,
     });
-  }
-};
+    page.appendItem('search:' + data.title + ' ' + data.year, 'directory', {
+//        title: 'найти ' + data.title + ' ' + data.year + ' в других плагинах',
+      title: 'Найти в мовиан',
+//        icon: '',
+      icon: LOGOARROW,
+    });
+    /*
+    page.appendItem('youtube:search:' + data.title + ' ' + data.year, 'directory', {
+//        title: '\u043d\u0430\u0439\u0442\u0438 \u043d\u0430 YouTube',
+      title: 'Найти на YouTube',
+//        icon: '',
+      icon: LOGOARROW,
+    });
+    log.d({yoData139: yoData});
+//      page.appendItem('yo:search:' + showtime.JSONEncode(yoData), 'directory', {
+    page.appendItem('yo:search:' + JSON.stringify(yoData), 'directory', {
+//        title: 'найти другой плеер',
+      title: 'Найти из Yohoho',
+//        icon: '',
+      icon: LOGOARROW,
+    });
+*/
+    display_franchise(page, pageHtml.dom);
+    page.loading = false;
+  });
+}
 function getPerson(page) {
   log.d({
     function: 'getPerson185',
@@ -489,7 +505,8 @@ function display_translate(page) {
         type: data.type,
       };
       epData = data.tr[index];
-      if (data.type == 'serial') {
+      var serial = data.type === 'serial';
+      if (serial) {
 //        uri = PREFIX + ':moviepage:' + showtime.JSONEncode(trData);
         uri = PREFIX + ':moviepage:' + JSON.stringify(trData);
       }
@@ -501,11 +518,14 @@ function display_translate(page) {
 //       uri = PREFIX + ':moviepage:' + JSON.stringify(trData);
 //      page.appendItem(uri, 'video', {
 //      page.appendItem(uri, 'directory', {
-      page.appendItem(uri, service.list, {
+
+      var item = page.appendItem(uri, service.list, {
         title: tr.translator_title,
         icon: data.icon,
         description: data.description,
       });
+      if (!serial)
+        bindPlayInfo(item, epData);
     });
   }
 };
